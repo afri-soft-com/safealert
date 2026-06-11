@@ -136,6 +136,17 @@ class HelpManualScreen extends StatelessWidget {
                   ],
                 ),
                 _section(
+                  icon: '🔔',
+                  title: 'Notifications push (Firebase)',
+                  children: const [
+                    _P('Android : notifications configurées via Firebase (projet safealert-prod). Test possible depuis un PC Windows.'),
+                    _P('iOS : nécessite d\'ajouter l\'app dans Firebase avec l\'identifiant com.safealert.safealert, puis le fichier GoogleService-Info.plist.'),
+                    _P('Sous Windows, vous ne pouvez pas compiler ni tester sur iPhone — seul un Mac avec Xcode le permet. Préparez Firebase maintenant ; testez iOS plus tard.'),
+                    _P('Push sur iPhone réel : une clé APNs (.p8) doit aussi être téléversée dans Firebase (Cloud Messaging).'),
+                    _P('Guide détaillé : docs/FIREBASE_SETUP.md dans le dépôt du projet.'),
+                  ],
+                ),
+                _section(
                   icon: '❓',
                   title: 'FAQ',
                   children: const [

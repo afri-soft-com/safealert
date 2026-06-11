@@ -67,11 +67,62 @@ await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
 ---
 
-## 4. iOS (optionnel)
+## 4. iOS — configuration depuis zéro (optionnel)
 
-1. Ajoutez une app iOS dans Firebase (bundle ID : voir `ios/Runner.xcodeproj`)
-2. Téléchargez `GoogleService-Info.plist` → `frontend/ios/Runner/`
-3. Incluez iOS dans `flutterfire configure`
+> **Important — Windows :** vous pouvez préparer les fichiers et la doc Firebase ici, mais **compiler et tester sur iPhone nécessite un Mac avec Xcode**. Sur Windows, concentrez-vous sur Android ; configurez iOS dans Firebase maintenant pour être prêt quand un Mac sera disponible.
+
+### Identifiant exact à utiliser
+
+Copiez-collez **exactement** ce bundle ID dans la console Firebase :
+
+```
+com.safealert.safealert
+```
+
+(Valeur `PRODUCT_BUNDLE_IDENTIFIER` dans `frontend/ios/Runner.xcodeproj/project.pbxproj`.)
+
+### Étape par étape — Console Firebase
+
+1. Ouvrez [console.firebase.google.com](https://console.firebase.google.com/) et sélectionnez le projet **`safealert-prod`** (ou créez-le à la section 1 si ce n'est pas déjà fait).
+2. Sur la page d'accueil du projet, cliquez sur l'icône **iOS** (ou **Ajouter une application** → **iOS**).
+3. **ID du bundle iOS** : saisissez `com.safealert.safealert` (sans espace, sensible à la casse).
+4. **Surnom de l'app** (optionnel) : `SafeAlert iOS`.
+5. **ID App Store** (optionnel) : laissez vide pour l'instant.
+6. Cliquez sur **Enregistrer l'application**.
+7. **Téléchargez `GoogleService-Info.plist`** — bouton de téléchargement sur l'écran de configuration. **Ne commitez pas ce fichier** tant qu'il n'est pas placé localement ; ne créez pas de fichier factice.
+8. **Où placer le fichier** (sur Mac ou après transfert depuis Windows) :
+
+```
+frontend/ios/Runner/GoogleService-Info.plist
+```
+
+9. Dans Xcode (Mac uniquement) : ouvrez `frontend/ios/Runner.xcworkspace`, vérifiez que `GoogleService-Info.plist` apparaît dans le groupe **Runner** (glisser-déposer si besoin, cochez **Copy items if needed**).
+10. **Notifications push (APNs)** — requis pour recevoir des alertes sur un **vrai iPhone** :
+    - [Apple Developer](https://developer.apple.com/account/) → **Certificates, Identifiers & Profiles** → **Keys** → **+** → cochez **Apple Push Notifications service (APNs)** → créez la clé → téléchargez le fichier `.p8` (une seule fois).
+    - Firebase Console → **Paramètres du projet** (engrenage) → onglet **Cloud Messaging** → section **Configuration de l'application Apple** → **Téléverser** la clé APNs (.p8), renseignez **Key ID** et **Team ID** Apple.
+11. Mettez à jour Flutter :
+    - **Recommandé** : sur Mac, `cd frontend && flutterfire configure` (sélectionner iOS + projet `safealert-prod`).
+    - **Manuel** : copiez les valeurs `API_KEY`, `GOOGLE_APP_ID`, `GCM_SENDER_ID`, `PROJECT_ID` depuis `GoogleService-Info.plist` vers `frontend/lib/firebase_options.dart` (section `ios`).
+
+### Après le téléchargement du plist
+
+1. Placez `GoogleService-Info.plist` au chemin indiqué ci-dessus.
+2. Régénérez ou complétez `firebase_options.dart` (CLI ou manuel).
+3. Sur Mac : `cd frontend && flutter run` sur un simulateur ou un iPhone branché.
+4. Si vous travaillez depuis Windows : dites **« ajoute iOS »** à l'équipe / à l'assistant — le plist pourra être installé et `firebase_options.dart` complété pour vous.
+
+### Limites iOS sous Windows
+
+| Action | Windows | Mac + Xcode |
+|--------|---------|-------------|
+| Créer l'app iOS dans Firebase | Oui | Oui |
+| Télécharger `GoogleService-Info.plist` | Oui | Oui |
+| Placer le plist dans le repo | Oui (fichiers) | Oui |
+| Téléverser la clé APNs dans Firebase | Oui (navigateur) | Oui |
+| `flutter run` sur simulateur / iPhone | Non | Oui |
+| Test push sur appareil réel | Non | Oui |
+
+Sans `GoogleService-Info.plist` et sans valeurs iOS valides dans `firebase_options.dart`, l'app **Android** continue de fonctionner ; le build iOS échouera ou Firebase ne s'initialisera pas correctement sur iOS.
 
 ---
 
@@ -116,8 +167,11 @@ Sans ces variables, l'API fonctionne mais les push sont désactivés.
 | Problème | Solution |
 |----------|----------|
 | `google-services.json` manquant | Télécharger depuis Firebase, placer dans `android/app/` |
+| `GoogleService-Info.plist` manquant (iOS) | Console Firebase → app iOS → télécharger, placer dans `ios/Runner/` |
+| Build iOS sous Windows | Impossible sans Mac ; préparer Firebase + plist, tester plus tard |
+| Push iOS non reçues | Clé APNs (.p8) téléversée dans Firebase → Cloud Messaging |
 | `firebase_options.dart` absent | `flutterfire configure` ou copier l'exemple |
-| Push non reçues | Vérifier FCM_* dans `.env`, token enregistré en base (`users.fcm_token`) |
+| Push non reçues (Android) | Vérifier FCM_* dans `.env`, token enregistré en base (`users.fcm_token`) |
 | Erreur clé privée | Entourer `FCM_PRIVATE_KEY` de guillemets, `\n` entre les lignes |
 
 ---
@@ -127,6 +181,7 @@ Sans ces variables, l'API fonctionne mais les push sont désactivés.
 | Fichier | Rôle |
 |---------|------|
 | `frontend/android/app/google-services.json` | Config Android Firebase |
+| `frontend/ios/Runner/GoogleService-Info.plist` | Config iOS Firebase (à télécharger) |
 | `frontend/lib/firebase_options.dart` | Options Flutter (généré) |
 | `frontend/lib/services/fcm_service.dart` | Init FCM côté app |
 | `backend/src/config/firebase.js` | Admin SDK + envoi push |

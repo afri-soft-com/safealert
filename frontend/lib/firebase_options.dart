@@ -32,6 +32,9 @@ class DefaultFirebaseOptions {
     storageBucket: 'safealert-prod.firebasestorage.app',
   );
 
+  // iOS : valeurs provisoires — compléter après téléchargement de
+  // GoogleService-Info.plist (Firebase Console → app iOS → safealert-prod).
+  // Voir docs/FIREBASE_SETUP.md §4. Ne pas inventer de plist localement.
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'YOUR_IOS_API_KEY',
     appId: 'YOUR_IOS_APP_ID',
