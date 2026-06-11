@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../utils/phone.dart';
 import '../services/api_service.dart';
 import '../services/fcm_service.dart';
 import '../services/location_service.dart';
@@ -51,9 +52,16 @@ class AuthProvider extends ChangeNotifier {
     _loading = true;
     _error = null;
     notifyListeners();
+    final normalized = normalizePhone(phone);
+    if (normalized == null) {
+      _error = 'Numéro de téléphone invalide';
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
     try {
-      final res = await _api.post('/auth/request-code', {'phone': phone});
-      _phone = phone;
+      final res = await _api.post('/auth/request-code', {'phone': normalized});
+      _phone = normalized;
       _devCode = res['devCode'] as String?;
       _loading = false;
       notifyListeners();

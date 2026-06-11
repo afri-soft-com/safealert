@@ -2,12 +2,13 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { pool } = require("../config/database");
 const { sendSMS, isSMSConfigured } = require("../services/sms");
+const { normalizePhone } = require("../utils/phone");
 
 const OTP_TTL_SECONDS = 300;
 
 const requestCode = async (req, res) => {
-  const { phone } = req.body;
-  if (!phone) return res.status(400).json({ error: "Numéro de téléphone requis" });
+  const phone = normalizePhone(req.body.phone);
+  if (!phone) return res.status(400).json({ error: "Numéro de téléphone invalide" });
 
   try {
     await pool.query(
@@ -51,7 +52,8 @@ const requestCode = async (req, res) => {
 };
 
 const verifyCode = async (req, res) => {
-  const { phone, code, pseudo } = req.body;
+  const phone = normalizePhone(req.body.phone);
+  const { code, pseudo } = req.body;
   if (!phone || !code) {
     return res.status(400).json({ error: "Téléphone et code requis" });
   }
