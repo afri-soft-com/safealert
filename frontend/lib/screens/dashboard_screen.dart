@@ -77,7 +77,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       physics: const NeverScrollableScrollPhysics(),
                       mainAxisSpacing: 8,
                       crossAxisSpacing: 8,
-                      childAspectRatio: 1.6,
+                      childAspectRatio: 1.35,
                       children: [
                         _metricCard('⚠️', '$totalIncidents', 'Incidents cette semaine', AppColors.rouge),
                         _metricCard('🆘', '$totalSos', 'Alertes SOS envoyées', AppColors.orange),
@@ -99,33 +99,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           const Text('INCIDENTS PAR JOUR (7 derniers jours)',
                             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
                           const SizedBox(height: 12),
-                          SizedBox(
-                            height: 80,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: barData.map((b) {
-                                final barH = maxVal > 0 ? (b.val / maxVal) * 60 : 0.0;
-                                return Expanded(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      Text('${b.val.toInt()}', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: b.color)),
-                                      const SizedBox(height: 4),
-                                      Container(
-                                        width: double.infinity,
-                                        height: barH,
-                                        decoration: BoxDecoration(
-                                          color: b.color,
-                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                                        ),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final chartH = constraints.maxWidth < 340 ? 96.0 : 80.0;
+                              final barMax = chartH - 32;
+                              return SizedBox(
+                                height: chartH,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: barData.map((b) {
+                                    final barH = maxVal > 0 ? (b.val / maxVal) * barMax : 0.0;
+                                    return Expanded(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text('${b.val.toInt()}', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: b.color)),
+                                          const SizedBox(height: 2),
+                                          Container(
+                                            width: double.infinity,
+                                            height: barH,
+                                            decoration: BoxDecoration(
+                                              color: b.color,
+                                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(b.label, style: const TextStyle(fontSize: 7, color: AppColors.gris), overflow: TextOverflow.ellipsis),
+                                        ],
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(b.label, style: const TextStyle(fontSize: 8, color: AppColors.gris)),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                            ),
+                                    );
+                                  }).toList(),
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -150,9 +157,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(h.label, style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                                    Expanded(
+                                      child: Text(h.label, style: const TextStyle(fontSize: 10, color: AppColors.gris), overflow: TextOverflow.ellipsis),
+                                    ),
                                     Text('${h.level}%', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: h.color)),
                                   ],
                                 ),
@@ -199,10 +207,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(icon, style: const TextStyle(fontSize: 16)),
-          Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
-          Text(label, style: const TextStyle(fontSize: 9, color: AppColors.gris, height: 1.3)),
+          Text(icon, style: const TextStyle(fontSize: 14)),
+          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: color)),
+          Text(label, style: const TextStyle(fontSize: 8, color: AppColors.gris, height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis),
         ],
       ),
     );

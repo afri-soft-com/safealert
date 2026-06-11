@@ -380,7 +380,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
+                    Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.bleuFonce), overflow: TextOverflow.ellipsis),
                     Row(
                       children: [
                         Flexible(

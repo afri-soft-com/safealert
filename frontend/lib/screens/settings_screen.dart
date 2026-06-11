@@ -122,7 +122,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
                 ),
                 const SizedBox(width: 12),
-                const Text('Paramètres', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                const Expanded(
+                  child: Text(
+                    'Paramètres',
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 if (_saving) ...[
                   const Spacer(),
                   const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)),

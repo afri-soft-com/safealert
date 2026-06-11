@@ -86,10 +86,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               Text(
                                 'Alerte active — ${_incidentLabel(latest)}',
                                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.rouge),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               Text(
                                 'Signalé il y a ${_timeAgo(latest['created_at'] as String?)}',
                                 style: const TextStyle(fontSize: 11, color: AppColors.gris),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
@@ -148,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   physics: const NeverScrollableScrollPhysics(),
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
-                  childAspectRatio: 1.5,
+                  childAspectRatio: 1.15,
                   children: [
                     _buildCard('🗺', 'Carte des zones', '$activeCount alerte${activeCount > 1 ? 's' : ''} (24h)', () => widget.onNavigate('map'), AppColors.bleu),
                     _buildCard('👥', 'Mes contacts', 'Cercle de confiance', () => widget.onNavigate('contacts'), AppColors.vert),
@@ -224,11 +227,12 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(icon, style: const TextStyle(fontSize: 22)),
-            const SizedBox(height: 4),
-            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.bleuFonce), maxLines: 2, overflow: TextOverflow.ellipsis),
-            Text(sub, style: const TextStyle(fontSize: 10, color: AppColors.gris), maxLines: 2, overflow: TextOverflow.ellipsis),
+            Text(icon, style: const TextStyle(fontSize: 18)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.bleuFonce), maxLines: 2, overflow: TextOverflow.ellipsis),
+            Text(sub, style: const TextStyle(fontSize: 9, color: AppColors.gris), maxLines: 2, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
@@ -251,7 +255,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(text, style: const TextStyle(fontSize: 11, color: AppColors.bleuFonce, fontWeight: FontWeight.w500)),
+                Text(text, style: const TextStyle(fontSize: 11, color: AppColors.bleuFonce, fontWeight: FontWeight.w500), maxLines: 3, overflow: TextOverflow.ellipsis),
                 if (time.isNotEmpty)
                   Text('Il y a $time', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
               ],

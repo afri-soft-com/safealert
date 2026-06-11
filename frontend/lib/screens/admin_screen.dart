@@ -109,7 +109,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               width: double.infinity,
               color: AppColors.rougeLight,
               padding: const EdgeInsets.all(8),
-              child: Text(p.error!, style: const TextStyle(fontSize: 11, color: AppColors.rouge)),
+              child: Text(p.error!, style: const TextStyle(fontSize: 11, color: AppColors.rouge), maxLines: 3, overflow: TextOverflow.ellipsis),
             ),
           Expanded(
             child: TabBarView(
@@ -161,8 +161,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(user['pseudo'] as String? ?? '—',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
-          Text(user['phone'] as String? ?? '', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.bleuFonce),
+              overflow: TextOverflow.ellipsis),
+          Text(user['phone'] as String? ?? '', style: const TextStyle(fontSize: 10, color: AppColors.gris), overflow: TextOverflow.ellipsis),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -262,22 +263,53 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                           final partner = p.partners[i];
                           final active = partner['is_active'] as bool? ?? true;
                           final key = partner['api_key'] as String? ?? '';
-                          return ListTile(
-                            title: Text(partner['partner_name'] as String? ?? '—',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: active ? AppColors.bleuFonce : AppColors.gris)),
-                            subtitle: Text(
-                              active && key.length >= 8 ? 'Clé : ${key.substring(0, 8)}…' : (active ? 'Clé active' : 'Révoquée'),
-                              style: const TextStyle(fontSize: 10),
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppColors.blanc,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFFEEEEEE)),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(partner['partner_name'] as String? ?? '—',
+                                            style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: active ? AppColors.bleuFonce : AppColors.gris),
+                                            overflow: TextOverflow.ellipsis),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          active && key.length >= 8 ? 'Clé : ${key.substring(0, 8)}…' : (active ? 'Clé active' : 'Révoquée'),
+                                          style: const TextStyle(fontSize: 10, color: AppColors.gris),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  if (active)
+                                    TextButton(
+                                      onPressed: () => p.revokePartner(partner['id'] as String),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      child: const Text('Révoquer', style: TextStyle(fontSize: 10, color: AppColors.rouge)),
+                                    )
+                                  else
+                                    const Text('Inactif', style: TextStyle(fontSize: 10, color: AppColors.gris)),
+                                ],
+                              ),
                             ),
-                            trailing: active
-                                ? TextButton(
-                                    onPressed: () => p.revokePartner(partner['id'] as String),
-                                    child: const Text('Révoquer', style: TextStyle(fontSize: 10, color: AppColors.rouge)),
-                                  )
-                                : const Text('Inactif', style: TextStyle(fontSize: 10, color: AppColors.gris)),
                           );
                         },
                       ),

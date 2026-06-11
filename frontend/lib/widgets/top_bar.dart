@@ -53,7 +53,12 @@ class TopBar extends StatelessWidget {
           if (title != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text(title!, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+              child: Text(
+                title!,
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
         ],
       ),

@@ -45,13 +45,13 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                       color: AppColors.grisClair,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 12,
+                      runSpacing: 6,
                       children: [
                         _dot(AppColors.vert, 'Faible'),
-                        const SizedBox(width: 12),
                         _dot(AppColors.orange, 'Moyen'),
-                        const SizedBox(width: 12),
                         _dot(AppColors.rouge, 'Élevé'),
                       ],
                     ),
@@ -115,11 +115,15 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                                       children: [
                                         Icon(Icons.warning, size: 12, color: AppColors.rouge.withValues(alpha: 0.6)),
                                         const SizedBox(width: 3),
-                                        Text('$alerts alertes', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                                        Flexible(
+                                          child: Text('$alerts alertes', style: const TextStyle(fontSize: 10, color: AppColors.gris), overflow: TextOverflow.ellipsis),
+                                        ),
                                         const SizedBox(width: 10),
                                         Icon(Icons.visibility, size: 12, color: AppColors.orange.withValues(alpha: 0.6)),
                                         const SizedBox(width: 3),
-                                        Text('${z['vigilance'] ?? 0} vigil.', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                                        Flexible(
+                                          child: Text('${z['vigilance'] ?? 0} vigil.', style: const TextStyle(fontSize: 10, color: AppColors.gris), overflow: TextOverflow.ellipsis),
+                                        ),
                                       ],
                                     ),
                                     const SizedBox(height: 4),

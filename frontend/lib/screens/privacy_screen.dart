@@ -23,8 +23,14 @@ class PrivacyScreen extends StatelessWidget {
                   child: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
                 ),
                 const SizedBox(width: 12),
-                const Text('Politique de confidentialité',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                const Expanded(
+                  child: Text(
+                    'Politique de confidentialité',
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
           ),

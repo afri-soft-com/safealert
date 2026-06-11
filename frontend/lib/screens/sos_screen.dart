@@ -95,8 +95,9 @@ class _SOSScreenState extends State<SOSScreen> {
           Expanded(
             child: Container(
               color: _completed ? AppColors.rougeLight : Colors.white,
-              padding: const EdgeInsets.all(20),
-              child: Column(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                 children: [
                   if (_failed)
                     Container(
@@ -113,7 +114,7 @@ class _SOSScreenState extends State<SOSScreen> {
                         style: TextStyle(fontSize: 11, color: Color(0xFF7A4F00)),
                       ),
                     ),
-                  const Spacer(flex: 1),
+                  const SizedBox(height: 24),
                   GestureDetector(
                     onTap: _sendSOS,
                     child: AnimatedContainer(
@@ -145,7 +146,7 @@ class _SOSScreenState extends State<SOSScreen> {
                       ),
                     ),
                   ),
-                  const Spacer(flex: 1),
+                  const SizedBox(height: 24),
                   ...List.generate(_steps.length, (i) {
                     final s = _steps[i];
                     final done = _step > i;
@@ -227,6 +228,7 @@ class _SOSScreenState extends State<SOSScreen> {
                     child: const Text('← Retour à l\'accueil', style: TextStyle(color: AppColors.gris, fontSize: 12)),
                   ),
                 ],
+                ),
               ),
             ),
           ),

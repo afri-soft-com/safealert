@@ -48,7 +48,14 @@ class SafetyScreen extends StatelessWidget {
                           children: [
                             Text(cat.icon, style: const TextStyle(fontSize: 20)),
                             const SizedBox(width: 10),
-                            Text(cat.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cat.color)),
+                            Expanded(
+                              child: Text(
+                                cat.title,
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cat.color),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 10),

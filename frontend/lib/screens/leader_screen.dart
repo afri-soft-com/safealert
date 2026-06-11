@@ -208,13 +208,15 @@ class _LeaderScreenState extends State<LeaderScreen> {
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(type.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color), overflow: TextOverflow.ellipsis),
                 ),
-                child: Text(type.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
               ),
               const SizedBox(width: 6),
               if (statusLabel.isNotEmpty)
@@ -228,7 +230,7 @@ class _LeaderScreenState extends State<LeaderScreen> {
                     child: Text(statusLabel, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color), overflow: TextOverflow.ellipsis),
                   ),
                 ),
-              const Spacer(),
+              const SizedBox(width: 6),
               Text('✅ $verif', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
             ],
           ),

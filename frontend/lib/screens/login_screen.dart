@@ -67,8 +67,9 @@ class _LoginScreenState extends State<LoginScreen> {
             Expanded(
               child: LayoutBuilder(
           builder: (context, constraints) {
+            final hPad = constraints.maxWidth < 360 ? 20.0 : 32.0;
             return SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(32, 32, 32, 32 + viewInsets.bottom),
+              padding: EdgeInsets.fromLTRB(hPad, 24, hPad, 24 + viewInsets.bottom),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight - viewInsets.bottom),
@@ -118,6 +119,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Text(
                         'Mode dev — code OTP : ${auth.devCode}',
                         textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: AppColors.orange, fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -185,6 +188,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     auth.error!,
                     textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: AppColors.rouge, fontSize: 12),
                   ),
                 ],
