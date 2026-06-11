@@ -47,5 +47,12 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>SafeAlert utilise votre position pour les alertes SOS et la carte des incidents.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
 </dict>
 </plist>
