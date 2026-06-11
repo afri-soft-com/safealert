@@ -7,7 +7,8 @@ import '../widgets/nav_bar.dart';
 
 class SafetyScreen extends StatelessWidget {
   final ValueChanged<String> onNavigate;
-  const SafetyScreen({super.key, required this.onNavigate});
+  final VoidCallback? onBack;
+  const SafetyScreen({super.key, required this.onNavigate, this.onBack});
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +16,7 @@ class SafetyScreen extends StatelessWidget {
       body: Column(
         children: [
           const StatusBar(),
-          const TopBar(title: 'Conseils de sécurité'),
+          TopBar(title: 'Conseils de sécurité', onBackTap: onBack),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),

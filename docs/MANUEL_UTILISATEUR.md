@@ -123,6 +123,13 @@ Pour masquer l'application derrière une calculatrice :
 1. Menu ☰ (coin supérieur droit de l'accueil).
 2. **Paramètres** : pseudo, téléphone, confidentialité, déconnexion, suppression de compte.
 
+### 3.9 Navigation et retour arrière
+
+- Sur les **écrans secondaires** (SOS, groupes, historique, paramètres, etc.), utilisez la **flèche ←** en haut à gauche pour revenir à l'écran précédent.
+- Sur les **onglets principaux** (Carte, Confiance, Urgences, Stats), le bouton **Retour** du téléphone Android ramène à l'**Accueil**.
+- Depuis l'**Accueil**, le bouton Retour Android **quitte l'application**.
+- Dans **Paramètres → Politique de confidentialité**, la flèche ← ou le bouton Retour ramène aux paramètres.
+
 ---
 
 ## 4. Mode hors ligne

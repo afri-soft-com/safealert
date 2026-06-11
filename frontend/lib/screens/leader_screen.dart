@@ -12,7 +12,8 @@ import '../widgets/nav_bar.dart';
 
 class LeaderScreen extends StatefulWidget {
   final ValueChanged<String> onNavigate;
-  const LeaderScreen({super.key, required this.onNavigate});
+  final VoidCallback? onBack;
+  const LeaderScreen({super.key, required this.onNavigate, this.onBack});
 
   @override
   State<LeaderScreen> createState() => _LeaderScreenState();
@@ -77,7 +78,7 @@ class _LeaderScreenState extends State<LeaderScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          const TopBar(title: 'Secteur — Vue responsable'),
+          TopBar(title: 'Secteur — Vue responsable', onBackTap: widget.onBack),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {

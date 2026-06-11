@@ -8,7 +8,8 @@ import '../widgets/nav_bar.dart';
 
 class GroupsScreen extends StatefulWidget {
   final ValueChanged<String> onNavigate;
-  const GroupsScreen({super.key, required this.onNavigate});
+  final VoidCallback? onBack;
+  const GroupsScreen({super.key, required this.onNavigate, this.onBack});
 
   @override
   State<GroupsScreen> createState() => _GroupsScreenState();
@@ -146,7 +147,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          const TopBar(title: 'Groupes de voisins'),
+          TopBar(title: 'Groupes de voisins', onBackTap: widget.onBack),
           Expanded(
             child: p.loading
                 ? const Center(child: CircularProgressIndicator())

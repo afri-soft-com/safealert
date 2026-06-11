@@ -8,7 +8,8 @@ import '../widgets/nav_bar.dart';
 
 class AnnuaireScreen extends StatefulWidget {
   final ValueChanged<String> onNavigate;
-  const AnnuaireScreen({super.key, required this.onNavigate});
+  final VoidCallback? onBack;
+  const AnnuaireScreen({super.key, required this.onNavigate, this.onBack});
 
   @override
   State<AnnuaireScreen> createState() => _AnnuaireScreenState();
@@ -32,7 +33,7 @@ class _AnnuaireScreenState extends State<AnnuaireScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          const TopBar(title: 'Annuaire d\'urgence'),
+          TopBar(title: 'Annuaire d\'urgence', onBackTap: widget.onBack),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),

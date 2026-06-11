@@ -7,7 +7,8 @@ import '../widgets/app_logo.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback onSuccess;
-  const LoginScreen({super.key, required this.onSuccess});
+  final VoidCallback? onBack;
+  const LoginScreen({super.key, required this.onSuccess, this.onBack});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -53,7 +54,18 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: AppColors.bleuFonce,
       resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: LayoutBuilder(
+        child: Column(
+          children: [
+            if (widget.onBack != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  onPressed: widget.onBack,
+                  icon: const Icon(Icons.arrow_back, color: Colors.white70),
+                ),
+              ),
+            Expanded(
+              child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(32, 32, 32, 32 + viewInsets.bottom),
@@ -181,6 +193,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             );
           },
+        ),
+            ),
+          ],
         ),
       ),
     );

@@ -8,7 +8,8 @@ import '../widgets/nav_bar.dart';
 
 class ContactsScreen extends StatefulWidget {
   final ValueChanged<String> onNavigate;
-  const ContactsScreen({super.key, required this.onNavigate});
+  final VoidCallback? onBack;
+  const ContactsScreen({super.key, required this.onNavigate, this.onBack});
 
   @override
   State<ContactsScreen> createState() => _ContactsScreenState();
@@ -95,7 +96,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          const TopBar(title: 'Cercle de confiance'),
+          TopBar(title: 'Cercle de confiance', onBackTap: widget.onBack),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),

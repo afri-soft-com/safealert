@@ -8,7 +8,8 @@ import '../widgets/nav_bar.dart';
 
 class DashboardScreen extends StatefulWidget {
   final ValueChanged<String> onNavigate;
-  const DashboardScreen({super.key, required this.onNavigate});
+  final VoidCallback? onBack;
+  const DashboardScreen({super.key, required this.onNavigate, this.onBack});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -59,7 +60,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          const TopBar(title: 'Tableau de bord — Votre quartier'),
+          TopBar(title: 'Tableau de bord — Votre quartier', onBackTap: widget.onBack),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),

@@ -8,7 +8,8 @@ import '../widgets/nav_bar.dart';
 
 class HeatmapScreen extends StatefulWidget {
   final ValueChanged<String> onNavigate;
-  const HeatmapScreen({super.key, required this.onNavigate});
+  final VoidCallback? onBack;
+  const HeatmapScreen({super.key, required this.onNavigate, this.onBack});
 
   @override
   State<HeatmapScreen> createState() => _HeatmapScreenState();
@@ -32,7 +33,7 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          const TopBar(title: 'Carte de chaleur — Densité incidents'),
+          TopBar(title: 'Carte de chaleur — Densité incidents', onBackTap: widget.onBack),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),

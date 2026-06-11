@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'theme.dart';
@@ -27,6 +28,9 @@ import 'screens/privacy_screen.dart';
 import 'screens/calculator_screen.dart';
 import 'services/volume_sos_service.dart';
 import 'services/fcm_service.dart';
+
+/// Onglets principaux de la barre de navigation inférieure.
+const kMainTabScreens = {'home', 'map', 'contacts', 'annuaire', 'dashboard'};
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,9 +71,13 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  String _currentScreen = 'splash';
+  final List<String> _navStack = ['splash'];
   bool _discreetLocked = false;
   bool _discreetChecked = false;
+
+  String get _currentScreen => _navStack.last;
+
+  bool get _canShowBackButton => _navStack.length > 1;
 
   @override
   void initState() {
@@ -95,7 +103,7 @@ class _AppShellState extends State<AppShell> {
       setState(() {
         _discreetLocked = (localDiscreet || context.read<AuthProvider>().isDiscreetMode) && !sessionUnlocked;
         _discreetChecked = true;
-        if (_discreetLocked) _currentScreen = 'calculator';
+        if (_discreetLocked) _navStack..clear()..add('calculator');
       });
     }
   }
@@ -103,23 +111,56 @@ class _AppShellState extends State<AppShell> {
   void _unlockDiscreet() {
     setState(() {
       _discreetLocked = false;
-      _currentScreen = 'splash';
+      _navStack..clear()..add('splash');
     });
   }
 
   void _navigate(String screen) {
     final auth = context.read<AuthProvider>();
     if (auth.requiresAuth(screen)) {
-      setState(() => _currentScreen = 'login');
+      setState(() {
+        if (_navStack.last != 'login') {
+          _navStack.add('login');
+        }
+      });
       return;
     }
-    setState(() => _currentScreen = screen);
+    setState(() {
+      if (kMainTabScreens.contains(screen)) {
+        _navStack..clear()..add(screen);
+      } else if (_navStack.last != screen) {
+        _navStack.add(screen);
+      }
+    });
+  }
+
+  void _goBack() {
+    setState(() {
+      if (_navStack.length > 1) {
+        _navStack.removeLast();
+        return;
+      }
+      final current = _navStack.last;
+      if (kMainTabScreens.contains(current) && current != 'home') {
+        _navStack..clear()..add('home');
+      } else if (current == 'login') {
+        _navStack..clear()..add('splash');
+      } else if (current == 'home' || current == 'splash') {
+        SystemNavigator.pop();
+      } else {
+        _navStack..clear()..add('home');
+      }
+    });
   }
 
   void _enterGuest() {
     context.read<AuthProvider>().enterGuestMode();
-    setState(() => _currentScreen = 'map');
+    setState(() {
+      _navStack..clear()..add('map');
+    });
   }
+
+  VoidCallback? get _onBack => _canShowBackButton ? _goBack : null;
 
   @override
   Widget build(BuildContext context) {
@@ -135,8 +176,10 @@ class _AppShellState extends State<AppShell> {
 
     if (_currentScreen == 'splash' && auth.isAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _currentScreen == 'splash') {
-          setState(() => _currentScreen = 'home');
+        if (mounted && _navStack.last == 'splash') {
+          setState(() {
+            _navStack..clear()..add('home');
+          });
         }
       });
     }
@@ -149,51 +192,67 @@ class _AppShellState extends State<AppShell> {
           onGuest: _enterGuest,
         );
       case 'login':
-        screen = LoginScreen(onSuccess: () {
-          auth.exitGuestMode();
-          _navigate('home');
-        });
+        screen = LoginScreen(
+          onSuccess: () {
+            auth.exitGuestMode();
+            _navigate('home');
+          },
+          onBack: _navStack.length > 1 ? _goBack : () {
+            setState(() {
+              _navStack..clear()..add('splash');
+            });
+          },
+        );
       case 'calculator':
         screen = CalculatorScreen(onUnlock: _unlockDiscreet);
       case 'home':
         screen = HomeScreen(onNavigate: _navigate);
       case 'sos':
-        screen = SOSScreen(onBack: () => _navigate('home'));
+        screen = SOSScreen(onBack: _goBack);
       case 'map':
-        screen = MapScreen(onNavigate: _navigate, isGuest: auth.isGuest);
+        screen = MapScreen(onNavigate: _navigate, isGuest: auth.isGuest, onBack: _onBack);
       case 'contacts':
-        screen = ContactsScreen(onNavigate: _navigate);
+        screen = ContactsScreen(onNavigate: _navigate, onBack: _onBack);
       case 'annuaire':
-        screen = AnnuaireScreen(onNavigate: _navigate);
+        screen = AnnuaireScreen(onNavigate: _navigate, onBack: _onBack);
       case 'heatmap':
-        screen = HeatmapScreen(onNavigate: _navigate);
+        screen = HeatmapScreen(onNavigate: _navigate, onBack: _onBack);
       case 'safety':
-        screen = SafetyScreen(onNavigate: _navigate);
+        screen = SafetyScreen(onNavigate: _navigate, onBack: _onBack);
       case 'groups':
-        screen = GroupsScreen(onNavigate: _navigate);
+        screen = GroupsScreen(onNavigate: _navigate, onBack: _onBack);
       case 'leader':
-        screen = LeaderScreen(onNavigate: _navigate);
+        screen = LeaderScreen(onNavigate: _navigate, onBack: _onBack);
       case 'settings':
         screen = SettingsScreen(
-          onBack: () => _navigate('home'),
+          onBack: _goBack,
           onPrivacy: () => _navigate('privacy'),
           onLogout: () {
             auth.logout();
-            _navigate('login');
+            setState(() {
+              _navStack..clear()..add('login');
+            });
           },
         );
       case 'privacy':
-        screen = PrivacyScreen(onBack: () => _navigate('settings'));
+        screen = PrivacyScreen(onBack: _goBack);
       case 'dashboard':
-        screen = DashboardScreen(onNavigate: _navigate);
+        screen = DashboardScreen(onNavigate: _navigate, onBack: _onBack);
       case 'history':
-        screen = HistoryScreen(onNavigate: _navigate);
+        screen = HistoryScreen(onNavigate: _navigate, onBack: _onBack);
       default:
         screen = HomeScreen(onNavigate: _navigate);
     }
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 200),
-      child: KeyedSubtree(key: ValueKey(_currentScreen), child: screen),
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _goBack();
+      },
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        child: KeyedSubtree(key: ValueKey(_currentScreen), child: screen),
+      ),
     );
   }
 }

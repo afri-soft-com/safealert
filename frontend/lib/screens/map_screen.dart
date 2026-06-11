@@ -15,7 +15,8 @@ const _defaultCenter = LatLng(-4.3217, 15.3125);
 class MapScreen extends StatefulWidget {
   final ValueChanged<String> onNavigate;
   final bool isGuest;
-  const MapScreen({super.key, required this.onNavigate, this.isGuest = false});
+  final VoidCallback? onBack;
+  const MapScreen({super.key, required this.onNavigate, this.isGuest = false, this.onBack});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -308,7 +309,7 @@ class _MapScreenState extends State<MapScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          const TopBar(title: 'Carte des incidents'),
+          TopBar(title: 'Carte des incidents', onBackTap: widget.onBack),
           if (widget.isGuest)
             Container(
               width: double.infinity,

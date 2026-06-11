@@ -55,11 +55,23 @@ class _SOSScreenState extends State<SOSScreen> {
             width: double.infinity,
             color: AppColors.rouge,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              children: const [
-                Text('ALERTE D\'URGENCE', style: TextStyle(color: Colors.white70, fontSize: 11, letterSpacing: 2)),
-                SizedBox(height: 4),
-                Text('Bouton SOS', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: widget.onBack,
+                  child: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ALERTE D\'URGENCE', style: TextStyle(color: Colors.white70, fontSize: 11, letterSpacing: 2)),
+                      SizedBox(height: 4),
+                      Text('Bouton SOS', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),

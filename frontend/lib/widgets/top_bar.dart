@@ -7,7 +7,8 @@ class TopBar extends StatelessWidget {
   final String? sub;
   final bool dark;
   final VoidCallback? onMenuTap;
-  const TopBar({super.key, this.title, this.sub, this.dark = false, this.onMenuTap});
+  final VoidCallback? onBackTap;
+  const TopBar({super.key, this.title, this.sub, this.dark = false, this.onMenuTap, this.onBackTap});
 
   @override
   Widget build(BuildContext context) {
@@ -19,6 +20,15 @@ class TopBar extends StatelessWidget {
         children: [
           Row(
             children: [
+              if (onBackTap != null) ...[
+                GestureDetector(
+                  onTap: onBackTap,
+                  child: const Padding(
+                    padding: EdgeInsets.only(right: 6),
+                    child: Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                  ),
+                ),
+              ],
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: const AppLogo(size: 28),
