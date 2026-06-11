@@ -220,8 +220,8 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Text(icon, style: const TextStyle(fontSize: 22)),
             const SizedBox(height: 4),
-            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
-            Text(sub, style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.bleuFonce), maxLines: 2, overflow: TextOverflow.ellipsis),
+            Text(sub, style: const TextStyle(fontSize: 10, color: AppColors.gris), maxLines: 2, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),

@@ -155,13 +155,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: const Center(child: Text('👤', style: TextStyle(fontSize: 20))),
                           ),
                           const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(user?['pseudo'] as String? ?? 'Citoyen',
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.bleuFonce)),
-                              Text(phone, style: const TextStyle(fontSize: 11, color: AppColors.gris)),
-                            ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(user?['pseudo'] as String? ?? 'Citoyen',
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
+                                    overflow: TextOverflow.ellipsis),
+                                Text(phone, style: const TextStyle(fontSize: 11, color: AppColors.gris), overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
                           ),
                         ],
                       ),

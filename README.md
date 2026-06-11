@@ -2,6 +2,15 @@
 
 Application de sécurité citoyenne pour l'Afrique subsaharienne. Architecture **offline-first** avec cache SQLite local, JWT auth par téléphone, et design adapté aux zones à faible connectivité.
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [docs/MANUEL_UTILISATEUR.md](docs/MANUEL_UTILISATEUR.md) | Guide utilisateur (français) — installation, OTP, SOS, FAQ |
+| [docs/DOCUMENTATION_VIVANTE.md](docs/DOCUMENTATION_VIVANTE.md) | Architecture, CI/CD, état du projet, changelog |
+| [docs/EXTERNAL_APIS.md](docs/EXTERNAL_APIS.md) | Variables d'environnement et APIs externes |
+| [docs/NEON_SETUP.md](docs/NEON_SETUP.md) | Configuration PostgreSQL Neon |
+
 ## Architecture
 
 ```

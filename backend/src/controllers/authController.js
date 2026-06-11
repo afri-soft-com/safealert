@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const { pool } = require("../config/database");
 const { sendSMS, isSMSConfigured } = require("../services/sms");
 const { normalizePhone } = require("../utils/phone");
+const { log } = require("../utils/logger");
 
 const OTP_TTL_SECONDS = 300;
 
@@ -31,12 +32,12 @@ const requestCode = async (req, res) => {
       process.env.NODE_ENV !== "production" && !isSMSConfigured();
 
     if (exposeDevOtp) {
-      console.log("");
-      console.log("══════════════════════════════════════════════");
-      console.log(`  [DEV OTP] ${phone} → ${code}  (valide 5 min)`);
-      console.log("  Twilio non configuré — SMS simulé, voir terminal.");
-      console.log("══════════════════════════════════════════════");
-      console.log("");
+      log("");
+      log("══════════════════════════════════════════════");
+      log(`  [DEV OTP] ${phone} → ${code}  (valide 5 min)`);
+      log("  Twilio non configuré — SMS simulé, voir terminal.");
+      log("══════════════════════════════════════════════");
+      log("");
     }
 
     const payload = { message: "Code envoyé", expiresIn: OTP_TTL_SECONDS };

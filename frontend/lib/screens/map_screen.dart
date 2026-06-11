@@ -160,7 +160,9 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    const Text('Signaler anonymement', style: TextStyle(fontSize: 11, color: AppColors.gris)),
+                    const Expanded(
+                      child: Text('Signaler anonymement', style: TextStyle(fontSize: 11, color: AppColors.gris)),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -322,17 +324,26 @@ class _MapScreenState extends State<MapScreen> {
                 children: [
                   Row(
                     children: [
-                      _badge('Danger', AppColors.rouge),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _badge('Danger', AppColors.rouge),
+                              const SizedBox(width: 6),
+                              _badge('Vigilance', AppColors.orange),
+                              const SizedBox(width: 6),
+                              _badge('Sûr', AppColors.vert),
+                            ],
+                          ),
+                        ),
+                      ),
                       const SizedBox(width: 6),
-                      _badge('Vigilance', AppColors.orange),
-                      const SizedBox(width: 6),
-                      _badge('Sûr', AppColors.vert),
-                      const Spacer(),
                       if (provider.isOffline)
                         const Text('📶', style: TextStyle(fontSize: 12))
                       else
                         Text('${incidents.length} alertes',
-                            style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                            style: const TextStyle(fontSize: 10, color: AppColors.gris), overflow: TextOverflow.ellipsis),
                     ],
                   ),
                   const SizedBox(height: 8),

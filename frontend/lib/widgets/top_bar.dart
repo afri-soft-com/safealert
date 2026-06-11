@@ -24,14 +24,16 @@ class TopBar extends StatelessWidget {
                 child: const AppLogo(size: 28),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('SafeAlert', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-                  if (sub != null) Text(sub!, style: const TextStyle(color: Colors.white70, fontSize: 10)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('SafeAlert', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.5), overflow: TextOverflow.ellipsis),
+                    if (sub != null) Text(sub!, style: const TextStyle(color: Colors.white70, fontSize: 10), overflow: TextOverflow.ellipsis, maxLines: 2),
+                  ],
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: onMenuTap,
                 child: const Icon(Icons.menu, color: Colors.white, size: 22),

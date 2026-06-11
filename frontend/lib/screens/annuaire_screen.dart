@@ -95,16 +95,21 @@ class _AnnuaireScreenState extends State<AnnuaireScreen> {
                                             ],
                                           ),
                                         ),
-                                        GestureDetector(
-                                          onTap: () {},
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                            decoration: BoxDecoration(
-                                              color: color,
-                                              borderRadius: BorderRadius.circular(10),
+                                        Flexible(
+                                          child: GestureDetector(
+                                            onTap: () {},
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                              decoration: BoxDecoration(
+                                                color: color,
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: Text(
+                                                s['phone_number'] as String? ?? '',
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                                              ),
                                             ),
-                                            child: Text(s['phone_number'] as String? ?? '',
-                                                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
                                           ),
                                         ),
                                       ],

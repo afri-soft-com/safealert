@@ -248,23 +248,29 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
                     Row(
                       children: [
-                        Text('$members membres', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                        Flexible(
+                          child: Text('$members membres', style: const TextStyle(fontSize: 10, color: AppColors.gris), overflow: TextOverflow.ellipsis),
+                        ),
                         if (zone.isNotEmpty) ...[
                           const SizedBox(width: 8),
-                          Text('📍 $zone', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                          Flexible(
+                            child: Text('📍 $zone', style: const TextStyle(fontSize: 10, color: AppColors.gris), overflow: TextOverflow.ellipsis),
+                          ),
                         ],
                       ],
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.grisClair,
-                  borderRadius: BorderRadius.circular(6),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.grisClair,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text('📋 $code', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.bleuFonce), overflow: TextOverflow.ellipsis),
                 ),
-                child: Text('📋 $code', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
               ),
             ],
           ),

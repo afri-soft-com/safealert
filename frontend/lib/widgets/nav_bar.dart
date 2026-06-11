@@ -42,6 +42,9 @@ class NavBar extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 10,
                       color: isActive ? AppColors.rouge : const Color(0xFFAAAAAA),

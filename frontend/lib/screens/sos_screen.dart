@@ -111,10 +111,12 @@ class _SOSScreenState extends State<SOSScreen> {
                         children: [
                           Text(done ? '✅' : s.icon, style: const TextStyle(fontSize: 18)),
                           const SizedBox(width: 12),
-                          Text(s.label, style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w600,
-                            color: done ? s.color : AppColors.gris,
-                          )),
+                          Expanded(
+                            child: Text(s.label, style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600,
+                              color: done ? s.color : AppColors.gris,
+                            ), overflow: TextOverflow.ellipsis),
+                          ),
                         ],
                       ),
                     );

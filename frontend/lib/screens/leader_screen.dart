@@ -206,13 +206,15 @@ class _LeaderScreenState extends State<LeaderScreen> {
               ),
               const SizedBox(width: 6),
               if (statusLabel.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(statusLabel, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color), overflow: TextOverflow.ellipsis),
                   ),
-                  child: Text(statusLabel, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: color)),
                 ),
               const Spacer(),
               Text('✅ $verif', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
@@ -225,10 +227,14 @@ class _LeaderScreenState extends State<LeaderScreen> {
           const SizedBox(height: 4),
           Row(
             children: [
-              Text('Par $reporter', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+              Flexible(
+                child: Text('Par $reporter', style: const TextStyle(fontSize: 10, color: AppColors.gris), overflow: TextOverflow.ellipsis),
+              ),
               if (zone.isNotEmpty) ...[
                 const SizedBox(width: 8),
-                Text('📍 $zone', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                Flexible(
+                  child: Text('📍 $zone', style: const TextStyle(fontSize: 10, color: AppColors.gris), overflow: TextOverflow.ellipsis),
+                ),
               ],
             ],
           ),

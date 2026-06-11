@@ -97,8 +97,11 @@ initFCM();
 initSMS();
 initRedis().catch((err) => console.warn("Redis init skipped:", err.message));
 
-server.listen(PORT, HOST, () => {
-  log(`SafeAlert API running on ${HOST}:${PORT}`);
-});
+if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
+  server.listen(PORT, HOST, () => {
+    log(`SafeAlert API running on ${HOST}:${PORT}`);
+  });
+}
 
 module.exports = { app, server, io };
+

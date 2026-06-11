@@ -47,15 +47,22 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+
     return Scaffold(
       backgroundColor: AppColors.bleuFonce,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(32, 32, 32, 32 + viewInsets.bottom),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight - viewInsets.bottom),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
                 const AppLogo(size: 96),
                 const SizedBox(height: 20),
                 const Text('SafeAlert', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800)),
@@ -108,6 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _codeCtrl,
                     keyboardType: TextInputType.number,
                     maxLength: 6,
+                    buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                     decoration: InputDecoration(
                       hintText: 'Code à 6 chiffres',
                       hintStyle: const TextStyle(color: Colors.white38),
@@ -125,8 +133,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         value: _isNew,
                         onChanged: (v) => setState(() => _isNew = v ?? false),
                         fillColor: WidgetStateProperty.resolveWith((_) => Colors.white54),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
                       ),
-                      const Text('Nouveau compte', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _isNew = !_isNew),
+                          child: const Text('Nouveau compte', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                        ),
+                      ),
                     ],
                   ),
                   if (_isNew) ...[
@@ -155,11 +170,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
                 if (auth.error != null) ...[
                   const SizedBox(height: 12),
-                  Text(auth.error!, style: const TextStyle(color: AppColors.rouge, fontSize: 12)),
+                  Text(
+                    auth.error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.rouge, fontSize: 12),
+                  ),
                 ],
-              ],
-            ),
-          ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
