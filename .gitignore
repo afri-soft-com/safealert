@@ -12,7 +12,7 @@ node_modules/
 credentials/
 credentials.json
 **/serviceAccount*.json
-firebase-adminsdk*.json
+*firebase-adminsdk*.json
 
 # Build & dependencies
 dist/
