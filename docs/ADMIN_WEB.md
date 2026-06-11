@@ -1,0 +1,97 @@
+# Console d'administration web — SafeAlert
+
+Interface web pour les **administrateurs plateforme** (`platform_admin`). Complète l'écran admin Flutter par une console bureau adaptée à la gestion quotidienne.
+
+## Prérequis
+
+- Node.js 20+
+- Backend SafeAlert en cours d'exécution (`http://localhost:3000`)
+- Compte utilisateur avec rôle `platform_admin`
+
+## Démarrage rapide
+
+```bash
+# Terminal 1 — API
+cd backend
+npm run dev
+
+# Terminal 2 — Console admin
+cd admin-web
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Ouvrir **http://localhost:5173**
+
+En développement, Vite proxifie `/api` vers le backend. Vous pouvez aussi définir :
+
+```env
+VITE_API_BASE_URL=http://localhost:3000/api
+```
+
+## Connexion
+
+1. Saisir le numéro de téléphone au format international (`+243971163574`)
+2. Recevoir le code OTP par SMS (ou en dev : terminal backend `[DEV OTP]` / champ `devCode`)
+3. Seuls les comptes `platform_admin` accèdent à la console
+
+### Promouvoir un administrateur
+
+```bash
+# Compte déjà créé via l'app mobile
+PLATFORM_ADMIN_PHONE=+243971163574 npm run migrate
+
+# Ou SQL direct
+UPDATE users SET role = 'platform_admin' WHERE phone = '+243971163574';
+```
+
+L'utilisateur doit **se reconnecter** pour obtenir un JWT avec le nouveau rôle.
+
+## Fonctionnalités
+
+| Page | Description |
+|------|-------------|
+| **Tableau de bord** | Utilisateurs, incidents, partenaires actifs, groupes |
+| **Utilisateurs** | Liste, recherche, changement de rôle et secteur |
+| **Partenaires API** | Création de clés (affichées une seule fois), révocation |
+| **Annuaire d'urgence** | CRUD des numéros d'urgence |
+| **Incidents** | Liste paginée avec filtres statut, zone, dates |
+| **Groupes** | Vue des groupes de voisins |
+
+## Production
+
+```bash
+cd admin-web
+npm run build   # → dist/
+```
+
+### Option A — Servir depuis l'API
+
+```env
+# backend/.env
+ADMIN_WEB_DIST=../admin-web/dist
+CORS_ORIGIN=https://admin.votredomaine.com
+```
+
+L'interface sera accessible sur `https://api.votredomaine.com/admin/`
+
+### Option B — Hébergement statique séparé
+
+Déployer `admin-web/dist/` sur Nginx, Netlify, etc. avec :
+
+```env
+VITE_API_BASE_URL=https://api.votredomaine.com/api
+```
+
+## Sécurité
+
+- JWT stocké en `localStorage` (usage admin interne)
+- Toutes les routes `/api/admin/*` exigent `platform_admin`
+- Ne jamais committer `.env` ni clés API partenaires
+
+## Stack
+
+- Vite 6 + React 19 + TypeScript
+- React Router 7
+- Thème sombre SafeAlert (accent rouge `#CC1C1C`)

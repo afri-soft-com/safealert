@@ -65,6 +65,17 @@ flutter pub get
 flutter run --dart-define=API_BASE_URL=http://192.168.x.x:3000/api
 ```
 
+### Console admin web
+
+```bash
+cd admin-web
+cp .env.example .env
+npm install
+npm run dev    # http://localhost:5173
+```
+
+Backend sur le port 3000 requis. CORS autorise `localhost:5173` en développement. Voir [ADMIN_WEB.md](ADMIN_WEB.md).
+
 **Points importants :**
 
 - PC et téléphone sur le **même Wi-Fi**.
@@ -148,7 +159,7 @@ docker compose --env-file .env.production up -d
 | Groupes voisins | ~80 % | Création, join par code |
 | Mode discret | ~75 % | Calculatrice + volume Android |
 | Leader / PDF | ~85 % | Filtrage secteur, gravité zones |
-| Administration | ~80 % | Écran mobile admin, API `/api/admin` |
+| Administration | ~90 % | Écran mobile + **console web** `admin-web/` |
 | Géocodage zones | ~90 % | Nominatim OSM, cache rate-limit |
 | Push FCM | ~60 % | Nécessite config Firebase |
 | iOS volume SOS | ~20 % | Limitation plateforme |
@@ -163,6 +174,14 @@ docker compose --env-file .env.production up -d
 ---
 
 ## 7. Changelog
+
+### 2026-06-11 (console admin web)
+
+- **admin-web/** : console Vite + React + TypeScript (thème sombre SafeAlert, UI français).
+- Pages : connexion OTP, tableau de bord, utilisateurs, partenaires, annuaire urgence, incidents, groupes.
+- **API** : `GET /api/admin/stats`, CRUD `/api/admin/emergency-numbers`, `GET /api/admin/incidents`, `GET /api/admin/groups`.
+- CORS dev : `localhost:5173` ; option `ADMIN_WEB_DIST` pour servir le build depuis l'API.
+- Doc : [ADMIN_WEB.md](ADMIN_WEB.md).
 
 ### 2026-06-11 (administration & zones)
 
@@ -232,8 +251,19 @@ Tous protégés par JWT + `requireRole('platform_admin')`.
 | GET | `/partners` | Liste clés partenaires |
 | POST | `/partners` | Créer clé (`partner_name`) |
 | DELETE | `/partners/:id` | Révoquer (`is_active=false`) |
+| GET | `/stats` | Métriques tableau de bord |
+| GET/POST | `/emergency-numbers` | Liste / créer numéro urgence |
+| PUT/DELETE | `/emergency-numbers/:id` | Modifier / supprimer |
+| GET | `/incidents?page&limit&status&zone&from&to` | Tous les incidents (paginé) |
+| GET | `/groups?page&limit` | Liste groupes voisins |
 
 `POST /api/partner/register` est réservé aux `platform_admin` (alias admin POST partners).
+
+### Console web (`admin-web/`)
+
+- Stack : Vite + React + TypeScript, port dev **5173**.
+- Auth : OTP téléphone via `/api/auth/*`, garde `platform_admin`.
+- Guide : [ADMIN_WEB.md](ADMIN_WEB.md).
 
 ### Premier administrateur
 
@@ -256,6 +286,7 @@ L'utilisateur doit se **reconnecter** pour obtenir un JWT avec le nouveau rôle.
 | [MANUEL_UTILISATEUR.md](MANUEL_UTILISATEUR.md) | Utilisateurs finaux |
 | [EXTERNAL_APIS.md](EXTERNAL_APIS.md) | DevOps / intégrations |
 | [NEON_SETUP.md](NEON_SETUP.md) | Configuration base Neon |
+| [ADMIN_WEB.md](ADMIN_WEB.md) | Admin plateforme (console web) |
 | [README.md](../README.md) | Démarrage rapide développeur |
 
 ---

@@ -39,15 +39,19 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 app.set("io", io);
 
+const path = require("path");
+
+const defaultDevOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
 const corsOrigin = process.env.CORS_ORIGIN;
+const corsOptions =
+  corsOrigin && corsOrigin !== "*"
+    ? { origin: corsOrigin.split(",").map((o) => o.trim()) }
+    : process.env.NODE_ENV !== "production"
+      ? { origin: defaultDevOrigins }
+      : {};
+
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(
-  cors(
-    corsOrigin && corsOrigin !== "*"
-      ? { origin: corsOrigin.split(",").map((o) => o.trim()) }
-      : {}
-  )
-);
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use("/api", apiLimiter);
 
@@ -80,6 +84,15 @@ app.use("/api/report", reportRoutes);
 app.use("/api/partner", partnerRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/history", historyRoutes);
+
+const adminWebDist = process.env.ADMIN_WEB_DIST;
+if (adminWebDist) {
+  const adminPath = path.resolve(adminWebDist);
+  app.use("/admin", express.static(adminPath));
+  app.get("/admin/*", (req, res) => {
+    res.sendFile(path.join(adminPath, "index.html"));
+  });
+}
 
 app.use((req, res) => {
   res.status(404).json({ error: "Route non trouvée", path: req.path });

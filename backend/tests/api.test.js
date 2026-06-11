@@ -236,6 +236,45 @@ describe("Admin", () => {
       .send({ partner_name: "Test" });
     expect(res.status).toBe(403);
   });
+
+  it("GET /api/admin/stats returns dashboard metrics", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total: 10 }] })
+      .mockResolvedValueOnce({ rows: [{ total: 50 }] })
+      .mockResolvedValueOnce({ rows: [{ total: 5 }] })
+      .mockResolvedValueOnce({ rows: [{ total: 2 }] })
+      .mockResolvedValueOnce({ rows: [{ total: 3 }] });
+    const res = await request(app)
+      .get("/api/admin/stats")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.users).toBe(10);
+    expect(res.body.incidents).toBe(50);
+  });
+
+  it("GET /api/admin/emergency-numbers lists entries", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "e1", service_name: "Police", phone_number: "112" }],
+    });
+    const res = await request(app)
+      .get("/api/admin/emergency-numbers")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+  });
+
+  it("GET /api/admin/incidents returns paginated list", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({
+        rows: [{ id: "i1", incident_type: "vol", status: "active", zone_name: "Gombe" }],
+      });
+    const res = await request(app)
+      .get("/api/admin/incidents")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+  });
 });
 
 describe("SOS", () => {
