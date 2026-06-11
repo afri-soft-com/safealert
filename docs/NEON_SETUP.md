@@ -54,6 +54,34 @@ Tables présentes : `users`, `trust_contacts`, `emergency_numbers`, `incidents`,
 3. **Optionnel — seed :** `DATABASE_URL=... npm run seed` dans `backend/` pour les numéros d’urgence.
 4. **Optionnel — projet Neon dédié SafeAlert :** créer un nouveau projet dans la console Neon, puis retirer le paramètre `projectId` de l’URL du serveur MCP Neon dans Cursor (déconnexion/reconnexion OAuth si besoin) pour permettre la gestion multi-projets.
 
+## Tests avant déploiement
+
+Suite automatisée (Windows) :
+
+```powershell
+.\scripts\pre-deploy-test.ps1
+```
+
+Vérifications manuelles rapides (API locale + Neon) :
+
+```powershell
+cd backend
+# DATABASE_URL = URL poolée Neon dans backend\.env
+$env:NODE_ENV = "development"
+$env:JWT_SECRET = "votre-secret-dev-32-caracteres-minimum"
+node src/server.js
+```
+
+Dans un autre terminal :
+
+```powershell
+Invoke-RestMethod http://localhost:3000/health
+Invoke-RestMethod http://localhost:3000/health/ready   # db: ok si Neon accessible
+Invoke-RestMethod http://localhost:3000/api/map/incidents   # GET public, pas d'auth
+```
+
+`POST /api/map/incidents` et les routes `/stats` nécessitent un JWT (`Authorization: Bearer …`).
+
 ## Limitations MCP constatées
 
 - Pas d’outil `list_projects` ni `create_project` dans la configuration actuelle.
