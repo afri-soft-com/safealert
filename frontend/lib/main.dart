@@ -1,0 +1,199 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'theme.dart';
+import 'providers/auth_provider.dart';
+import 'providers/incident_provider.dart';
+import 'providers/contacts_provider.dart';
+import 'providers/annuaire_provider.dart';
+import 'providers/leader_provider.dart';
+import 'providers/groups_provider.dart';
+import 'providers/history_provider.dart';
+import 'screens/splash_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/sos_screen.dart';
+import 'screens/map_screen.dart';
+import 'screens/contacts_screen.dart';
+import 'screens/annuaire_screen.dart';
+import 'screens/dashboard_screen.dart';
+import 'screens/settings_screen.dart';
+import 'screens/leader_screen.dart';
+import 'screens/groups_screen.dart';
+import 'screens/safety_screen.dart';
+import 'screens/heatmap_screen.dart';
+import 'screens/history_screen.dart';
+import 'screens/privacy_screen.dart';
+import 'screens/calculator_screen.dart';
+import 'services/volume_sos_service.dart';
+import 'services/fcm_service.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  FCMService().initialize();
+  runApp(const SafeAlertApp());
+}
+
+class SafeAlertApp extends StatelessWidget {
+  const SafeAlertApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuth()),
+        ChangeNotifierProvider(create: (_) => IncidentProvider()),
+        ChangeNotifierProvider(create: (_) => ContactsProvider()),
+        ChangeNotifierProvider(create: (_) => AnnuaireProvider()),
+        ChangeNotifierProvider(create: (_) => LeaderProvider()),
+        ChangeNotifierProvider(create: (_) => GroupsProvider()),
+        ChangeNotifierProvider(create: (_) => HistoryProvider()),
+      ],
+      child: MaterialApp(
+        title: 'SafeAlert',
+        theme: AppTheme.light,
+        debugShowCheckedModeBanner: false,
+        home: const AppShell(),
+      ),
+    );
+  }
+}
+
+class AppShell extends StatefulWidget {
+  const AppShell({super.key});
+
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  String _currentScreen = 'splash';
+  bool _discreetLocked = false;
+  bool _discreetChecked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _checkDiscreetMode();
+      if (!mounted) return;
+      VolumeSOSService.init(() {
+        if (mounted && context.read<AuthProvider>().isAuthenticated) {
+          context.read<IncidentProvider>().triggerSOS(0, 0, type: 'sos_discret');
+        }
+      });
+    });
+  }
+
+  Future<void> _checkDiscreetMode() async {
+    await context.read<AuthProvider>().checkAuth();
+    if (!mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    final sessionUnlocked = prefs.getBool('discreet_unlocked_session') ?? false;
+    final localDiscreet = prefs.getBool('discreet_mode_local') ?? false;
+    if (mounted) {
+      setState(() {
+        _discreetLocked = (localDiscreet || context.read<AuthProvider>().isDiscreetMode) && !sessionUnlocked;
+        _discreetChecked = true;
+        if (_discreetLocked) _currentScreen = 'calculator';
+      });
+    }
+  }
+
+  void _unlockDiscreet() {
+    setState(() {
+      _discreetLocked = false;
+      _currentScreen = 'splash';
+    });
+  }
+
+  void _navigate(String screen) {
+    final auth = context.read<AuthProvider>();
+    if (auth.requiresAuth(screen)) {
+      setState(() => _currentScreen = 'login');
+      return;
+    }
+    setState(() => _currentScreen = screen);
+  }
+
+  void _enterGuest() {
+    context.read<AuthProvider>().enterGuestMode();
+    setState(() => _currentScreen = 'map');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_discreetChecked) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_discreetLocked) {
+      return CalculatorScreen(onUnlock: _unlockDiscreet);
+    }
+
+    final auth = context.watch<AuthProvider>();
+
+    if (_currentScreen == 'splash' && auth.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _currentScreen == 'splash') {
+          setState(() => _currentScreen = 'home');
+        }
+      });
+    }
+
+    Widget screen;
+    switch (_currentScreen) {
+      case 'splash':
+        screen = SplashScreen(
+          onStart: () => _navigate(auth.isAuthenticated ? 'home' : 'login'),
+          onGuest: _enterGuest,
+        );
+      case 'login':
+        screen = LoginScreen(onSuccess: () {
+          auth.exitGuestMode();
+          _navigate('home');
+        });
+      case 'calculator':
+        screen = CalculatorScreen(onUnlock: _unlockDiscreet);
+      case 'home':
+        screen = HomeScreen(onNavigate: _navigate);
+      case 'sos':
+        screen = SOSScreen(onBack: () => _navigate('home'));
+      case 'map':
+        screen = MapScreen(onNavigate: _navigate, isGuest: auth.isGuest);
+      case 'contacts':
+        screen = ContactsScreen(onNavigate: _navigate);
+      case 'annuaire':
+        screen = AnnuaireScreen(onNavigate: _navigate);
+      case 'heatmap':
+        screen = HeatmapScreen(onNavigate: _navigate);
+      case 'safety':
+        screen = SafetyScreen(onNavigate: _navigate);
+      case 'groups':
+        screen = GroupsScreen(onNavigate: _navigate);
+      case 'leader':
+        screen = LeaderScreen(onNavigate: _navigate);
+      case 'settings':
+        screen = SettingsScreen(
+          onBack: () => _navigate('home'),
+          onPrivacy: () => _navigate('privacy'),
+          onLogout: () {
+            auth.logout();
+            _navigate('login');
+          },
+        );
+      case 'privacy':
+        screen = PrivacyScreen(onBack: () => _navigate('settings'));
+      case 'dashboard':
+        screen = DashboardScreen(onNavigate: _navigate);
+      case 'history':
+        screen = HistoryScreen(onNavigate: _navigate);
+      default:
+        screen = HomeScreen(onNavigate: _navigate);
+    }
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      child: KeyedSubtree(key: ValueKey(_currentScreen), child: screen),
+    );
+  }
+}

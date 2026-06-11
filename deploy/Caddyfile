@@ -1,0 +1,6 @@
+# Caddy — automatic HTTPS (Let's Encrypt)
+# Set DOMAIN env var when starting the container.
+
+{$DOMAIN} {
+    reverse_proxy api:3000
+}

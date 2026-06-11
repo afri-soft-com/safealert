@@ -1,0 +1,96 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+class ApiService {
+  /// Override at build time: flutter run --dart-define=API_BASE_URL=https://api.example.com/api
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://10.0.2.2:3000/api',
+  );
+
+  /// Socket.io server origin (API base URL without `/api` suffix).
+  static String get socketOrigin {
+    if (baseUrl.endsWith('/api')) {
+      return baseUrl.substring(0, baseUrl.length - 4);
+    }
+    final uri = Uri.parse(baseUrl);
+    if (uri.hasPort) return '${uri.scheme}://${uri.host}:${uri.port}';
+    return '${uri.scheme}://${uri.host}';
+  }
+  String? _token;
+
+  static final ApiService _instance = ApiService._();
+  ApiService._();
+  factory ApiService() => _instance;
+
+  Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    _token = prefs.getString('auth_token');
+  }
+
+  Map<String, String> get _headers => {
+    'Content-Type': 'application/json',
+    if (_token != null) 'Authorization': 'Bearer $_token',
+  };
+
+  bool get hasToken => _token != null;
+  String? get token => _token;
+
+  Future<void> setToken(String token) async {
+    _token = token;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('auth_token', token);
+  }
+
+  Future<void> clearToken() async {
+    _token = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+  }
+
+  Future<Map<String, dynamic>> get(String path) async {
+    final res = await http.get(Uri.parse('$baseUrl$path'), headers: _headers);
+    return _handle(res);
+  }
+
+  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
+    final res = await http.post(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body));
+    return _handle(res);
+  }
+
+  Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) async {
+    final res = await http.put(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body));
+    return _handle(res);
+  }
+
+  Future<Map<String, dynamic>> delete(String path) async {
+    final res = await http.delete(Uri.parse('$baseUrl$path'), headers: _headers);
+    return _handle(res);
+  }
+
+  Map<String, dynamic> _handle(http.Response res) {
+    dynamic body;
+    try {
+      body = res.body.isEmpty ? <String, dynamic>{} : jsonDecode(res.body);
+    } catch (_) {
+      throw ApiException('Réponse serveur invalide', res.statusCode);
+    }
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      if (body is List) return {'data': body, 'message': 'ok'};
+      if (body is Map) return body as Map<String, dynamic>;
+    }
+    if (body is Map && body.containsKey('error')) {
+      throw ApiException(body['error'] as String? ?? 'Erreur inconnue', res.statusCode);
+    }
+    throw ApiException('Erreur ${res.statusCode}', res.statusCode);
+  }
+}
+
+class ApiException implements Exception {
+  final String message;
+  final int statusCode;
+  ApiException(this.message, this.statusCode);
+  @override
+  String toString() => message;
+}

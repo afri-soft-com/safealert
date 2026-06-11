@@ -1,0 +1,84 @@
+# SafeAlert — production sur VPS avec PostgreSQL hébergé sur Neon
+# Usage : docker compose -f docker-compose.neon.yml --env-file .env.production up -d
+#
+# PostgreSQL : Neon (DATABASE_URL / DATABASE_URL_DIRECT dans .env.production)
+# Redis      : conteneur local sur le VPS (cache alertes — recommandé)
+# API        : image GHCR (API_IMAGE)
+
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    image: ${API_IMAGE:-ghcr.io/afri-soft-com/safealert-api:latest}
+    pull_policy: always
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+      AFRICASTALKING_API_KEY: ${AFRICASTALKING_API_KEY:-}
+      AFRICASTALKING_USERNAME: ${AFRICASTALKING_USERNAME:-}
+      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
+      FCM_PRIVATE_KEY: ${FCM_PRIVATE_KEY:-}
+      FCM_CLIENT_EMAIL: ${FCM_CLIENT_EMAIL:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: sh -c "npm run migrate && npm start"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    restart: unless-stopped
+
+  seed:
+    profiles: ["init"]
+    image: ${API_IMAGE:-ghcr.io/afri-soft-com/safealert-api:latest}
+    environment:
+      DATABASE_URL: ${DATABASE_URL_DIRECT:-${DATABASE_URL}}
+    command: npm run seed
+    restart: "no"
+
+  proxy:
+    profiles: ["proxy"]
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

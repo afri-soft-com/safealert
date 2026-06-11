@@ -1,0 +1,33 @@
+.env
+node_modules/
+.DS_Store
+*.log
+
+# Secrets & credentials
+.env.production
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials/
+credentials.json
+**/serviceAccount*.json
+firebase-adminsdk*.json
+
+# Build & dependencies
+dist/
+build/
+.next/
+out/
+coverage/
+__pycache__/
+*.pyc
+.pytest_cache/
+.turbo/
+.vercel/
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
