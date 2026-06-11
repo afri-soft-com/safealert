@@ -111,6 +111,8 @@ Sources documentées : `backend/src/config/migrate.js`, `seed.js`, contrôleurs,
 
 **Notifications externes** : SMS Twilio et push Firebase déclenchés à la création/annulation SOS (pas stockés en base).
 
+**Référence détaillée gravité / statut / heatmap** : voir [ZONES_GRAVITE.md](ZONES_GRAVITE.md) (critères exacts Danger, Vigilance, Sûr, Alerte ; acteurs ; distinction marqueurs vs densité heatmap).
+
 ---
 
 ### 2.5 `incident_verifications` — Confirmations communautaires
@@ -141,6 +143,7 @@ Sources documentées : `backend/src/config/migrate.js`, `seed.js`, contrôleurs,
 
 **Seed** : `npm run seed` insère 5 numéros RDC (112, 15, 118, etc.) après purge de la table.  
 **Lecture publique** : `GET /api/annuaire` (sans auth).  
+**Cache mobile offline** : l'app Flutter stocke la réponse dans SQLite (`safealert_cache.db`, clé `annuaire`, TTL 24 h) via `AnnuaireProvider` ; affichage immédiat du cache puis rafraîchissement réseau.  
 **Gestion admin** : CRUD via `GET/POST/PUT/DELETE /api/admin/emergency-numbers` (console web ou API).
 
 ---
@@ -381,6 +384,7 @@ Organismes externes (ONG, services publics, intégrateurs) — **pas de rôle ap
 | [DOCUMENTATION_VIVANTE.md](DOCUMENTATION_VIVANTE.md) | Architecture, CI/CD, changelog |
 | [ADMIN_WEB.md](ADMIN_WEB.md) | Console d'administration web |
 | [EXTERNAL_APIS.md](EXTERNAL_APIS.md) | Twilio, Firebase, Nominatim |
+| [ZONES_GRAVITE.md](ZONES_GRAVITE.md) | Critères gravité (alert, danger, vigilance, safe), statuts incident, heatmap vs marqueurs |
 
 ---
 

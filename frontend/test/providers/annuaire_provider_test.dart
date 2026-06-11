@@ -51,6 +51,47 @@ void main() {
       expect(provider.isOffline, true);
     });
 
+    test('caches numbers after successful fetch', () async {
+      fakeApi.onGet('/annuaire', () => {
+        'data': [
+          {'id': 3, 'service_name': 'Pompiers', 'phone_number': '118'},
+        ],
+      });
+
+      await provider.fetchNumbers();
+
+      final cached = await fakeDb.get('annuaire', maxAgeSeconds: 86400);
+      expect(cached, isNotNull);
+      expect((cached as List).first['service_name'], 'Pompiers');
+    });
+
+    test('preloads cache before API response', () async {
+      await fakeDb.put('annuaire', [
+        {'id': 4, 'service_name': 'Police'},
+      ]);
+      fakeApi.onGet('/annuaire', () => {
+        'data': [
+          {'id': 5, 'service_name': 'Police nationale'},
+        ],
+      });
+
+      await provider.fetchNumbers();
+
+      expect(provider.numbers.first['service_name'], 'Police nationale');
+      expect(provider.isOffline, false);
+    });
+
+    test('uses country-specific cache key', () async {
+      await fakeDb.put('annuaire_cd', [
+        {'id': 6, 'service_name': 'Urgences CD'},
+      ]);
+
+      await provider.fetchNumbers(country: 'cd');
+
+      expect(provider.numbers.first['service_name'], 'Urgences CD');
+      expect(provider.isOffline, true);
+    });
+
     test('sets empty list when cache misses on error', () async {
       await provider.fetchNumbers();
 

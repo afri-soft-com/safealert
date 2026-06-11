@@ -16,7 +16,9 @@ class SOSScreen extends StatefulWidget {
 class _SOSScreenState extends State<SOSScreen> {
   int _step = 0;
   bool _completed = false;
+  bool _failed = false;
   bool _cancelling = false;
+  Timer? _progressTimer;
   static const _steps = [
     _StepData('📍', 'GPS localisé', AppColors.vert),
     _StepData('📲', 'Contacts alertés', AppColors.vert),
@@ -24,12 +26,33 @@ class _SOSScreenState extends State<SOSScreen> {
     _StepData('🚨', 'Alerte transmise !', AppColors.rouge),
   ];
 
+  @override
+  void dispose() {
+    _progressTimer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _sendSOS() async {
     if (_completed) return;
-    setState(() => _step = 0);
+    _progressTimer?.cancel();
+    setState(() {
+      _step = 0;
+      _failed = false;
+      _completed = false;
+    });
+
+    final result = await context.read<IncidentProvider>().triggerSOS(
+      0, 0, type: 'sos',
+    );
+
+    if (!mounted) return;
+    if (result == null) {
+      setState(() => _failed = true);
+      return;
+    }
 
     int i = 0;
-    Timer.periodic(const Duration(milliseconds: 600), (timer) {
+    _progressTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {
       i++;
       if (mounted) setState(() => _step = i);
       if (i >= 4) {
@@ -37,12 +60,6 @@ class _SOSScreenState extends State<SOSScreen> {
         if (mounted) setState(() => _completed = true);
       }
     });
-
-    try {
-      await context.read<IncidentProvider>().triggerSOS(
-        0, 0, type: 'sos',
-      );
-    } catch (_) {}
   }
 
   @override
@@ -81,6 +98,21 @@ class _SOSScreenState extends State<SOSScreen> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
+                  if (_failed)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3CD),
+                        border: Border.all(color: AppColors.orange),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        '📶 Pas de connexion — L\'alerte n\'a pas pu être envoyée. Réessayez dès que le réseau est disponible.',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF7A4F00)),
+                      ),
+                    ),
                   const Spacer(flex: 1),
                   GestureDetector(
                     onTap: _sendSOS,
@@ -100,7 +132,13 @@ class _SOSScreenState extends State<SOSScreen> {
                       ),
                       child: Center(
                         child: Text(
-                          _step == 0 ? '🆘\nAPPUYER' : _completed ? '✅\nENVOYÉ !' : '⏳\nEnvoi...',
+                          _failed
+                              ? '📶\nRÉESSAYER'
+                              : _step == 0
+                                  ? '🆘\nAPPUYER'
+                                  : _completed
+                                      ? '✅\nENVOYÉ !'
+                                      : '⏳\nEnvoi...',
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800, height: 1.2),
                         ),

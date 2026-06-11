@@ -17,8 +17,18 @@ class AnnuaireProvider extends ChangeNotifier {
   bool get loading => _loading;
   bool get isOffline => _isOffline;
 
+  static const int _cacheTtlSeconds = 86400; // 24 h (US-12)
+
   Future<void> fetchNumbers({String? country}) async {
-    _loading = true;
+    final cacheKey = country != null ? 'annuaire_$country' : 'annuaire';
+
+    final cached = await _cache.get(cacheKey, maxAgeSeconds: _cacheTtlSeconds);
+    if (cached != null) {
+      _numbers = (cached as List).cast<Map<String, dynamic>>();
+      notifyListeners();
+    }
+
+    _loading = _numbers.isEmpty;
     _isOffline = false;
     notifyListeners();
     try {
@@ -26,15 +36,15 @@ class AnnuaireProvider extends ChangeNotifier {
       if (country != null) path += '?country=$country';
       final res = await _api.get(path);
       _numbers = (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-      await _cache.put('annuaire', _numbers);
+      await _cache.put(cacheKey, _numbers);
     } catch (_) {
-      final cached = await _cache.get('annuaire', maxAgeSeconds: 86400);
-      if (cached != null) {
-        _numbers = (cached as List).cast<Map<String, dynamic>>();
-        _isOffline = true;
-      } else {
-        _numbers = [];
+      if (_numbers.isEmpty) {
+        final fallback = await _cache.get(cacheKey, maxAgeSeconds: _cacheTtlSeconds);
+        if (fallback != null) {
+          _numbers = (fallback as List).cast<Map<String, dynamic>>();
+        }
       }
+      _isOffline = _numbers.isNotEmpty;
     }
     _loading = false;
     notifyListeners();

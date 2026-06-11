@@ -179,9 +179,17 @@ Le **nom de zone** (`zone_name`) est déterminé automatiquement à partir du GP
 
 SafeAlert fonctionne avec une **connexion limitée** :
 
-- Les données récentes (incidents, contacts, annuaire) sont **mises en cache**.
-- Un bandeau indique **Mode hors-ligne** quand le serveur est inaccessible.
-- Le bouton SOS tente d'envoyer l'alerte dès que le réseau revient.
+| Donnée | Cache local | Durée | Indicateur |
+|--------|-------------|-------|------------|
+| **Annuaire d'urgence** | SQLite | 24 h | Bandeau jaune « Mode hors-ligne » |
+| **Carte (incidents)** | SQLite | 5 min | Icône 📶 sur la carte |
+| **Contacts de confiance** | SQLite | 1 h | Bandeau jaune |
+| **Conseils sécurité** | Intégrés à l'app | Permanent | Toujours disponible |
+
+- L'annuaire et la carte affichent les **dernières données synchronisées** si le serveur est inaccessible (délai max. ~10 s).
+- Un bandeau **Mode hors-ligne** indique que vous consultez le cache local.
+- Le **bouton SOS** nécessite une connexion : un message d'erreur s'affiche si l'envoi échoue — réessayez lorsque le réseau est rétabli.
+- **Mode invité** : annuaire et carte accessibles sans compte ; le cache s'applique de la même façon.
 
 ---
 

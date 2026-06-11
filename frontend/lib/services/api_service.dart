@@ -9,6 +9,9 @@ class ApiService {
     defaultValue: 'http://10.0.2.2:3000/api',
   );
 
+  /// Limite l'attente réseau pour basculer rapidement sur le cache offline.
+  static const Duration requestTimeout = Duration(seconds: 10);
+
   /// Socket.io server origin (API base URL without `/api` suffix).
   static String get socketOrigin {
     if (baseUrl.endsWith('/api')) {
@@ -50,27 +53,37 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> get(String path) async {
-    final res = await http.get(Uri.parse('$baseUrl$path'), headers: _headers);
+    final res = await http
+        .get(Uri.parse('$baseUrl$path'), headers: _headers)
+        .timeout(requestTimeout);
     return _handle(res);
   }
 
   Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
-    final res = await http.post(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body));
+    final res = await http
+        .post(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body))
+        .timeout(requestTimeout);
     return _handle(res);
   }
 
   Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) async {
-    final res = await http.put(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body));
+    final res = await http
+        .put(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body))
+        .timeout(requestTimeout);
     return _handle(res);
   }
 
   Future<Map<String, dynamic>> patch(String path, Map<String, dynamic> body) async {
-    final res = await http.patch(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body));
+    final res = await http
+        .patch(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body))
+        .timeout(requestTimeout);
     return _handle(res);
   }
 
   Future<Map<String, dynamic>> delete(String path) async {
-    final res = await http.delete(Uri.parse('$baseUrl$path'), headers: _headers);
+    final res = await http
+        .delete(Uri.parse('$baseUrl$path'), headers: _headers)
+        .timeout(requestTimeout);
     return _handle(res);
   }
 
