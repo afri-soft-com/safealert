@@ -142,6 +142,7 @@ docker compose --env-file .env.production up -d
 | Changement architecture / déploiement | Mettre à jour ce fichier |
 | Correctif ou feature livrée | Ajouter une entrée **Changelog** ci-dessous |
 | Nouvelle route API | Mettre à jour `README.md` (table endpoints) |
+| Nouvelle table ou changement de rôles | Mettre à jour [PROVENANCE_DONNEES_ET_ROLES.md](PROVENANCE_DONNEES_ET_ROLES.md) |
 
 **Règle :** toute PR qui modifie le comportement visible ou le déploiement doit inclure la mise à jour doc associée.
 
@@ -287,6 +288,7 @@ L'utilisateur doit se **reconnecter** pour obtenir un JWT avec le nouveau rôle.
 | [EXTERNAL_APIS.md](EXTERNAL_APIS.md) | DevOps / intégrations |
 | [NEON_SETUP.md](NEON_SETUP.md) | Configuration base Neon |
 | [ADMIN_WEB.md](ADMIN_WEB.md) | Admin plateforme (console web) |
+| [PROVENANCE_DONNEES_ET_ROLES.md](PROVENANCE_DONNEES_ET_ROLES.md) | Provenance des données et rôles |
 | [README.md](../README.md) | Démarrage rapide développeur |
 
 ---

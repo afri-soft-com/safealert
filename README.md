@@ -11,6 +11,7 @@ Application de sùcuritù citoyenne pour l'Afrique subsaharienne. Architecture **o
 | [docs/EXTERNAL_APIS.md](docs/EXTERNAL_APIS.md) | Variables d'environnement et APIs externes |
 | [docs/NEON_SETUP.md](docs/NEON_SETUP.md) | Configuration PostgreSQL Neon |
 | [docs/ADMIN_WEB.md](docs/ADMIN_WEB.md) | Console web d'administration plateforme |
+| [docs/PROVENANCE_DONNEES_ET_ROLES.md](docs/PROVENANCE_DONNEES_ET_ROLES.md) | Provenance des donnÈes et rÙles utilisateurs |
 
 ## Architecture
 
