@@ -1,5 +1,70 @@
 # SafeAlert — déploiement sur Render.com
 
+## Déploiement via MCP Render (Cursor)
+
+Le serveur MCP `user-render` permet de créer et configurer les services depuis Cursor.
+
+### Prérequis MCP
+
+1. Clé API Render : [Account Settings → API Keys](https://dashboard.render.com/u/settings#api-keys)
+2. Dans Cursor : **Settings → MCP → user-render** → variable `RENDER_API_KEY`
+3. **GitHub connecté à Render** avec accès au dépôt `afri-soft-com/safealert` (obligatoire pour un dépôt privé)
+
+### État du workspace (dernière session MCP)
+
+| Élément | Statut |
+|---------|--------|
+| Connexion MCP | ✅ OK |
+| Workspace | **My Workspace** (`celestinkas@gmail.com`) |
+| Key Value `safealert-redis` | ✅ Créé (Frankfurt, free, `allkeys-lru`) |
+| Web Service `safealert-api` | ⚠️ Bloqué — dépôt GitHub privé non accessible à Render |
+| Static Site `safealert-admin` | ⏸ Non créé (attendre l’API) |
+
+### Créer l’API après connexion GitHub
+
+Une fois le dépôt connecté dans [Render Dashboard → Account → GitHub](https://dashboard.render.com/) :
+
+**Option A — Blueprint (recommandé)** : New → Blueprint → repo `afri-soft-com/safealert` → Apply `render.yaml`.
+
+**Option B — MCP `create_web_service`** :
+
+| Paramètre | Valeur |
+|-----------|--------|
+| `name` | `safealert-api` |
+| `runtime` | `node` |
+| `repo` | `https://github.com/afri-soft-com/safealert` |
+| `branch` | `main` |
+| `region` | `frankfurt` |
+| `plan` | `starter` (évite le sleep du free tier) |
+| `buildCommand` | `cd backend && npm install && npm run migrate` |
+| `startCommand` | `cd backend && npm start` |
+
+Variables d’environnement à définir via MCP `update_environment_variables` ou le dashboard (ne jamais committer) :
+
+- `NODE_ENV=production`, `HOST=0.0.0.0`, `JWT_EXPIRES_IN=30d`
+- `DATABASE_URL` (Neon poolée), `DATABASE_URL_DIRECT` (Neon direct pour migrations)
+- `JWT_SECRET`, `TWILIO_*`, `FCM_*`
+- `REDIS_URL` (copier depuis le dashboard Key Value `safealert-redis`)
+- `NOMINATIM_USER_AGENT` (ex. `SafeAlert/1.0 (safealert-api.onrender.com)`)
+- `CORS_ORIGIN` (URL admin-web une fois déployée)
+
+**Limitations MCP** : pas de `rootDir`, pas de `healthCheckPath`, pas de runtime Docker. Configurer **Health Check Path** `/health/ready` manuellement dans le dashboard après création.
+
+### Static Site admin-web (optionnel, MCP)
+
+```
+create_static_site:
+  name: safealert-admin
+  repo: https://github.com/afri-soft-com/safealert
+  branch: main
+  buildCommand: cd admin-web && npm install && npm run build
+  publishPath: admin-web/dist
+  envVars:
+    - VITE_API_BASE_URL=https://safealert-api.onrender.com/api
+```
+
+---
+
 ## Verdict de compatibilité
 
 **Oui, partiellement compatible.**
