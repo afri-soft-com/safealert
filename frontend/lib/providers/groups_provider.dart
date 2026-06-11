@@ -11,13 +11,24 @@ class GroupsProvider extends ChangeNotifier {
         _cache = localDatabase ?? LocalDatabase();
   List<Map<String, dynamic>> _myGroups = [];
   List<Map<String, dynamic>> _discoverable = [];
+  final Map<String, List<Map<String, dynamic>>> _joinRequestsByGroup = {};
   bool _loading = false;
   bool _isOffline = false;
+  String? _lastJoinMessage;
 
   List<Map<String, dynamic>> get myGroups => _myGroups;
   List<Map<String, dynamic>> get discoverable => _discoverable;
   bool get loading => _loading;
   bool get isOffline => _isOffline;
+  String? get lastJoinMessage => _lastJoinMessage;
+
+  int get totalPendingRequests => _myGroups.fold<int>(
+        0,
+        (sum, g) => sum + ((g['pending_requests'] as int?) ?? 0),
+      );
+
+  List<Map<String, dynamic>> joinRequestsFor(String groupId) =>
+      _joinRequestsByGroup[groupId] ?? [];
 
   Future<void> fetchMyGroups() async {
     _loading = true;
@@ -55,6 +66,18 @@ class GroupsProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> fetchJoinRequests(String groupId) async {
+    try {
+      final res = await _api.get('/groups/$groupId/join-requests');
+      _joinRequestsByGroup[groupId] =
+          (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      notifyListeners();
+    } catch (_) {
+      _joinRequestsByGroup[groupId] = [];
+      notifyListeners();
+    }
+  }
+
   Future<bool> createGroup(String name, {String? description, String? zoneName}) async {
     try {
       await _api.post('/groups', {
@@ -70,10 +93,33 @@ class GroupsProvider extends ChangeNotifier {
   }
 
   Future<bool> joinGroup(String code) async {
+    _lastJoinMessage = null;
     try {
-      await _api.post('/groups/join', {'invite_code': code});
-      await fetchMyGroups();
+      final res = await _api.post('/groups/join', {'invite_code': code});
+      _lastJoinMessage = res['message'] as String? ?? 'Demande envoyée';
       await fetchDiscoverable();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> approveJoinRequest(String requestId, String groupId) async {
+    try {
+      await _api.put('/groups/join-requests/$requestId/approve', {});
+      await fetchJoinRequests(groupId);
+      await fetchMyGroups();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> rejectJoinRequest(String requestId, String groupId) async {
+    try {
+      await _api.put('/groups/join-requests/$requestId/reject', {});
+      await fetchJoinRequests(groupId);
+      await fetchMyGroups();
       return true;
     } catch (_) {
       return false;

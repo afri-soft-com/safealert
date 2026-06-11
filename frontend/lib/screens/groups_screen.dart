@@ -19,10 +19,17 @@ class _GroupsScreenState extends State<GroupsScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final p = context.read<GroupsProvider>();
-      p.fetchMyGroups();
-      p.fetchDiscoverable();
+      await p.fetchMyGroups();
+      await p.fetchDiscoverable();
+      for (final g in p.myGroups) {
+        final pending = g['pending_requests'] as int? ?? 0;
+        final role = g['my_role'] as String? ?? 'member';
+        if (pending > 0 && (role == 'admin')) {
+          await p.fetchJoinRequests(g['id'] as String);
+        }
+      }
     });
   }
 
@@ -104,15 +111,26 @@ class _GroupsScreenState extends State<GroupsScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Rejoindre un groupe', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        content: TextField(
-          controller: codeCtrl,
-          textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(
-            hintText: 'Code d\'invitation (ex: A1B2C3D4)',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            isDense: true,
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Votre demande sera envoyée à l\'administrateur du groupe pour validation.',
+              style: TextStyle(fontSize: 11, color: AppColors.gris),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: codeCtrl,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                hintText: 'Code d\'invitation (ex: A1B2C3D4)',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                isDense: true,
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -123,14 +141,102 @@ class _GroupsScreenState extends State<GroupsScreen> {
             onPressed: () async {
               if (codeCtrl.text.trim().isEmpty) return;
               Navigator.pop(ctx);
-              await context.read<GroupsProvider>().joinGroup(codeCtrl.text.trim());
+              final p = context.read<GroupsProvider>();
+              final ok = await p.joinGroup(codeCtrl.text.trim());
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(
+                  ok ? (p.lastJoinMessage ?? 'Demande envoyée') : 'Code invalide ou demande déjà en cours',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                backgroundColor: ok ? AppColors.vert : AppColors.rouge,
+              ));
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.vert,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Rejoindre', style: TextStyle(fontSize: 13)),
+            child: const Text('Envoyer la demande', style: TextStyle(fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _expandGroupRequests(Map<String, dynamic> g, GroupsProvider p) async {
+    final id = g['id'] as String;
+    await p.fetchJoinRequests(id);
+    if (!mounted) return;
+    final requests = p.joinRequestsFor(id);
+    if (requests.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Aucune demande en attente', style: TextStyle(fontSize: 12)),
+      ));
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Demandes en attente — ${g['name']}',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
+            const SizedBox(height: 12),
+            ...requests.map((r) => _requestTile(r, id, p)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _requestTile(Map<String, dynamic> r, String groupId, GroupsProvider p) {
+    final id = r['id'] as String;
+    final pseudo = r['pseudo'] as String? ?? 'Citoyen';
+    final phone = r['phone'] as String? ?? '';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.grisClair,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(pseudo, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                Text(phone, style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              await p.rejectJoinRequest(id, groupId);
+              if (mounted) Navigator.pop(context);
+            },
+            child: const Text('Refuser', style: TextStyle(fontSize: 11, color: AppColors.rouge)),
+          ),
+          const SizedBox(width: 4),
+          ElevatedButton(
+            onPressed: () async {
+              await p.approveJoinRequest(id, groupId);
+              if (mounted) Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.vert,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            ),
+            child: const Text('Approuver', style: TextStyle(fontSize: 11)),
           ),
         ],
       ),
@@ -142,6 +248,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     final p = context.watch<GroupsProvider>();
     final myGroups = p.myGroups;
     final discoverable = p.discoverable;
+    final totalPending = p.totalPendingRequests;
 
     return Scaffold(
       body: Column(
@@ -185,6 +292,29 @@ class _GroupsScreenState extends State<GroupsScreen> {
                           ),
                         ],
                       ),
+                      if (totalPending > 0) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.orange.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.orange.withValues(alpha: 0.5)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.notifications_active, size: 18, color: AppColors.orange),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '$totalPending demande${totalPending > 1 ? 's' : ''} en attente de validation',
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       if (myGroups.isNotEmpty) ...[
                         const Text('MES GROUPES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
@@ -195,7 +325,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       if (discoverable.isNotEmpty) ...[
                         const Text('GROUPES À DÉCOUVRIR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
                         const SizedBox(height: 8),
-                        ...discoverable.map((g) => _discoverCard(g, p)),
+                        ...discoverable.map((g) => _discoverCard(g)),
                       ],
                       if (myGroups.isEmpty && discoverable.isEmpty)
                         const Padding(
@@ -220,6 +350,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
     final zone = g['zone_name'] as String? ?? '';
     final members = g['member_count'] as int? ?? 0;
     final code = g['invite_code'] as String? ?? '';
+    final myRole = g['my_role'] as String? ?? 'member';
+    final pending = g['pending_requests'] as int? ?? 0;
+    final isAdmin = myRole == 'admin';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
@@ -263,6 +397,19 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   ],
                 ),
               ),
+              if (isAdmin && pending > 0)
+                GestureDetector(
+                  onTap: () => _expandGroupRequests(g, p),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.orange,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text('$pending', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ),
+                ),
               Flexible(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -275,6 +422,23 @@ class _GroupsScreenState extends State<GroupsScreen> {
               ),
             ],
           ),
+          if (isAdmin && pending > 0) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _expandGroupRequests(g, p),
+                icon: const Icon(Icons.person_add_alt_1, size: 14),
+                label: Text('Demandes en attente ($pending)', style: const TextStyle(fontSize: 11)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.orange,
+                  side: const BorderSide(color: AppColors.orange),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
@@ -295,7 +459,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
-  Widget _discoverCard(Map<String, dynamic> g, GroupsProvider p) {
+  Widget _discoverCard(Map<String, dynamic> g) {
     final name = g['name'] as String? ?? '';
     final zone = g['zone_name'] as String? ?? '';
     final members = g['member_count'] as int? ?? 0;

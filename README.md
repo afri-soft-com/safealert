@@ -66,6 +66,14 @@ npm run dev               # â†’ http://localhost:3000
 
 ### 3. Frontend
 
+> **Important :** le dossier `frontend/` est une app **Flutter** (`pubspec.yaml`). N'utilisez **pas** `npm` ici. Toutes les commandes Node/npm se lancent depuis `backend/`.
+
+Sur un **téléphone Android** (même Wi-Fi que le PC), récupérez l'IP LAN du PC (`ipconfig`, adresse du type `192.168.x.x`) puis :
+
+```bash
+flutter run -d <device_id> --dart-define=API_BASE_URL=http://<IP_LAN>:3000/api
+```
+
 ```bash
 cd frontend
 flutter pub get

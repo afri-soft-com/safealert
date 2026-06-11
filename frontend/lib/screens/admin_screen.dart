@@ -217,6 +217,22 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     return Column(
       children: [
         Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.grisClair,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text(
+              'Les partenaires (ONG, autorités) ne sont pas des utilisateurs mobiles. '
+              'Ils intègrent l\'API SafeAlert via une clé X-API-Key — pas d\'écran dédié dans l\'app.',
+              style: TextStyle(fontSize: 10, color: AppColors.gris, height: 1.4),
+            ),
+          ),
+        ),
+        Padding(
           padding: const EdgeInsets.all(12),
           child: SizedBox(
             width: double.infinity,

@@ -106,21 +106,46 @@ void main() {
   });
 
   group('joinGroup', () {
-    test('joins group and refreshes lists', () async {
-      fakeApi.onPost('/groups/join', () => {'message': 'Rejoint'});
-      fakeApi.onGet('/groups', () => {'data': []});
+    test('sends join request and refreshes discoverable', () async {
+      fakeApi.onPost('/groups/join', () => {'message': 'Demande envoyée', 'status': 'pending'});
       fakeApi.onGet('/groups/discover', () => {'data': []});
 
       final result = await provider.joinGroup('ABCD12');
 
       expect(result, true);
       expect(fakeApi.lastBody!['invite_code'], 'ABCD12');
+      expect(provider.lastJoinMessage, 'Demande envoyée');
     });
 
     test('returns false on failure', () async {
       final result = await provider.joinGroup('INVALID');
 
       expect(result, false);
+    });
+  });
+
+  group('join requests admin', () {
+    test('fetches join requests for group', () async {
+      fakeApi.onGet('/groups/g1/join-requests', () => {
+        'data': [
+          {'id': 'r1', 'pseudo': 'Marie', 'phone': '+243812345678'},
+        ],
+      });
+
+      await provider.fetchJoinRequests('g1');
+
+      expect(provider.joinRequestsFor('g1').length, 1);
+      expect(provider.joinRequestsFor('g1')[0]['pseudo'], 'Marie');
+    });
+
+    test('approves join request', () async {
+      fakeApi.onPut('/groups/join-requests/r1/approve', () => {'status': 'approved'});
+      fakeApi.onGet('/groups/g1/join-requests', () => {'data': []});
+      fakeApi.onGet('/groups', () => {'data': []});
+
+      final result = await provider.approveJoinRequest('r1', 'g1');
+
+      expect(result, true);
     });
   });
 

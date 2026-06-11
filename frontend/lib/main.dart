@@ -28,6 +28,7 @@ import 'screens/history_screen.dart';
 import 'screens/admin_screen.dart';
 import 'screens/privacy_screen.dart';
 import 'screens/calculator_screen.dart';
+import 'screens/help_manual_screen.dart';
 import 'services/volume_sos_service.dart';
 import 'services/fcm_service.dart';
 
@@ -226,10 +227,13 @@ class _AppShellState extends State<AppShell> {
         screen = GroupsScreen(onNavigate: _navigate, onBack: _onBack);
       case 'leader':
         screen = LeaderScreen(onNavigate: _navigate, onBack: _onBack);
+      case 'help':
+        screen = HelpManualScreen(onBack: _goBack);
       case 'settings':
         screen = SettingsScreen(
           onBack: _goBack,
           onPrivacy: () => _navigate('privacy'),
+          onHelp: () => _navigate('help'),
           onAdmin: auth.user?['role'] == 'platform_admin' ? () => _navigate('admin') : null,
           onLogout: () {
             auth.logout();

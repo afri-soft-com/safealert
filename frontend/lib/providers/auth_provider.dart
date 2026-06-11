@@ -7,7 +7,7 @@ import '../services/socket_service.dart';
 
 /// Routes nécessitant une authentification (US-14 mode invité).
 const kAuthRequiredScreens = {
-  'home', 'sos', 'contacts', 'dashboard', 'settings', 'leader', 'groups', 'history', 'privacy', 'admin',
+  'home', 'sos', 'contacts', 'dashboard', 'settings', 'leader', 'groups', 'history', 'privacy', 'admin', 'help',
 };
 
 class AuthProvider extends ChangeNotifier {

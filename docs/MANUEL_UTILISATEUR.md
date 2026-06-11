@@ -112,7 +112,8 @@ Pour masquer l'application derrière une calculatrice :
 
 | Fonction | Description |
 |----------|-------------|
-| **Groupes voisins** | Créer ou rejoindre un groupe d'entraide par quartier |
+| **Groupes voisins** | Créer un groupe ou demander à rejoindre via code d'invitation (validation admin) |
+| **Aide / Manuel** | Guide intégré (connexion, SOS, rôles, FAQ) depuis l'accueil ou Paramètres |
 | **Conseils sécurité** | Astuces disponibles hors ligne |
 | **Carte chaleur** | Densité des incidents par zone |
 | **Mon historique** | Vos alertes passées |
@@ -126,6 +127,24 @@ Réservé aux comptes avec le rôle **Administrateur plateforme** :
 1. Depuis l'**accueil**, carte **Administration**, ou **Paramètres → Administration plateforme**.
 2. Onglet **Utilisateurs** : liste paginée, changement de rôle (citoyen, responsable, agent, administrateur), attribution d'un **secteur géographique** (ex. Gombe, Limete).
 3. Onglet **Partenaires API** : créer une clé pour un organisme externe, révoquer une clé inactive.
+
+### 3.12 Rôles application vs partenaires API
+
+| Type | Accès |
+|------|--------|
+| **Citoyen** | Application mobile standard (SOS, carte, groupes…) |
+| **Responsable / Agent** | + Mode responsable (incidents du secteur assigné) |
+| **Administrateur plateforme** | + Administration (utilisateurs, rôles, clés partenaires) |
+| **Partenaire ONG / autorité** | **Pas d'application mobile** — intégration API avec en-tête `X-API-Key` |
+
+Les partenaires sont des organismes externes (ONG, services publics, intégrateurs) qui consomment l'API SafeAlert côté serveur. Un administrateur plateforme crée leur clé dans **Administration → Partenaires API**. Ils n'ont pas de compte OTP ni d'écran dédié dans l'app.
+
+### 3.13 Groupes voisins — demandes d'adhésion
+
+1. **Créer** un groupe : vous devenez administrateur et recevez un code d'invitation à partager.
+2. **Rejoindre** avec un code : votre demande est **en attente** — vous n'êtes pas ajouté immédiatement.
+3. L'**administrateur du groupe** voit les demandes en attente et peut **Approuver** ou **Refuser**.
+4. Une fois approuvé, le groupe apparaît dans **Mes groupes**.
 
 Les responsables (leader/agent) avec un secteur assigné ne voient que les incidents dont la zone correspond à ce secteur dans **Mode responsable**.
 

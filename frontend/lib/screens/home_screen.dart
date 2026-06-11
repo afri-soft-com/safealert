@@ -158,6 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildCard('🛡', 'Conseils sécurité', 'Astuces hors-ligne', () => widget.onNavigate('safety'), AppColors.rouge),
                     _buildCard('🔥', 'Carte chaleur', 'Densité incidents', () => widget.onNavigate('heatmap'), AppColors.orange),
                     _buildCard('📋', 'Mon historique', 'Mes alertes', () => widget.onNavigate('history'), AppColors.gris),
+                    _buildCard('📖', 'Aide / Manuel', 'Guide d\'utilisation', () => widget.onNavigate('help'), AppColors.bleu),
                   ],
                 ),
                 const SizedBox(height: 14),

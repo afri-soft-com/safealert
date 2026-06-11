@@ -11,8 +11,9 @@ class SettingsScreen extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onLogout;
   final VoidCallback? onPrivacy;
+  final VoidCallback? onHelp;
   final VoidCallback? onAdmin;
-  const SettingsScreen({super.key, required this.onBack, required this.onLogout, this.onPrivacy, this.onAdmin});
+  const SettingsScreen({super.key, required this.onBack, required this.onLogout, this.onPrivacy, this.onHelp, this.onAdmin});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -261,6 +262,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             Text('iOS : détection volume non disponible (limitation système)',
                                 style: TextStyle(fontSize: 10, color: AppColors.gris, fontStyle: FontStyle.italic)),
                           ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.blanc,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFEEEEEE)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('AIDE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.gris, letterSpacing: 1)),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: widget.onHelp,
+                          icon: const Icon(Icons.menu_book_outlined, size: 16),
+                          label: const Text('Aide / Manuel d\'utilisation', style: TextStyle(fontSize: 13)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.bleuFonce,
+                            side: const BorderSide(color: Color(0xFFDDDDDD)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
                         ),
                       ),
                     ],

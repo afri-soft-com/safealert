@@ -22,6 +22,7 @@ process.env.JWT_EXPIRES_IN = "1h";
 const { app } = require("../src/server");
 
 const validToken = jwt.sign({ userId: "user-1", role: "citizen" }, process.env.JWT_SECRET);
+const user2Token = jwt.sign({ userId: "user-2", role: "citizen" }, process.env.JWT_SECRET);
 const leaderToken = jwt.sign({ userId: "leader-1", role: "leader" }, process.env.JWT_SECRET);
 const adminToken = jwt.sign({ userId: "admin-1", role: "platform_admin" }, process.env.JWT_SECRET);
 
@@ -341,6 +342,87 @@ describe("Leader", () => {
       .set("Authorization", `Bearer ${leaderToken}`);
     expect(res.status).toBe(200);
     expect(res.body.incident.status).toBe("in_progress");
+  });
+});
+
+describe("Groups join requests", () => {
+  it("POST /api/groups/join creates pending request", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .post("/api/groups/join")
+      .set("Authorization", `Bearer ${user2Token}`)
+      .send({ invite_code: "ABCD1234" });
+    expect(res.status).toBe(201);
+    expect(res.body.message).toMatch(/demande envoyée/i);
+    expect(res.body.status).toBe("pending");
+  });
+
+  it("POST /api/groups/join rejects duplicate pending request", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: "r1", status: "pending" }] });
+    const res = await request(app)
+      .post("/api/groups/join")
+      .set("Authorization", `Bearer ${user2Token}`)
+      .send({ invite_code: "ABCD1234" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/déjà en attente/i);
+  });
+
+  it("GET /api/groups/:id/join-requests rejects non-admin", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .get("/api/groups/g1/join-requests")
+      .set("Authorization", `Bearer ${user2Token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it("GET /api/groups/:id/join-requests allows group admin", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] })
+      .mockResolvedValueOnce({
+        rows: [{ id: "r1", user_id: "user-2", pseudo: "Jean", phone: "+243811111111", status: "pending" }],
+      });
+    const res = await request(app)
+      .get("/api/groups/g1/join-requests")
+      .set("Authorization", `Bearer ${validToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body[0].pseudo).toBe("Jean");
+  });
+
+  it("PUT /api/groups/join-requests/:id/approve adds member", async () => {
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [{ id: "r1", group_id: "g1", user_id: "user-2", status: "pending", group_name: "Voisins" }],
+      })
+      .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .put("/api/groups/join-requests/r1/approve")
+      .set("Authorization", `Bearer ${validToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("approved");
+  });
+
+  it("PUT /api/groups/join-requests/:id/reject updates status", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "r1", group_id: "g1", user_id: "user-2", status: "pending" }] })
+      .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .put("/api/groups/join-requests/r1/reject")
+      .set("Authorization", `Bearer ${validToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("rejected");
   });
 });
 
