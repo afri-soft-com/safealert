@@ -53,6 +53,8 @@ DATABASE_URL_DIRECT=postgresql://USER:PASS@ep-xxx.region.aws.neon.tech/safealert
 | **Statut** | À configurer (sinon simulation console en dev) |
 | **Valeur (placeholder)** | SID / Token depuis [console.twilio.com](https://console.twilio.com) |
 
+**Dev sans Twilio :** avec `NODE_ENV=development` et variables Twilio/Africa's Talking vides, le code OTP s'affiche dans le terminal backend (`[DEV OTP]`) et est renvoyé dans la réponse `POST /api/auth/request-code` via le champ `devCode` (jamais en production).
+
 ---
 
 ## 3. Africa's Talking (SMS — alternative Afrique)

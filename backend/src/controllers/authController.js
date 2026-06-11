@@ -1,6 +1,5 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { log } = require("../utils/logger");
 const { pool } = require("../config/database");
 const { sendSMS, isSMSConfigured } = require("../services/sms");
 
@@ -27,11 +26,24 @@ const requestCode = async (req, res) => {
 
     await sendSMS(phone, `Votre code SafeAlert: ${code}. Valide 5 minutes.`);
 
-    if (!isSMSConfigured() || process.env.NODE_ENV !== "production") {
-      log(`[DEV] Code for ${phone}: ${code}`);
+    const exposeDevOtp =
+      process.env.NODE_ENV !== "production" && !isSMSConfigured();
+
+    if (exposeDevOtp) {
+      console.log("");
+      console.log("══════════════════════════════════════════════");
+      console.log(`  [DEV OTP] ${phone} → ${code}  (valide 5 min)`);
+      console.log("  Twilio non configuré — SMS simulé, voir terminal.");
+      console.log("══════════════════════════════════════════════");
+      console.log("");
     }
 
-    return res.json({ message: "Code envoyé", expiresIn: OTP_TTL_SECONDS });
+    const payload = { message: "Code envoyé", expiresIn: OTP_TTL_SECONDS };
+    if (exposeDevOtp) {
+      payload.devCode = code;
+    }
+
+    return res.json(payload);
   } catch (err) {
     console.error("requestCode error:", err);
     return res.status(500).json({ error: "Erreur serveur" });

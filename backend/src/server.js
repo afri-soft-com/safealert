@@ -91,13 +91,14 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 
 initFCM();
 initSMS();
 initRedis().catch((err) => console.warn("Redis init skipped:", err.message));
 
-server.listen(PORT, () => {
-  log(`SafeAlert API running on port ${PORT}`);
+server.listen(PORT, HOST, () => {
+  log(`SafeAlert API running on ${HOST}:${PORT}`);
 });
 
 module.exports = { app, server, io };

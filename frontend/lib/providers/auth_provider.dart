@@ -19,6 +19,7 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? _user;
   String? _error;
   String? _phone;
+  String? _devCode;
 
   bool get loading => _loading;
   bool get isAuthenticated => _isAuthenticated;
@@ -26,6 +27,8 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? get user => _user;
   String? get error => _error;
   String? get phone => _phone;
+  /// OTP de test renvoyé par l'API en dev quand SMS n'est pas configuré.
+  String? get devCode => _devCode;
 
   Future<void> checkAuth() async {
     await _api.init();
@@ -49,8 +52,9 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      await _api.post('/auth/request-code', {'phone': phone});
+      final res = await _api.post('/auth/request-code', {'phone': phone});
       _phone = phone;
+      _devCode = res['devCode'] as String?;
       _loading = false;
       notifyListeners();
       return true;
@@ -146,6 +150,7 @@ class AuthProvider extends ChangeNotifier {
     _isAuthenticated = false;
     _isGuest = false;
     _phone = null;
+    _devCode = null;
     LocationService().sharePresence = true;
     notifyListeners();
   }

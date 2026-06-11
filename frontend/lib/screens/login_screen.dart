@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
@@ -86,6 +87,23 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ] else ...[
+                  if (kDebugMode && auth.devCode != null) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.orange.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.orange.withValues(alpha: 0.5)),
+                      ),
+                      child: Text(
+                        'Mode dev — code OTP : ${auth.devCode}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: AppColors.orange, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   TextField(
                     controller: _codeCtrl,
                     keyboardType: TextInputType.number,
