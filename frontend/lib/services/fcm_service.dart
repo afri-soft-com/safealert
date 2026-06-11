@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import '../firebase_options.dart';
 import 'api_service.dart';
 
 class FCMService extends ChangeNotifier {
@@ -23,9 +24,9 @@ class FCMService extends ChangeNotifier {
     _initialized = true;
 
     try {
-      // Si firebase_options.dart existe (généré par flutterfire configure),
-      // décommenter l'import et utiliser DefaultFirebaseOptions.currentPlatform
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
       final messaging = FirebaseMessaging.instance;
 
       if (defaultTargetPlatform == TargetPlatform.iOS) {
