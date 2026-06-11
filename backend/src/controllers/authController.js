@@ -106,6 +106,7 @@ const verifyCode = async (req, res) => {
         phone: user.phone,
         pseudo: user.pseudo,
         role: user.role,
+        sector_name: user.sector_name ?? null,
         is_discreet_mode: user.is_discreet_mode ?? false,
         share_presence: user.share_presence ?? true,
       },
@@ -119,7 +120,7 @@ const verifyCode = async (req, res) => {
 const getProfile = async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, phone, pseudo, role, avatar_url, is_discreet_mode, share_presence, last_seen_at, created_at
+      `SELECT id, phone, pseudo, role, sector_name, avatar_url, is_discreet_mode, share_presence, last_seen_at, created_at
        FROM users WHERE id = $1`,
       [req.userId]
     );

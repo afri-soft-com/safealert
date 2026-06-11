@@ -1,5 +1,6 @@
 const { pool } = require("../config/database");
 const { cacheGet, cacheSet, invalidateActiveAlerts } = require("../config/redis");
+const { resolveZoneName } = require("../utils/incidentZone");
 
 const buildIncidentsCacheKey = (hours, status) =>
   `map:incidents:h${hours}:s${status || "all"}`;
@@ -77,11 +78,12 @@ const reportIncident = async (req, res) => {
     return res.status(400).json({ error: "Position et type d'incident requis" });
   }
   try {
+    const zoneName = await resolveZoneName(lat, lng);
     const result = await pool.query(
-      `INSERT INTO incidents (user_id, incident_type, description, lat, lng, location, severity, is_anonymous)
-       VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326), 'vigilance', $8)
+      `INSERT INTO incidents (user_id, incident_type, description, lat, lng, location, severity, is_anonymous, zone_name)
+       VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326), 'vigilance', $8, $9)
        RETURNING *`,
-      [req.userId, incident_type, description, lat, lng, lng, lat, is_anonymous || false]
+      [req.userId, incident_type, description, lat, lng, lng, lat, is_anonymous || false, zoneName]
     );
     await invalidateActiveAlerts();
     return res.status(201).json(result.rows[0]);
@@ -111,12 +113,16 @@ const verifyIncident = async (req, res) => {
     );
 
     let newStatus = "active";
+    let newSeverity = inc.rows[0].severity || "vigilance";
     const newCount = inc.rows[0].verified_by + 1;
-    if (newCount >= 3) newStatus = "verified";
+    if (newCount >= 3) {
+      newStatus = "verified";
+      newSeverity = "danger";
+    }
 
     const result = await pool.query(
-      `UPDATE incidents SET verified_by = $1, status = $2 WHERE id = $3 RETURNING *`,
-      [newCount, newStatus, id]
+      `UPDATE incidents SET verified_by = $1, status = $2, severity = $3 WHERE id = $4 RETURNING *`,
+      [newCount, newStatus, newSeverity, id]
     );
     await invalidateActiveAlerts();
     return res.json(result.rows[0]);

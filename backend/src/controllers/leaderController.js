@@ -1,7 +1,23 @@
 const { pool } = require("../config/database");
 
+const getLeaderSector = async (userId) => {
+  const res = await pool.query("SELECT sector_name FROM users WHERE id = $1", [userId]);
+  return res.rows[0]?.sector_name || null;
+};
+
+const sectorFilterClause = (sectorName, alias = "i", startParam = 1) => {
+  if (!sectorName) return { clause: "", params: [], nextParam: startParam };
+  return {
+    clause: ` AND ${alias}.zone_name ILIKE $${startParam}`,
+    params: [`%${sectorName}%`],
+    nextParam: startParam + 1,
+  };
+};
+
 const getSectorIncidents = async (req, res) => {
   try {
+    const sectorName = await getLeaderSector(req.userId);
+    const filter = sectorFilterClause(sectorName, "i", 1);
     const result = await pool.query(`
       SELECT i.id, i.incident_type, i.description, i.lat, i.lng,
              i.severity, i.status, i.verified_by, i.is_anonymous, i.zone_name, i.created_at,
@@ -10,8 +26,9 @@ const getSectorIncidents = async (req, res) => {
       FROM incidents i
       LEFT JOIN users u ON i.user_id = u.id
       WHERE i.status IN ('active', 'verified', 'acknowledged', 'in_progress')
+      ${filter.clause}
       ORDER BY i.created_at DESC LIMIT 100
-    `);
+    `, filter.params);
     return res.json(result.rows);
   } catch (err) {
     console.error("getSectorIncidents error:", err);
@@ -62,12 +79,34 @@ const acknowledgeIncident = async (req, res) => {
 const resolveIncident = async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await pool.query(
-      `UPDATE incidents SET status = 'resolved', resolved_at = NOW()
-       WHERE id = $1 AND status IN ('active', 'verified', 'acknowledged', 'in_progress') RETURNING *`,
+    const existing = await pool.query(
+      "SELECT id, zone_name FROM incidents WHERE id = $1 AND status IN ('active', 'verified', 'acknowledged', 'in_progress')",
       [id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ error: "Incident non trouvé ou déjà résolu" });
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: "Incident non trouvé ou déjà résolu" });
+    }
+
+    const zoneName = existing.rows[0].zone_name;
+    let severityUpdate = "";
+    if (zoneName) {
+      const activeInZone = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM incidents
+         WHERE zone_name ILIKE $1 AND id != $2
+           AND status IN ('active', 'verified', 'acknowledged', 'in_progress')
+           AND created_at > NOW() - INTERVAL '24 hours'`,
+        [`%${zoneName}%`, id]
+      );
+      if (activeInZone.rows[0].count === 0) {
+        severityUpdate = ", severity = 'safe'";
+      }
+    }
+
+    const result = await pool.query(
+      `UPDATE incidents SET status = 'resolved', resolved_at = NOW()${severityUpdate}
+       WHERE id = $1 RETURNING *`,
+      [id]
+    );
     return res.json({ message: "Incident résolu", incident: result.rows[0] });
   } catch (err) {
     console.error("resolveIncident error:", err);
@@ -77,6 +116,14 @@ const resolveIncident = async (req, res) => {
 
 const getSectorStats = async (req, res) => {
   try {
+    const sectorName = await getLeaderSector(req.userId);
+    let whereClause = "";
+    const params = [];
+    if (sectorName) {
+      whereClause = " WHERE zone_name ILIKE $1";
+      params.push(`%${sectorName}%`);
+    }
+
     const result = await pool.query(`
       SELECT
         COUNT(*) FILTER (WHERE status = 'active') as active,
@@ -88,8 +135,9 @@ const getSectorStats = async (req, res) => {
         COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as last_24h,
         COUNT(DISTINCT user_id) as total_reporters
       FROM incidents
-    `);
-    return res.json(result.rows[0]);
+      ${whereClause}
+    `, params);
+    return res.json({ ...result.rows[0], sector_name: sectorName });
   } catch (err) {
     console.error("getSectorStats error:", err);
     return res.status(500).json({ error: "Erreur serveur" });

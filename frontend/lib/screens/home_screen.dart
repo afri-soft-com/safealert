@@ -195,6 +195,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: _buildCard('👑', 'Mode responsable', 'Gérer les incidents du secteur',
                         () => widget.onNavigate('leader'), AppColors.bleuFonce),
                   ),
+                if (userRole == 'platform_admin')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: _buildCard('⚙️', 'Administration', 'Utilisateurs, rôles et partenaires API',
+                        () => widget.onNavigate('admin'), AppColors.gris),
+                  ),
               ],
             ),
           ),

@@ -53,6 +53,7 @@ class FakeApiService implements ApiService {
   final Map<String, Map<String, dynamic> Function()> _getResponses = {};
   final Map<String, Map<String, dynamic> Function()> _postResponses = {};
   final Map<String, Map<String, dynamic> Function()> _putResponses = {};
+  final Map<String, Map<String, dynamic> Function()> _patchResponses = {};
   final Map<String, Map<String, dynamic> Function()> _deleteResponses = {};
 
   @override
@@ -71,6 +72,10 @@ class FakeApiService implements ApiService {
 
   void onPut(String path, Map<String, dynamic> Function() response) {
     _putResponses[path] = response;
+  }
+
+  void onPatch(String path, Map<String, dynamic> Function() response) {
+    _patchResponses[path] = response;
   }
 
   void onDelete(String path, Map<String, dynamic> Function() response) {
@@ -116,6 +121,15 @@ class FakeApiService implements ApiService {
     final factory = _putResponses[path];
     if (factory != null) return factory();
     throw Exception('Not stubbed: PUT $path');
+  }
+
+  @override
+  Future<Map<String, dynamic>> patch(String path, Map<String, dynamic> body) async {
+    lastPath = path;
+    lastBody = body;
+    final factory = _patchResponses[path];
+    if (factory != null) return factory();
+    throw Exception('Not stubbed: PATCH $path');
   }
 
   @override

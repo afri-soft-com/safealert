@@ -10,6 +10,7 @@ import 'providers/annuaire_provider.dart';
 import 'providers/leader_provider.dart';
 import 'providers/groups_provider.dart';
 import 'providers/history_provider.dart';
+import 'providers/admin_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -24,6 +25,7 @@ import 'screens/groups_screen.dart';
 import 'screens/safety_screen.dart';
 import 'screens/heatmap_screen.dart';
 import 'screens/history_screen.dart';
+import 'screens/admin_screen.dart';
 import 'screens/privacy_screen.dart';
 import 'screens/calculator_screen.dart';
 import 'services/volume_sos_service.dart';
@@ -52,6 +54,7 @@ class SafeAlertApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LeaderProvider()),
         ChangeNotifierProvider(create: (_) => GroupsProvider()),
         ChangeNotifierProvider(create: (_) => HistoryProvider()),
+        ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],
       child: MaterialApp(
         title: 'SafeAlert',
@@ -227,6 +230,7 @@ class _AppShellState extends State<AppShell> {
         screen = SettingsScreen(
           onBack: _goBack,
           onPrivacy: () => _navigate('privacy'),
+          onAdmin: auth.user?['role'] == 'platform_admin' ? () => _navigate('admin') : null,
           onLogout: () {
             auth.logout();
             setState(() {
@@ -240,6 +244,8 @@ class _AppShellState extends State<AppShell> {
         screen = DashboardScreen(onNavigate: _navigate, onBack: _onBack);
       case 'history':
         screen = HistoryScreen(onNavigate: _navigate, onBack: _onBack);
+      case 'admin':
+        screen = AdminScreen(onNavigate: _navigate, onBack: _onBack);
       default:
         screen = HomeScreen(onNavigate: _navigate);
     }

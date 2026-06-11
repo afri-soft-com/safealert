@@ -11,7 +11,8 @@ class SettingsScreen extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onLogout;
   final VoidCallback? onPrivacy;
-  const SettingsScreen({super.key, required this.onBack, required this.onLogout, this.onPrivacy});
+  final VoidCallback? onAdmin;
+  const SettingsScreen({super.key, required this.onBack, required this.onLogout, this.onPrivacy, this.onAdmin});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -307,6 +308,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('COMPTE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.gris, letterSpacing: 1)),
+                      if (user?['role'] == 'platform_admin' && widget.onAdmin != null) ...[
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: widget.onAdmin,
+                            icon: const Icon(Icons.admin_panel_settings, size: 16),
+                            label: const Text('Administration plateforme', style: TextStyle(fontSize: 13)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.bleuFonce,
+                              side: const BorderSide(color: AppColors.bleuFonce),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       SizedBox(
                         width: double.infinity,

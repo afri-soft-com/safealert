@@ -127,14 +127,34 @@ const migrate = async () => {
 
     await client.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS share_presence BOOLEAN DEFAULT true;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS sector_name VARCHAR(100);
       ALTER TABLE incidents ADD COLUMN IF NOT EXISTS acknowledged_by UUID REFERENCES users(id) ON DELETE SET NULL;
       ALTER TABLE incidents ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMP WITH TIME ZONE;
       ALTER TABLE incidents DROP CONSTRAINT IF EXISTS incidents_status_check;
       ALTER TABLE incidents ADD CONSTRAINT incidents_status_check
         CHECK (status IN ('active','verified','resolved','false_alarm','acknowledged','in_progress'));
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+      ALTER TABLE users ADD CONSTRAINT users_role_check
+        CHECK (role IN ('citizen','leader','agent','platform_admin'));
     `);
 
+    const adminPhone = process.env.PLATFORM_ADMIN_PHONE;
+    if (adminPhone) {
+      const normalized = adminPhone.trim();
+      const promoted = await client.query(
+        `UPDATE users SET role = 'platform_admin', updated_at = NOW()
+         WHERE phone = $1 RETURNING id, phone, pseudo`,
+        [normalized]
+      );
+      if (promoted.rows.length > 0) {
+        console.log(`Platform admin promoted: ${promoted.rows[0].phone} (${promoted.rows[0].pseudo})`);
+      } else {
+        console.log(`PLATFORM_ADMIN_PHONE=${normalized} — aucun utilisateur existant (créez le compte puis relancez migrate)`);
+      }
+    }
+
     console.log("Migration completed successfully");
+    console.log("Pour promouvoir un admin manuellement : UPDATE users SET role = 'platform_admin' WHERE phone = '+243XXXXXXXXX';");
   } catch (err) {
     console.error("Migration failed:", err);
     throw err;

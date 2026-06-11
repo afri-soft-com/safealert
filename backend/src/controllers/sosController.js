@@ -1,6 +1,7 @@
 const { pool } = require("../config/database");
 const { sendAlert, sendCancelAlert } = require("../services/alert");
 const { invalidateActiveAlerts } = require("../config/redis");
+const { resolveZoneName } = require("../utils/incidentZone");
 
 const CANCEL_WINDOW_MS = 2 * 60 * 1000;
 
@@ -19,11 +20,12 @@ const triggerSOS = async (req, res) => {
   }
 
   try {
+    const zoneName = await resolveZoneName(lat, lng);
     const result = await pool.query(
-      `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity)
-       VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, 'alert')
+      `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name)
+       VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, 'alert', $8)
        RETURNING *`,
-      [req.userId, incident_type || "sos", lat, lng, lng, lat, description]
+      [req.userId, incident_type || "sos", lat, lng, lng, lat, description, zoneName]
     );
     const incident = result.rows[0];
 

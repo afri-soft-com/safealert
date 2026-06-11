@@ -147,7 +147,9 @@ docker compose --env-file .env.production up -d
 | Annuaire urgence | ~95 % | Cache 24h |
 | Groupes voisins | ~80 % | Création, join par code |
 | Mode discret | ~75 % | Calculatrice + volume Android |
-| Leader / PDF | ~70 % | Rôle leader requis |
+| Leader / PDF | ~85 % | Filtrage secteur, gravité zones |
+| Administration | ~80 % | Écran mobile admin, API `/api/admin` |
+| Géocodage zones | ~90 % | Nominatim OSM, cache rate-limit |
 | Push FCM | ~60 % | Nécessite config Firebase |
 | iOS volume SOS | ~20 % | Limitation plateforme |
 
@@ -162,6 +164,14 @@ docker compose --env-file .env.production up -d
 
 ## 7. Changelog
 
+### 2026-06-11 (administration & zones)
+
+- **Géocodage Nominatim** : `zone_name` auto à la création SOS/signalement ; cache + rate-limit.
+- **Gravité** : 3 confirmations → `danger` ; résolution zone calme → `safe`.
+- **Secteurs leaders** : `users.sector_name`, filtrage ILIKE côté `/api/leader`.
+- **Admin** : rôle `platform_admin`, routes `/api/admin/*`, écran Flutter `admin_screen.dart`.
+- **Partenaires** : enregistrement ouvert restreint aux admins.
+
 ### 2026-06-11
 
 - **OTP E.164** : normalisation `+243` côté backend (`utils/phone.js`) et frontend (`lib/utils/phone.dart`).
@@ -175,6 +185,67 @@ docker compose --env-file .env.production up -d
 - Stack Neon + Redis VPS + déploiement GHCR.
 - Cache SQLite offline-first (providers Flutter).
 - CI GitHub Actions backend + frontend.
+
+---
+
+---
+
+## 9. Administration et secteurs (juin 2026)
+
+### Rôles utilisateur
+
+| Rôle | Code | Capacités |
+|------|------|-----------|
+| Citoyen | `citizen` | SOS, signalements, carte |
+| Responsable | `leader` | Mode responsable, PDF secteur |
+| Agent | `agent` | Idem leader |
+| Admin plateforme | `platform_admin` | Gestion utilisateurs + clés partenaires |
+
+### Modèle secteur
+
+- Colonne `users.sector_name` (nullable, VARCHAR 100).
+- Leaders/agents avec secteur : incidents filtrés via `zone_name ILIKE '%secteur%'`.
+- Assignation : `PATCH /api/admin/users/:id/sector` (admin uniquement).
+
+### Géocodage inverse (zones)
+
+- Service : `backend/src/services/geocode.js`
+- API : Nominatim OSM (`/reverse?lat=&lon=&format=json`)
+- User-Agent obligatoire : `NOMINATIM_USER_AGENT` ou défaut SafeAlert
+- Cache mémoire + intervalle min 1,1 s entre requêtes
+- Appelé à la création SOS et signalement carte → remplit `incidents.zone_name`
+
+### Gravité après confirmations
+
+- `verified_by >= 3` → `severity = danger`, `status = verified`
+- Résolution leader sans autre incident actif 24 h dans la zone → `severity = safe`
+
+### Endpoints admin (`/api/admin/*`)
+
+Tous protégés par JWT + `requireRole('platform_admin')`.
+
+| Méthode | Route | Action |
+|---------|-------|--------|
+| GET | `/users?page&limit` | Liste utilisateurs paginée |
+| PATCH | `/users/:id/role` | `{ role }` |
+| PATCH | `/users/:id/sector` | `{ sector_name }` |
+| GET | `/partners` | Liste clés partenaires |
+| POST | `/partners` | Créer clé (`partner_name`) |
+| DELETE | `/partners/:id` | Révoquer (`is_active=false`) |
+
+`POST /api/partner/register` est réservé aux `platform_admin` (alias admin POST partners).
+
+### Premier administrateur
+
+```bash
+# Option A — variable d'environnement (compte déjà créé)
+PLATFORM_ADMIN_PHONE=+243812345678 npm run migrate
+
+# Option B — SQL direct
+UPDATE users SET role = 'platform_admin' WHERE phone = '+243812345678';
+```
+
+L'utilisateur doit se **reconnecter** pour obtenir un JWT avec le nouveau rôle.
 
 ---
 

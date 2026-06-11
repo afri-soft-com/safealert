@@ -23,6 +23,7 @@ const { app } = require("../src/server");
 
 const validToken = jwt.sign({ userId: "user-1", role: "citizen" }, process.env.JWT_SECRET);
 const leaderToken = jwt.sign({ userId: "leader-1", role: "leader" }, process.env.JWT_SECRET);
+const adminToken = jwt.sign({ userId: "admin-1", role: "platform_admin" }, process.env.JWT_SECRET);
 
 let validOtpHash;
 
@@ -35,6 +36,13 @@ beforeEach(() => {
   mockQuery.mockResolvedValue({ rows: [] });
   mockConnect.mockResolvedValue(mockClient);
   mockRelease.mockReset();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ address: { suburb: "Gombe" } }),
+    })
+  );
 });
 
 describe("Health", () => {
@@ -163,15 +171,69 @@ describe("Incidents", () => {
 
   it("POST /api/map/incidents/:id/verify records vote and increments count", async () => {
     mockQuery
-      .mockResolvedValueOnce({ rows: [{ verified_by: 0, status: "active" }] })
+      .mockResolvedValueOnce({ rows: [{ verified_by: 0, status: "active", severity: "vigilance" }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: "i1", verified_by: 1, status: "active" }] });
+      .mockResolvedValueOnce({ rows: [{ id: "i1", verified_by: 1, status: "active", severity: "vigilance" }] });
     const res = await request(app)
       .post("/api/map/incidents/i1/verify")
       .set("Authorization", `Bearer ${validToken}`);
     expect(res.status).toBe(200);
     expect(res.body.verified_by).toBe(1);
+  });
+
+  it("POST /api/map/incidents/:id/verify sets danger when 3 confirmations", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ verified_by: 2, status: "active", severity: "vigilance" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: "i1", verified_by: 3, status: "verified", severity: "danger" }] });
+    const res = await request(app)
+      .post("/api/map/incidents/i1/verify")
+      .set("Authorization", `Bearer ${validToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.severity).toBe("danger");
+    expect(res.body.status).toBe("verified");
+  });
+});
+
+describe("Admin", () => {
+  it("GET /api/admin/users rejects citizen", async () => {
+    const res = await request(app)
+      .get("/api/admin/users")
+      .set("Authorization", `Bearer ${validToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it("GET /api/admin/users allows platform_admin", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ id: "u1", phone: "+243811234567", role: "citizen" }] });
+    const res = await request(app)
+      .get("/api/admin/users")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+  });
+
+  it("PATCH /api/admin/users/:id/role updates role", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "u2", phone: "+243811234568", pseudo: "Leader", role: "leader", sector_name: null }],
+    });
+    const res = await request(app)
+      .patch("/api/admin/users/u2/role")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ role: "leader" });
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe("leader");
+  });
+
+  it("POST /api/partner/register rejects citizen", async () => {
+    const res = await request(app)
+      .post("/api/partner/register")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ partner_name: "Test" });
+    expect(res.status).toBe(403);
   });
 });
 
@@ -250,7 +312,9 @@ describe("Leader", () => {
   });
 
   it("GET /api/leader/sector/incidents allows leader", async () => {
-    mockQuery.mockResolvedValue({ rows: [] });
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ sector_name: null }] })
+      .mockResolvedValueOnce({ rows: [] });
     const res = await request(app)
       .get("/api/leader/sector/incidents")
       .set("Authorization", `Bearer ${leaderToken}`);

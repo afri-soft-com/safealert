@@ -116,7 +116,31 @@ Pour masquer l'application derrière une calculatrice :
 | **Conseils sécurité** | Astuces disponibles hors ligne |
 | **Carte chaleur** | Densité des incidents par zone |
 | **Mon historique** | Vos alertes passées |
-| **Mode responsable** | Réservé aux rôles leader/agent |
+| **Mode responsable** | Réservé aux rôles leader/agent (filtré par secteur si assigné) |
+| **Administration** | Réservé au rôle `platform_admin` (utilisateurs, rôles, partenaires API) |
+
+### 3.10 Administration (administrateurs plateforme)
+
+Réservé aux comptes avec le rôle **Administrateur plateforme** :
+
+1. Depuis l'**accueil**, carte **Administration**, ou **Paramètres → Administration plateforme**.
+2. Onglet **Utilisateurs** : liste paginée, changement de rôle (citoyen, responsable, agent, administrateur), attribution d'un **secteur géographique** (ex. Gombe, Limete).
+3. Onglet **Partenaires API** : créer une clé pour un organisme externe, révoquer une clé inactive.
+
+Les responsables (leader/agent) avec un secteur assigné ne voient que les incidents dont la zone correspond à ce secteur dans **Mode responsable**.
+
+### 3.11 Zones Danger / Vigilance / Sûr
+
+Les incidents sont classés par **gravité** (`severity`) selon leur type et les confirmations communautaires :
+
+| Niveau | Couleur CDC | Quand |
+|--------|-------------|-------|
+| **Alerte** (`alert`) | Rouge vif | SOS déclenché — urgence immédiate |
+| **Vigilance** (`vigilance`) | Orange | Signalement communautaire (vol, agression, etc.) |
+| **Danger** (`danger`) | Rouge confirmé | **3 confirmations** ou plus par la communauté |
+| **Sûr** (`safe`) | Vert | Zone sans incident actif récent après résolution par un responsable |
+
+Le **nom de zone** (`zone_name`) est déterminé automatiquement à partir du GPS (quartier / ville via OpenStreetMap). Il alimente la carte chaleur et le filtrage secteur des responsables.
 
 ### 3.8 Profil et paramètres
 
@@ -163,6 +187,10 @@ Utilisez un numéro congolais valide : `+243` + 9 chiffres (ex. `+243812345678`)
 | **Développement local** | Adresse IP de votre PC sur le réseau Wi-Fi (ex. `http://192.168.1.10:3000/api`) — pas `localhost` sur un téléphone physique |
 
 Vérifiez que le téléphone et le PC sont sur le **même réseau Wi-Fi** et que le pare-feu autorise le port 3000.
+
+### Comment devenir administrateur ?
+
+Le premier administrateur est promu manuellement en base de données ou via la variable `PLATFORM_ADMIN_PHONE` lors de `npm run migrate` (après création du compte). Contactez l'équipe technique de votre instance.
 
 ### Puis-je utiliser SafeAlert sans compte ?
 

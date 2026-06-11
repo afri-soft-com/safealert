@@ -1,0 +1,273 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../theme.dart';
+import '../providers/admin_provider.dart';
+import '../widgets/status_bar.dart';
+import '../widgets/top_bar.dart';
+import '../widgets/nav_bar.dart';
+
+class AdminScreen extends StatefulWidget {
+  final ValueChanged<String> onNavigate;
+  final VoidCallback? onBack;
+  const AdminScreen({super.key, required this.onNavigate, this.onBack});
+
+  @override
+  State<AdminScreen> createState() => _AdminScreenState();
+}
+
+class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabs;
+  final _partnerNameCtrl = TextEditingController();
+  final Map<String, TextEditingController> _sectorCtrls = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final p = context.read<AdminProvider>();
+      p.fetchUsers();
+      p.fetchPartners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    _partnerNameCtrl.dispose();
+    for (final c in _sectorCtrls.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  TextEditingController _sectorController(String userId, String initial) {
+    return _sectorCtrls.putIfAbsent(userId, () => TextEditingController(text: initial));
+  }
+
+  Future<void> _showNewPartnerDialog() async {
+    _partnerNameCtrl.clear();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nouveau partenaire API', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: _partnerNameCtrl,
+          decoration: const InputDecoration(hintText: 'Nom de l\'organisation', labelText: 'Partenaire'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, _partnerNameCtrl.text.trim()),
+            child: const Text('Créer'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty || !mounted) return;
+
+    final apiKey = await context.read<AdminProvider>().createPartner(name);
+    if (!mounted) return;
+    if (apiKey != null) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Clé API créée'),
+          content: SelectableText('Conservez cette clé :\n\n$apiKey', style: const TextStyle(fontSize: 11)),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Erreur lors de la création', style: TextStyle(fontSize: 11)),
+        backgroundColor: AppColors.rouge,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.watch<AdminProvider>();
+
+    return Scaffold(
+      body: Column(
+        children: [
+          const StatusBar(),
+          TopBar(title: 'Administration', onBackTap: widget.onBack),
+          TabBar(
+            controller: _tabs,
+            labelColor: AppColors.bleuFonce,
+            unselectedLabelColor: AppColors.gris,
+            indicatorColor: AppColors.bleuFonce,
+            tabs: const [
+              Tab(text: 'Utilisateurs'),
+              Tab(text: 'Partenaires API'),
+            ],
+          ),
+          if (p.error != null)
+            Container(
+              width: double.infinity,
+              color: AppColors.rougeLight,
+              padding: const EdgeInsets.all(8),
+              child: Text(p.error!, style: const TextStyle(fontSize: 11, color: AppColors.rouge)),
+            ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabs,
+              children: [
+                _buildUsersTab(p),
+                _buildPartnersTab(p),
+              ],
+            ),
+          ),
+          NavBar(active: 'home', onTap: widget.onNavigate),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUsersTab(AdminProvider p) {
+    if (p.loadingUsers) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (p.users.isEmpty) {
+      return const Center(child: Text('Aucun utilisateur', style: TextStyle(fontSize: 12, color: AppColors.gris)));
+    }
+    return RefreshIndicator(
+      onRefresh: () => p.fetchUsers(page: p.usersPage),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: p.users.length,
+        itemBuilder: (ctx, i) => _userTile(p, p.users[i]),
+      ),
+    );
+  }
+
+  Widget _userTile(AdminProvider p, Map<String, dynamic> user) {
+    final id = user['id'] as String;
+    final role = user['role'] as String? ?? 'citizen';
+    final sector = user['sector_name'] as String? ?? '';
+    final sectorCtrl = _sectorController(id, sector);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.blanc,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(user['pseudo'] as String? ?? '—',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
+          Text(user['phone'] as String? ?? '', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('Rôle : ', style: TextStyle(fontSize: 11, color: AppColors.gris)),
+              Expanded(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: AdminProvider.roleLabels.containsKey(role) ? role : 'citizen',
+                  items: AdminProvider.roleLabels.entries
+                      .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 11))))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) p.updateUserRole(id, v);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: sectorCtrl,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    labelText: 'Secteur géographique',
+                    hintText: 'Ex. Gombe, Limete…',
+                    labelStyle: const TextStyle(fontSize: 10),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.save, size: 18, color: AppColors.bleuFonce),
+                onPressed: () {
+                  final v = sectorCtrl.text.trim();
+                  p.updateUserSector(id, v.isEmpty ? null : v);
+                },
+                tooltip: 'Enregistrer secteur',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPartnersTab(AdminProvider p) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _showNewPartnerDialog,
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Créer une clé partenaire', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.bleuFonce,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: p.loadingPartners
+              ? const Center(child: CircularProgressIndicator())
+              : p.partners.isEmpty
+                  ? const Center(child: Text('Aucun partenaire', style: TextStyle(fontSize: 12, color: AppColors.gris)))
+                  : RefreshIndicator(
+                      onRefresh: p.fetchPartners,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        itemCount: p.partners.length,
+                        itemBuilder: (ctx, i) {
+                          final partner = p.partners[i];
+                          final active = partner['is_active'] as bool? ?? true;
+                          final key = partner['api_key'] as String? ?? '';
+                          return ListTile(
+                            title: Text(partner['partner_name'] as String? ?? '—',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: active ? AppColors.bleuFonce : AppColors.gris)),
+                            subtitle: Text(
+                              active && key.length >= 8 ? 'Clé : ${key.substring(0, 8)}…' : (active ? 'Clé active' : 'Révoquée'),
+                              style: const TextStyle(fontSize: 10),
+                            ),
+                            trailing: active
+                                ? TextButton(
+                                    onPressed: () => p.revokePartner(partner['id'] as String),
+                                    child: const Text('Révoquer', style: TextStyle(fontSize: 10, color: AppColors.rouge)),
+                                  )
+                                : const Text('Inactif', style: TextStyle(fontSize: 10, color: AppColors.gris)),
+                          );
+                        },
+                      ),
+                    ),
+        ),
+      ],
+    );
+  }
+}

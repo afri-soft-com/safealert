@@ -206,8 +206,25 @@ Retries : 12 tentatives, intervalle 10 s. Secret requis : `PRODUCTION_URL`.
 
 ---
 
+---
+
+## 13. Nominatim / OpenStreetMap (géocodage inverse)
+
+| Champ | Valeur |
+|-------|--------|
+| **Objectif** | Déterminer le nom de quartier/ville (`zone_name`) à partir des coordonnées GPS |
+| **Variables** | `NOMINATIM_USER_AGENT` (recommandé en prod — email de contact) |
+| **URL** | `https://nominatim.openstreetmap.org/reverse?lat=&lon=&format=json` |
+| **Fichiers** | `backend/src/services/geocode.js`, `backend/src/utils/incidentZone.js` |
+| **Statut** | Intégré — **pas de clé API** ; respecter [Usage Policy Nominatim](https://operations.osmfoundation.org/policies/nominatim/) (1 req/s, User-Agent, cache) |
+| **Valeur** | `SafeAlert/1.0 (citizen-safety-app; contact@votredomaine.com)` |
+
+---
+
 ## Checklist rapide avant déploiement
 
+- [ ] `NOMINATIM_USER_AGENT` avec contact valide (prod)
+- [ ] Premier `platform_admin` promu (`PLATFORM_ADMIN_PHONE` ou SQL)
 - [ ] `JWT_SECRET` ≥ 32 caractères aléatoires
 - [ ] Neon : projet dédié SafeAlert, `CREATE EXTENSION postgis`, URLs poolée + directe
 - [ ] `DATABASE_URL` / `DATABASE_URL_DIRECT` (Neon) ou Postgres Docker local

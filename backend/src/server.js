@@ -31,6 +31,7 @@ const leaderRoutes = require("./routes/leader");
 const groupsRoutes = require("./routes/groups");
 const reportRoutes = require("./routes/report");
 const partnerRoutes = require("./routes/partner");
+const adminRoutes = require("./routes/admin");
 const historyRoutes = require("./routes/history");
 
 const app = express();
@@ -77,6 +78,7 @@ app.use("/api/leader", leaderRoutes);
 app.use("/api/groups", groupsRoutes);
 app.use("/api/report", reportRoutes);
 app.use("/api/partner", partnerRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/history", historyRoutes);
 
 app.use((req, res) => {

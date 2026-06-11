@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../theme.dart';
 import '../services/api_service.dart';
 import '../providers/leader_provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/nav_bar.dart';
@@ -71,14 +72,24 @@ class _LeaderScreenState extends State<LeaderScreen> {
   @override
   Widget build(BuildContext context) {
     final p = context.watch<LeaderProvider>();
+    final auth = context.watch<AuthProvider>();
     final stats = p.stats;
     final incidents = p.incidents;
+    final sectorName = auth.user?['sector_name'] as String? ?? stats?['sector_name'] as String?;
 
     return Scaffold(
       body: Column(
         children: [
           const StatusBar(),
           TopBar(title: 'Secteur — Vue responsable', onBackTap: widget.onBack),
+          if (sectorName != null && sectorName.isNotEmpty)
+            Container(
+              width: double.infinity,
+              color: AppColors.grisClair,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              child: Text('Filtre secteur : $sectorName',
+                  style: const TextStyle(fontSize: 10, color: AppColors.gris, fontWeight: FontWeight.w600)),
+            ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
