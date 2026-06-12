@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../utils/phone.dart';
+import '../utils/network_error.dart';
 import '../services/api_service.dart';
 import '../services/fcm_service.dart';
 import '../services/location_service.dart';
@@ -72,7 +73,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _error = 'Erreur réseau';
+      _error = describeNetworkError(e);
       _loading = false;
       notifyListeners();
       return false;
@@ -106,7 +107,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      _error = 'Erreur réseau';
+      _error = describeNetworkError(e);
       _loading = false;
       notifyListeners();
       return false;

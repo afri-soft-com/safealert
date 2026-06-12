@@ -3,14 +3,15 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  /// Override at build time: flutter run --dart-define=API_BASE_URL=https://api.example.com/api
+  /// Production Render. Override at build time for local dev:
+  /// `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000/api`
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:3000/api',
+    defaultValue: 'https://safealert-api.onrender.com/api',
   );
 
-  /// Délai réseau (cold start Render peut dépasser 10 s).
-  static const Duration requestTimeout = Duration(seconds: 60);
+  /// Délai réseau (cold start Render peut dépasser 60 s).
+  static const Duration requestTimeout = Duration(seconds: 90);
 
   /// Socket.io server origin (API base URL without `/api` suffix).
   static String get socketOrigin {
