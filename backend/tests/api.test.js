@@ -463,6 +463,101 @@ describe("Groups join requests", () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("rejected");
   });
+
+  it("POST /api/groups/:id/join creates request for public group", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Public", is_public: true }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .post("/api/groups/g1/join")
+      .set("Authorization", `Bearer ${user2Token}`)
+      .send({});
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe("pending");
+  });
+
+  it("POST /api/groups/:id/join rejects private group", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "g1", name: "Privé", is_public: false }] });
+    const res = await request(app)
+      .post("/api/groups/g1/join")
+      .set("Authorization", `Bearer ${user2Token}`)
+      .send({});
+    expect(res.status).toBe(403);
+  });
+
+  it("GET /api/groups/:id/members requires membership", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .get("/api/groups/g1/members")
+      .set("Authorization", `Bearer ${user2Token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it("GET /api/groups/:id/members returns masked phones for members", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ id: "u2", pseudo: "Jean", phone: "+243811111111", role: "member", joined_at: "2025-01-01" }],
+      });
+    const res = await request(app)
+      .get("/api/groups/g1/members")
+      .set("Authorization", `Bearer ${user2Token}`);
+    expect(res.status).toBe(200);
+    expect(res.body[0].phone).toContain("***");
+  });
+
+  it("POST /api/groups/:id/messages creates message for member", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] })
+      .mockResolvedValueOnce({ rows: [{ name: "Voisins" }] })
+      .mockResolvedValueOnce({ rows: [{ pseudo: "Jean" }] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "m1",
+          group_id: "g1",
+          user_id: "user-2",
+          content: "Bonjour",
+          created_at: "2025-01-01T00:00:00Z",
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .post("/api/groups/g1/messages")
+      .set("Authorization", `Bearer ${user2Token}`)
+      .send({ content: "Bonjour" });
+    expect(res.status).toBe(201);
+    expect(res.body.content).toBe("Bonjour");
+  });
+
+  it("POST /api/groups/:id/alerts creates alert for member", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] })
+      .mockResolvedValueOnce({ rows: [{ name: "Voisins" }] })
+      .mockResolvedValueOnce({ rows: [{ pseudo: "Jean" }] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "a1",
+          group_id: "g1",
+          author_id: "user-2",
+          type: "help_needed",
+          title: "Coupure courant",
+          body: null,
+          lat: null,
+          lng: null,
+          created_at: "2025-01-01T00:00:00Z",
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .post("/api/groups/g1/alerts")
+      .set("Authorization", `Bearer ${user2Token}`)
+      .send({ type: "help_needed", title: "Coupure courant" });
+    expect(res.status).toBe(201);
+    expect(res.body.type).toBe("help_needed");
+  });
 });
 
 describe("History", () => {

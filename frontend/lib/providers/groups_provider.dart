@@ -12,6 +12,9 @@ class GroupsProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _myGroups = [];
   List<Map<String, dynamic>> _discoverable = [];
   final Map<String, List<Map<String, dynamic>>> _joinRequestsByGroup = {};
+  final Map<String, List<Map<String, dynamic>>> _membersByGroup = {};
+  final Map<String, List<Map<String, dynamic>>> _messagesByGroup = {};
+  final Map<String, List<Map<String, dynamic>>> _alertsByGroup = {};
   bool _loading = false;
   bool _isOffline = false;
   String? _lastJoinMessage;
@@ -29,6 +32,15 @@ class GroupsProvider extends ChangeNotifier {
 
   List<Map<String, dynamic>> joinRequestsFor(String groupId) =>
       _joinRequestsByGroup[groupId] ?? [];
+
+  List<Map<String, dynamic>> membersFor(String groupId) =>
+      _membersByGroup[groupId] ?? [];
+
+  List<Map<String, dynamic>> messagesFor(String groupId) =>
+      _messagesByGroup[groupId] ?? [];
+
+  List<Map<String, dynamic>> alertsFor(String groupId) =>
+      _alertsByGroup[groupId] ?? [];
 
   Future<void> fetchMyGroups() async {
     _loading = true;
@@ -78,6 +90,75 @@ class GroupsProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> fetchMembers(String groupId) async {
+    try {
+      final res = await _api.get('/groups/$groupId/members');
+      _membersByGroup[groupId] =
+          (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      notifyListeners();
+    } catch (_) {
+      _membersByGroup[groupId] = [];
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchMessages(String groupId) async {
+    try {
+      final res = await _api.get('/groups/$groupId/messages');
+      _messagesByGroup[groupId] =
+          (res['messages'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      notifyListeners();
+    } catch (_) {
+      _messagesByGroup[groupId] = [];
+      notifyListeners();
+    }
+  }
+
+  Future<bool> sendMessage(String groupId, String content) async {
+    try {
+      await _api.post('/groups/$groupId/messages', {'content': content});
+      await fetchMessages(groupId);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> fetchAlerts(String groupId) async {
+    try {
+      final res = await _api.get('/groups/$groupId/alerts');
+      _alertsByGroup[groupId] =
+          (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      notifyListeners();
+    } catch (_) {
+      _alertsByGroup[groupId] = [];
+      notifyListeners();
+    }
+  }
+
+  Future<bool> createAlert(
+    String groupId, {
+    required String type,
+    required String title,
+    String? body,
+    double? lat,
+    double? lng,
+  }) async {
+    try {
+      await _api.post('/groups/$groupId/alerts', {
+        'type': type,
+        'title': title,
+        if (body != null) 'body': body,
+        if (lat != null) 'lat': lat,
+        if (lng != null) 'lng': lng,
+      });
+      await fetchAlerts(groupId);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> createGroup(String name, {String? description, String? zoneName}) async {
     try {
       await _api.post('/groups', {
@@ -96,6 +177,18 @@ class GroupsProvider extends ChangeNotifier {
     _lastJoinMessage = null;
     try {
       final res = await _api.post('/groups/join', {'invite_code': code});
+      _lastJoinMessage = res['message'] as String? ?? 'Demande envoyée';
+      await fetchDiscoverable();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> requestJoinGroup(String groupId) async {
+    _lastJoinMessage = null;
+    try {
+      final res = await _api.post('/groups/$groupId/join', {});
       _lastJoinMessage = res['message'] as String? ?? 'Demande envoyée';
       await fetchDiscoverable();
       return true;

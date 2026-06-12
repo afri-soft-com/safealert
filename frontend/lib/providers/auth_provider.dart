@@ -128,12 +128,13 @@ class AuthProvider extends ChangeNotifier {
   bool requiresAuth(String screen) =>
       kAuthRequiredScreens.contains(screen) && !_isAuthenticated;
 
-  Future<bool> updateProfile({bool? isDiscreetMode, bool? sharePresence}) async {
+  Future<bool> updateProfile({bool? isDiscreetMode, bool? sharePresence, bool? sosNotifyGroups}) async {
     if (!_isAuthenticated) return false;
     try {
       final body = <String, dynamic>{};
       if (isDiscreetMode != null) body['is_discreet_mode'] = isDiscreetMode;
       if (sharePresence != null) body['share_presence'] = sharePresence;
+      if (sosNotifyGroups != null) body['sos_notify_groups'] = sosNotifyGroups;
       final res = await _api.put('/auth/profile', body);
       _user = res;
       _applyPrivacySettings();
@@ -146,6 +147,7 @@ class AuthProvider extends ChangeNotifier {
 
   bool get isDiscreetMode => _user?['is_discreet_mode'] as bool? ?? false;
   bool get sharePresence => _user?['share_presence'] as bool? ?? true;
+  bool get sosNotifyGroups => _user?['sos_notify_groups'] as bool? ?? true;
 
   void _applyPrivacySettings() {
     LocationService().sharePresence = sharePresence;

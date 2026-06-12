@@ -5,6 +5,7 @@ import '../providers/groups_provider.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/nav_bar.dart';
+import 'group_detail_screen.dart';
 
 class GroupsScreen extends StatefulWidget {
   final ValueChanged<String> onNavigate;
@@ -354,7 +355,12 @@ class _GroupsScreenState extends State<GroupsScreen> {
     final pending = g['pending_requests'] as int? ?? 0;
     final isAdmin = myRole == 'admin';
 
-    return Container(
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => GroupDetailScreen(group: g)),
+      ),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -440,30 +446,53 @@ class _GroupsScreenState extends State<GroupsScreen> {
             ),
           ],
           const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () => p.leaveGroup(id),
-              icon: const Icon(Icons.exit_to_app, size: 14),
-              label: const Text('Quitter le groupe', style: TextStyle(fontSize: 11)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.rouge,
-                side: const BorderSide(color: AppColors.rouge),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(vertical: 6),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => GroupDetailScreen(group: g)),
+                  ),
+                  icon: const Icon(Icons.forum, size: 14),
+                  label: const Text('Ouvrir', style: TextStyle(fontSize: 11)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.bleuFonce,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => p.leaveGroup(id),
+                  icon: const Icon(Icons.exit_to_app, size: 14),
+                  label: const Text('Quitter', style: TextStyle(fontSize: 11)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.rouge,
+                    side: const BorderSide(color: AppColors.rouge),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
+    ),
     );
   }
 
   Widget _discoverCard(Map<String, dynamic> g) {
+    final id = g['id'] as String? ?? '';
     final name = g['name'] as String? ?? '';
     final zone = g['zone_name'] as String? ?? '';
     final members = g['member_count'] as int? ?? 0;
     final creator = g['created_by_name'] as String? ?? '';
+    final isPublic = g['is_public'] as bool? ?? true;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -493,6 +522,26 @@ class _GroupsScreenState extends State<GroupsScreen> {
               ],
             ),
           ),
+          if (isPublic)
+            TextButton(
+              onPressed: () async {
+                final p = context.read<GroupsProvider>();
+                final ok = await p.requestJoinGroup(id);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(
+                    ok ? (p.lastJoinMessage ?? 'Demande envoyée') : 'Impossible d\'envoyer la demande',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  backgroundColor: ok ? AppColors.vert : AppColors.rouge,
+                ));
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.vert,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: const Text('Demander\nà rejoindre', textAlign: TextAlign.center, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600)),
+            ),
         ],
       ),
     );

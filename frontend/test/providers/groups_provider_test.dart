@@ -149,6 +149,61 @@ void main() {
     });
   });
 
+  group('requestJoinGroup', () {
+    test('sends join request by group id', () async {
+      fakeApi.onPost('/groups/g1/join', () => {'message': 'Demande envoyée', 'status': 'pending'});
+      fakeApi.onGet('/groups/discover', () => {'data': []});
+
+      final result = await provider.requestJoinGroup('g1');
+
+      expect(result, true);
+      expect(provider.lastJoinMessage, 'Demande envoyée');
+    });
+  });
+
+  group('members messages alerts', () {
+    test('fetches members', () async {
+      fakeApi.onGet('/groups/g1/members', () => {
+        'data': [
+          {'id': 'u1', 'pseudo': 'Marie', 'role': 'admin'},
+        ],
+      });
+
+      await provider.fetchMembers('g1');
+
+      expect(provider.membersFor('g1').length, 1);
+      expect(provider.membersFor('g1')[0]['pseudo'], 'Marie');
+    });
+
+    test('sends message and refreshes', () async {
+      fakeApi.onPost('/groups/g1/messages', () => {'id': 'm1', 'content': 'Salut'});
+      fakeApi.onGet('/groups/g1/messages', () => {
+        'messages': [
+          {'id': 'm1', 'content': 'Salut', 'author_pseudo': 'Jean'},
+        ],
+      });
+
+      final ok = await provider.sendMessage('g1', 'Salut');
+
+      expect(ok, true);
+      expect(provider.messagesFor('g1').length, 1);
+    });
+
+    test('creates alert and refreshes', () async {
+      fakeApi.onPost('/groups/g1/alerts', () => {'id': 'a1', 'type': 'info', 'title': 'Test'});
+      fakeApi.onGet('/groups/g1/alerts', () => {
+        'data': [
+          {'id': 'a1', 'type': 'info', 'title': 'Test'},
+        ],
+      });
+
+      final ok = await provider.createAlert('g1', type: 'info', title: 'Test');
+
+      expect(ok, true);
+      expect(provider.alertsFor('g1').length, 1);
+    });
+  });
+
   group('leaveGroup', () {
     test('leaves group and refreshes my groups', () async {
       fakeApi.onDelete('/groups/g1/leave', () => {'message': 'QuittÃ©'});

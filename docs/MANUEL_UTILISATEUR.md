@@ -143,19 +143,22 @@ Les partenaires sont des organismes externes (ONG, services publics, intégrateu
 
 Les **groupes voisins** permettent de créer une petite communauté d'entraide autour de votre quartier, immeuble ou rue. C'est un espace pour rester en contact avec des personnes proches géographiquement, partager des alertes locales et se soutenir mutuellement — par exemple en cas de coupure de courant, d'inondation ou de situation suspecte dans le voisinage.
 
-Ils ne remplacent **pas** le **cercle de confiance** : vos contacts de confiance sont les proches (famille, amis) alertés automatiquement lors d'un **SOS** ; les groupes voisins servent plutôt à l'entraide de quartier entre personnes qui se connaissent ou qui habitent à proximité. Les groupes voisins ne servent **pas** à valider ou confirmer les incidents sur la carte — cette fonction reste ouverte à toute la communauté SafeAlert.
+Ils ne remplacent **pas** le **cercle de confiance** : vos contacts de confiance sont les proches (famille, amis) alertés automatiquement par **SMS et push** lors d'un **SOS**. Les groupes voisins reçoivent une **notification push** supplémentaire si vous activez **« Alerter mes groupes en SOS »** dans les paramètres (activé par défaut). Les groupes voisins ne servent **pas** à valider ou confirmer les incidents sur la carte — cette fonction reste ouverte à toute la communauté SafeAlert.
 
 - **Créer un groupe** : vous devenez administrateur et recevez un **code d'invitation** à partager (SMS, WhatsApp, etc.).
-- **Rejoindre un groupe** : saisissez le code ; votre demande reste **en attente** jusqu'à l'approbation de l'administrateur.
-- **Gérer les adhésions** : l'administrateur du groupe voit les demandes et peut **Approuver** ou **Refuser** chaque candidat.
-- **Une fois approuvé** : le groupe apparaît dans **Mes groupes** et vous pouvez échanger avec les autres membres.
+- **Rejoindre un groupe** : saisissez le code **ou** demandez à rejoindre depuis **Groupes à découvrir** (groupes publics).
+- **Gérer les adhésions** : l'administrateur approuve ou refuse les demandes en attente.
+- **Une fois membre** : consultez la **liste des membres**, échangez par **messages** et publiez des **alertes locales** (info, aide demandée, proposition d'aide, danger).
 
 ### 3.14 Groupes voisins — étapes pratiques
 
 1. Depuis l'accueil, ouvrez **Groupes voisins**.
 2. **Créer** un groupe : choisissez un nom, partagez le code d'invitation.
-3. **Rejoindre** avec un code : attendez la validation de l'administrateur.
-4. L'**administrateur** approuve ou refuse les demandes en attente depuis l'écran du groupe.
+3. **Rejoindre** : avec un code d'invitation **ou** bouton **Demander à rejoindre** sur un groupe découvrable.
+4. L'**administrateur** approuve ou refuse les demandes depuis l'onglet **Membres** du groupe.
+5. **Ouvrir** un groupe : onglets **Membres**, **Messages** (chat de groupe) et **Alertes** (entraide locale).
+6. Publiez une **alerte locale** (coupure, inondation, aide…) via le bouton **Alerte** ; les membres sont notifiés par push.
+7. En cas de **SOS**, vos groupes peuvent être alertés si l'option est activée dans **Paramètres → Confidentialité**.
 
 Les responsables (leader/agent) avec un secteur assigné ne voient que les incidents dont la zone correspond à ce secteur dans **Mode responsable**.
 

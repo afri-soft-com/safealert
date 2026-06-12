@@ -157,7 +157,7 @@ docker compose --env-file .env.production up -d
 | Carte incidents | ~85 % | OSM, filtres, signalement |
 | Contacts confiance | ~90 % | CRUD + cache offline |
 | Annuaire urgence | ~95 % | Cache 24h |
-| Groupes voisins | ~80 % | Création, join par code |
+| Groupes voisins | ~95 % | Membres, chat, alertes locales, discover join, SOS→groupes push |
 | Mode discret | ~75 % | Calculatrice + volume Android |
 | Leader / PDF | ~85 % | Filtrage secteur, gravité zones |
 | Administration | ~90 % | Écran mobile + **console web** `admin-web/` |

@@ -1,5 +1,6 @@
 const { pool } = require("../config/database");
 const { sendAlert, sendCancelAlert } = require("../services/alert");
+const { notifyUserGroupsOnSOS } = require("../services/groupNotify");
 const { invalidateActiveAlerts } = require("../config/redis");
 const { resolveZoneName } = require("../utils/incidentZone");
 
@@ -30,6 +31,16 @@ const triggerSOS = async (req, res) => {
     const incident = result.rows[0];
 
     const notification = await sendAlert(req.userId, lat, lng, incident_type || "sos");
+
+    const userRes = await pool.query("SELECT pseudo FROM users WHERE id = $1", [req.userId]);
+    const groupNotification = await notifyUserGroupsOnSOS(
+      req.userId,
+      lat,
+      lng,
+      userRes.rows[0]?.pseudo || "Un membre"
+    );
+    notification.groupSos = groupNotification;
+
     await invalidateActiveAlerts();
 
     const io = req.app.get("io");

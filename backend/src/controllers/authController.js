@@ -109,6 +109,7 @@ const verifyCode = async (req, res) => {
         sector_name: user.sector_name ?? null,
         is_discreet_mode: user.is_discreet_mode ?? false,
         share_presence: user.share_presence ?? true,
+        sos_notify_groups: user.sos_notify_groups ?? true,
       },
     });
   } catch (err) {
@@ -120,7 +121,8 @@ const verifyCode = async (req, res) => {
 const getProfile = async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, phone, pseudo, role, sector_name, avatar_url, is_discreet_mode, share_presence, last_seen_at, created_at
+      `SELECT id, phone, pseudo, role, sector_name, avatar_url, is_discreet_mode, share_presence,
+              sos_notify_groups, last_seen_at, created_at
        FROM users WHERE id = $1`,
       [req.userId]
     );
@@ -133,7 +135,7 @@ const getProfile = async (req, res) => {
 };
 
 const updateProfile = async (req, res) => {
-  const { pseudo, avatar_url, is_discreet_mode, share_presence } = req.body;
+  const { pseudo, avatar_url, is_discreet_mode, share_presence, sos_notify_groups } = req.body;
   try {
     const result = await pool.query(
       `UPDATE users SET
@@ -141,9 +143,10 @@ const updateProfile = async (req, res) => {
         avatar_url = COALESCE($2, avatar_url),
         is_discreet_mode = COALESCE($3, is_discreet_mode),
         share_presence = COALESCE($4, share_presence),
+        sos_notify_groups = COALESCE($5, sos_notify_groups),
         updated_at = NOW()
-       WHERE id = $5 RETURNING id, phone, pseudo, role, avatar_url, is_discreet_mode, share_presence`,
-      [pseudo, avatar_url, is_discreet_mode, share_presence, req.userId]
+       WHERE id = $6 RETURNING id, phone, pseudo, role, avatar_url, is_discreet_mode, share_presence, sos_notify_groups`,
+      [pseudo, avatar_url, is_discreet_mode, share_presence, sos_notify_groups, req.userId]
     );
     return res.json(result.rows[0]);
   } catch (err) {

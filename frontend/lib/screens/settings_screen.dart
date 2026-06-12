@@ -22,6 +22,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _discreetMode = false;
   bool _sharePresence = true;
+  bool _sosNotifyGroups = true;
   bool _deleting = false;
   bool _saving = false;
 
@@ -36,6 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _discreetMode = auth.isDiscreetMode;
       _sharePresence = auth.sharePresence;
+      _sosNotifyGroups = auth.sosNotifyGroups;
     });
   }
 
@@ -61,6 +63,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (auth.isAuthenticated) {
       setState(() => _saving = true);
       await auth.updateProfile(sharePresence: value);
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _saveSosNotifyGroups(bool value) async {
+    setState(() => _sosNotifyGroups = value);
+    final auth = context.read<AuthProvider>();
+    if (auth.isAuthenticated) {
+      setState(() => _saving = true);
+      await auth.updateProfile(sosNotifyGroups: value);
       if (mounted) setState(() => _saving = false);
     }
   }
@@ -207,6 +219,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             value: _sharePresence,
                             onChanged: _saveSharePresence,
                             activeColor: AppColors.vert,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(height: 1),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Alerter mes groupes en SOS', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bleuFonce)),
+                                Text('Notifie les membres de vos groupes voisins lors d\'un SOS (push uniquement)', style: TextStyle(fontSize: 10, color: AppColors.gris)),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: _sosNotifyGroups,
+                            onChanged: _saveSosNotifyGroups,
+                            activeColor: AppColors.orange,
                           ),
                         ],
                       ),
