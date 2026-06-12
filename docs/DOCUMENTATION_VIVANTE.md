@@ -116,8 +116,21 @@ Fichiers : `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`.
 
 1. **Backend** : install → lint → migration test → `npm test` (Vitest + supertest, DB mockée).
 2. **Frontend** : `flutter pub get` → `flutter analyze` → `flutter test`.
+3. **Admin-web** : `npm ci` → `npm run build` (Vite + TypeScript).
+4. **Docker** : build image API (smoke, sans push) après succès des trois jobs ci-dessus.
 
-### Pipeline Deploy
+### Déploiement admin-web (Render Static Site)
+
+Sur **push vers `main`** lorsque `admin-web/**` ou `render.yaml` change :
+
+1. Le job **deploy-admin-render** déclenche le deploy hook Render (si configuré).
+2. Sinon, Render peut déployer via l’intégration Git (auto-deploy du Blueprint).
+
+**Secret GitHub optionnel** : `RENDER_DEPLOY_HOOK_ADMIN` — URL du deploy hook du service `safealert-admin` (Render Dashboard → service → Settings → Deploy Hook).
+
+Variables Render (dashboard, pas GitHub) : `VITE_API_BASE_URL` sur le static site ; `CORS_ORIGIN` sur l’API.
+
+### Pipeline Deploy (API backend)
 
 - Déclenchement : tag `v*` ou `workflow_dispatch`.
 - Build image Docker backend → push **GHCR** (`ghcr.io/...`).

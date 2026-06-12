@@ -80,9 +80,62 @@ jobs:
       - name: Run unit tests
         run: flutter test
 
+  admin-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin-web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: admin-web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          # Placeholder CI — Render injecte VITE_API_BASE_URL au déploiement réel
+          VITE_API_BASE_URL: https://ci-placeholder.example.com/api
+
+  deploy-admin-render:
+    needs: admin-web
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            admin-web:
+              - 'admin-web/**'
+              - 'render.yaml'
+
+      - name: Trigger Render static site deploy
+        if: steps.changes.outputs.admin-web == 'true'
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_ADMIN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RENDER_DEPLOY_HOOK:-}" ]; then
+            echo "RENDER_DEPLOY_HOOK_ADMIN non configuré — hook ignoré."
+            echo "Le déploiement peut toujours se faire via l'intégration Git Render (auto-deploy)."
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
+          echo "Déploiement Render safealert-admin déclenché."
+
   docker-build:
     runs-on: ubuntu-latest
-    needs: [backend, frontend]
+    needs: [backend, frontend, admin-web]
     permissions:
       contents: read
       packages: write

@@ -59,13 +59,21 @@ services:
       - key: FCM_CLIENT_EMAIL
         sync: false
 
-  # Décommenter pour héberger la console admin (Static Site)
-  # - type: web
-  #   name: safealert-admin
-  #   runtime: static
-  #   rootDir: admin-web
-  #   buildCommand: npm install && npm run build
-  #   staticPublishPath: ./dist
-  #   envVars:
-  #     - key: VITE_API_BASE_URL
-  #       sync: false
+  # Console admin plateforme (Static Site — voir docs/RENDER_DEPLOY.md)
+  - type: web
+    name: safealert-admin
+    runtime: static
+    rootDir: admin-web
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    buildFilter:
+      paths:
+        - admin-web/**
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Ex. https://safealert-api.onrender.com/api — à renseigner au 1er déploiement
+      - key: VITE_API_BASE_URL
+        sync: false

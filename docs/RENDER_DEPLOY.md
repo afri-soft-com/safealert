@@ -176,6 +176,20 @@ Si vous préférez créer les services à la main :
 
 Mettre à jour `CORS_ORIGIN` sur l’API avec l’URL du site admin.
 
+### CI/CD GitHub Actions
+
+Le workflow `.github/workflows/ci.yml` :
+
+- **Vérifie** le build `admin-web` à chaque push / PR.
+- **Déclenche** le déploiement Render sur `main` si `admin-web/**` ou `render.yaml` a changé.
+
+Configurer le secret GitHub **`RENDER_DEPLOY_HOOK_ADMIN`** (optionnel) :
+
+1. Render Dashboard → **safealert-admin** → **Settings** → **Deploy Hook** → copier l’URL.
+2. GitHub → repo → **Settings** → **Secrets and variables** → **Actions** → New secret.
+
+Sans ce secret, le déploiement repose sur l’auto-deploy Render branché au dépôt GitHub.
+
 ---
 
 ## Variables d’environnement
