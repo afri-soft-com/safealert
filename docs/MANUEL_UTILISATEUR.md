@@ -139,12 +139,23 @@ Réservé aux comptes avec le rôle **Administrateur plateforme** :
 
 Les partenaires sont des organismes externes (ONG, services publics, intégrateurs) qui consomment l'API SafeAlert côté serveur. Un administrateur plateforme crée leur clé dans **Administration → Partenaires API**. Ils n'ont pas de compte OTP ni d'écran dédié dans l'app.
 
-### 3.13 Groupes voisins — demandes d'adhésion
+### 3.13 À quoi servent les groupes voisins ?
 
-1. **Créer** un groupe : vous devenez administrateur et recevez un code d'invitation à partager.
-2. **Rejoindre** avec un code : votre demande est **en attente** — vous n'êtes pas ajouté immédiatement.
-3. L'**administrateur du groupe** voit les demandes en attente et peut **Approuver** ou **Refuser**.
-4. Une fois approuvé, le groupe apparaît dans **Mes groupes**.
+Les **groupes voisins** permettent de créer une petite communauté d'entraide autour de votre quartier, immeuble ou rue. C'est un espace pour rester en contact avec des personnes proches géographiquement, partager des alertes locales et se soutenir mutuellement — par exemple en cas de coupure de courant, d'inondation ou de situation suspecte dans le voisinage.
+
+Ils ne remplacent **pas** le **cercle de confiance** : vos contacts de confiance sont les proches (famille, amis) alertés automatiquement lors d'un **SOS** ; les groupes voisins servent plutôt à l'entraide de quartier entre personnes qui se connaissent ou qui habitent à proximité. Les groupes voisins ne servent **pas** à valider ou confirmer les incidents sur la carte — cette fonction reste ouverte à toute la communauté SafeAlert.
+
+- **Créer un groupe** : vous devenez administrateur et recevez un **code d'invitation** à partager (SMS, WhatsApp, etc.).
+- **Rejoindre un groupe** : saisissez le code ; votre demande reste **en attente** jusqu'à l'approbation de l'administrateur.
+- **Gérer les adhésions** : l'administrateur du groupe voit les demandes et peut **Approuver** ou **Refuser** chaque candidat.
+- **Une fois approuvé** : le groupe apparaît dans **Mes groupes** et vous pouvez échanger avec les autres membres.
+
+### 3.14 Groupes voisins — étapes pratiques
+
+1. Depuis l'accueil, ouvrez **Groupes voisins**.
+2. **Créer** un groupe : choisissez un nom, partagez le code d'invitation.
+3. **Rejoindre** avec un code : attendez la validation de l'administrateur.
+4. L'**administrateur** approuve ou refuse les demandes en attente depuis l'écran du groupe.
 
 Les responsables (leader/agent) avec un secteur assigné ne voient que les incidents dont la zone correspond à ce secteur dans **Mode responsable**.
 
