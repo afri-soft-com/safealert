@@ -9,8 +9,8 @@ class ApiService {
     defaultValue: 'http://10.0.2.2:3000/api',
   );
 
-  /// Limite l'attente réseau pour basculer rapidement sur le cache offline.
-  static const Duration requestTimeout = Duration(seconds: 10);
+  /// Délai réseau (cold start Render peut dépasser 10 s).
+  static const Duration requestTimeout = Duration(seconds: 60);
 
   /// Socket.io server origin (API base URL without `/api` suffix).
   static String get socketOrigin {
