@@ -309,3 +309,28 @@ UPDATE users SET role = 'platform_admin' WHERE phone = '+243XXXXXXXXX';
 | WebSocket SOS instable | Scaling > 1 instance | Désactiver autoscaling ou ajouter Redis adapter Socket.io |
 | OTP SMS échoue | Twilio trial / geo | Voir [EXTERNAL_APIS.md](./EXTERNAL_APIS.md) |
 | CORS admin-web | Origine non listée | Ajouter l’URL dans `CORS_ORIGIN` |
+| **Not Found** sur `safealert-admin.onrender.com` | Mauvais **Publish Directory** ou build échoué | Voir ci-dessous |
+
+### « Not Found » sur la console admin
+
+Le domaine Render existe mais **aucun fichier** n’est publié. Le CI GitHub **ne déploie pas les fichiers** : il valide le build et peut déclencher Render — c’est Render qui doit builder et publier `dist/`.
+
+**Vérifier dans Render → safealert-admin → Settings :**
+
+| Paramètre | Valeur correcte |
+|-----------|-----------------|
+| Type | **Static Site** (pas Web Service) |
+| Root Directory | `admin-web` |
+| Build Command | `npm install && npm run build` |
+| Publish Directory | `dist` (pas `admin-web/dist` si Root = `admin-web`) |
+
+**Puis** : onglet **Events** ou **Logs** → le dernier deploy doit être **Live** (vert), pas **Failed**.
+
+Si Root Directory est **vide** (racine du repo) :
+
+| Paramètre | Valeur |
+|-----------|--------|
+| Build Command | `cd admin-web && npm install && npm run build` |
+| Publish Directory | `admin-web/dist` |
+
+Après correction → **Manual Deploy** → **Clear build cache & deploy**.
