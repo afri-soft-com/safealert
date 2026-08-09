@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Politique de confidentialité — SafeAlert</title>
+  <style>
+    :root {
+      --bg: #0b6e6e;
+      --ink: #14201f;
+      --muted: #4a5c5a;
+      --card: #ffffff;
+      --line: #d7e5e3;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(11, 110, 110, 0.18), transparent 40%),
+        linear-gradient(180deg, #f3faf9 0%, #eef6f5 100%);
+      line-height: 1.65;
+    }
+    header {
+      background: linear-gradient(135deg, #0b6e6e, #063d3d);
+      color: #fff;
+      padding: 48px 20px 40px;
+    }
+    header .wrap, main {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.8rem, 4vw, 2.4rem);
+      letter-spacing: 0.02em;
+    }
+    .subtitle { opacity: 0.9; margin: 0; font-family: system-ui, sans-serif; font-size: 0.95rem; }
+    main {
+      background: var(--card);
+      margin-top: -24px;
+      margin-bottom: 48px;
+      padding: 32px 24px 48px;
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(6, 61, 61, 0.08);
+      border: 1px solid var(--line);
+    }
+    h2 {
+      margin-top: 2rem;
+      font-size: 1.25rem;
+      color: var(--bg);
+    }
+    p, li { font-family: system-ui, -apple-system, Segoe UI, sans-serif; color: var(--muted); }
+    ul { padding-left: 1.2rem; }
+    a { color: var(--bg); }
+    .meta {
+      font-family: system-ui, sans-serif;
+      font-size: 0.85rem;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      margin-top: 2.5rem;
+      padding-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Politique de confidentialité</h1>
+      <p class="subtitle">SafeAlert — Application de sécurité citoyenne</p>
+    </div>
+  </header>
+  <main>
+    <p>
+      La présente politique décrit comment <strong>SafeAlert</strong> collecte, utilise et protège
+      vos données lorsque vous utilisez l’application mobile et les services associés
+      (API, console d’administration).
+    </p>
+    <p><strong>Dernière mise à jour :</strong> 9 août 2026</p>
+
+    <h2>1. Responsable du traitement</h2>
+    <p>
+      SafeAlert est opéré par l’éditeur de l’application. Pour toute question relative à vos données :
+      contactez le support via le compte développeur Play Console ou l’adresse indiquée dans la fiche store.
+    </p>
+
+    <h2>2. Données collectées</h2>
+    <ul>
+      <li><strong>Compte :</strong> numéro de téléphone, pseudo, rôle (citoyen, leader, etc.).</li>
+      <li><strong>Authentification :</strong> codes OTP envoyés par SMS (stockés de façon hashée, durée limitée).</li>
+      <li><strong>Localisation :</strong> position GPS lors d’un SOS, d’un signalement ou de la mise à jour de présence (avec votre autorisation).</li>
+      <li><strong>Contenu d’urgence :</strong> incidents SOS, descriptions, contacts de confiance, groupes de voisins.</li>
+      <li><strong>Notifications :</strong> jeton Firebase Cloud Messaging (FCM) pour les alertes push.</li>
+      <li><strong>Données techniques :</strong> journaux serveur nécessaires au fonctionnement et à la sécurité (ex. adresse IP pour le rate-limiting).</li>
+    </ul>
+
+    <h2>3. Finalités</h2>
+    <ul>
+      <li>Créer et sécuriser votre compte (OTP).</li>
+      <li>Déclencher et diffuser des alertes SOS aux contacts / communauté.</li>
+      <li>Afficher la carte des incidents et l’annuaire d’urgence.</li>
+      <li>Améliorer la fiabilité, la sécurité et la prévention des abus.</li>
+      <li>Administrer la plateforme (comptes <em>platform_admin</em> uniquement).</li>
+    </ul>
+
+    <h2>4. Base légale</h2>
+    <p>
+      Traitement fondé sur votre consentement (localisation, notifications), l’exécution du service
+      que vous demandez (SOS, compte) et l’intérêt légitime de sécuriser la plateforme.
+    </p>
+
+    <h2>5. Partage des données</h2>
+    <ul>
+      <li>Vos alertes peuvent être visibles par vos contacts de confiance, membres de groupes concernés, et opérateurs autorisés.</li>
+      <li>Prestataires techniques : hébergement (Render), base de données, SMS (ex. Twilio / SerdiPay), Firebase (notifications).</li>
+      <li>Nous ne vendons pas vos données personnelles.</li>
+    </ul>
+
+    <h2>6. Conservation</h2>
+    <p>
+      Les codes OTP expirent rapidement. Les comptes et incidents sont conservés tant que le service
+      est utilisé, ou jusqu’à suppression de compte / demande d’effacement, sous réserve d’obligations légales.
+    </p>
+
+    <h2>7. Sécurité</h2>
+    <p>
+      Communications HTTPS, mots de passe OTP hashés, contrôle d’accès par rôles, journalisation
+      d’administration. Aucune mesure n’étant absolue, signalez tout incident de sécurité au support.
+    </p>
+
+    <h2>8. Vos droits</h2>
+    <p>
+      Selon la législation applicable, vous pouvez demander l’accès, la rectification, la suppression
+      de votre compte (fonction prévue dans l’app) ou vous opposer à certains traitements
+      (ex. désactiver la localisation ou les notifications dans les paramètres du téléphone).
+    </p>
+
+    <h2>9. Données des mineurs</h2>
+    <p>
+      SafeAlert n’est pas destiné aux enfants. Si vous pensez qu’un mineur a fourni des données,
+      contactez-nous pour suppression.
+    </p>
+
+    <h2>10. Modifications</h2>
+    <p>
+      Cette politique peut être mise à jour. La date en tête de page sera révisée ; l’usage continu
+      du service après publication vaut prise de connaissance des changements matériels.
+    </p>
+
+    <h2>11. Contact</h2>
+    <p>
+      Pour exercer vos droits ou poser une question : utilisez le canal de contact de la fiche
+      Google Play « SafeAlert » ou le support indiqué par l’éditeur.
+    </p>
+
+    <div class="meta">
+      <p>SafeAlert — Politique de confidentialité publique pour Google Play.</p>
+      <p><a href="https://safealert-admin.onrender.com/">Retour à la console</a></p>
+    </div>
+  </main>
+</body>
+</html>
