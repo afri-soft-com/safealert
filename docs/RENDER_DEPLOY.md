@@ -10,15 +10,17 @@ Le serveur MCP `user-render` permet de créer et configurer les services depuis 
 2. Dans Cursor : **Settings → MCP → user-render** → variable `RENDER_API_KEY`
 3. **GitHub connecté à Render** avec accès au dépôt `afri-soft-com/safealert` (obligatoire pour un dépôt privé)
 
-### État du workspace (dernière session MCP)
+### État du workspace (août 2026)
 
 | Élément | Statut |
 |---------|--------|
-| Connexion MCP | ✅ OK |
 | Workspace | **My Workspace** (`celestinkas@gmail.com`) |
-| Key Value `safealert-redis` | ✅ Créé (Frankfurt, free, `allkeys-lru`) |
-| Web Service `safealert-api` | ⚠️ Bloqué — dépôt GitHub privé non accessible à Render |
-| Static Site `safealert-admin` | ⏸ Non créé (attendre l’API) |
+| Key Value `safealert-redis` | Créé (Frankfurt, free) — peut être **suspended** après inactivité |
+| Web Service `safealert-api` | ✅ Live — `https://safealert-api.onrender.com` (`srv-d8le8e8js32c7397i4tg`) |
+| Static Site `safealert-admin` | ✅ Live — `https://safealert-admin.onrender.com` (`srv-d8ltt3nlk1mc73bl4c9g`) |
+| CI auto-deploy | ✅ Push `main` → API Render + smoke `/health/ready` (secret `RENDER_API_KEY`) |
+| Health check | `/health/ready` |
+| Build / start | `cd backend && npm ci` / `cd backend && npm run migrate && npm start` |
 
 ### Créer l’API après connexion GitHub
 
