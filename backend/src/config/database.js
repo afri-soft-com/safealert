@@ -1,10 +1,17 @@
 const { Pool } = require("pg");
 
+// Neon (surtout depuis Render EU) peut dépasser 5s au cold start
+const connectionTimeoutMillis = Number(process.env.DB_CONNECTION_TIMEOUT_MS || 30000);
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 20,
+  max: Number(process.env.DB_POOL_MAX || 20),
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis,
+  ssl:
+    process.env.DATABASE_URL && process.env.DATABASE_URL.includes("sslmode=require")
+      ? { rejectUnauthorized: false }
+      : undefined,
 });
 
 pool.on("error", (err) => {

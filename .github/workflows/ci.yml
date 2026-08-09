@@ -11,8 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   packages: write
+  actions: read
 
 jobs:
   changes:
@@ -21,7 +22,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       admin: ${{ steps.filter.outputs.admin }}
-      deploy: ${{ steps.filter.outputs.deploy }}
+      deploy_web: ${{ steps.filter.outputs.deploy_web }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -37,7 +38,7 @@ jobs:
             admin:
               - 'admin-web/**'
               - 'render.yaml'
-            deploy:
+            deploy_web:
               - 'backend/**'
               - 'admin-web/**'
               - 'render.yaml'
@@ -141,9 +142,12 @@ jobs:
         run: npm ci
 
       - name: Build production bundle
-        run: npm run build
         env:
-          VITE_API_BASE_URL: https://ci-placeholder.example.com/api
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          export VITE_API_BASE_URL="${API_BASE_URL:-https://safealert-api.onrender.com/api}"
+          npm run build
 
   docker-build:
     runs-on: ubuntu-latest
@@ -151,13 +155,11 @@ jobs:
     if: |
       always() &&
       needs.changes.outputs.backend == 'true' &&
-      (needs.backend.result == 'success' || needs.backend.result == 'skipped')
+      needs.backend.result == 'success'
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - uses: docker/setup-buildx-action@v3
-
       - name: Build backend Docker image (smoke, no push)
         uses: docker/build-push-action@v5
         with:
@@ -167,84 +169,117 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Déploiement Render (API + admin) — hooks dashboard Render
+  # Déploiement web automatique Render (API + admin) via API Render
   deploy-render:
-    needs: [changes, backend, admin-web, docker-build]
+    needs: [changes, backend, admin-web]
     if: |
+      always() &&
       github.ref == 'refs/heads/main' &&
       github.event_name == 'push' &&
-      needs.changes.outputs.deploy == 'true' &&
+      needs.changes.outputs.deploy_web == 'true' &&
       (needs.backend.result == 'success' || needs.backend.result == 'skipped') &&
-      (needs.admin-web.result == 'success' || needs.admin-web.result == 'skipped') &&
-      (needs.docker-build.result == 'success' || needs.docker-build.result == 'skipped')
+      (needs.admin-web.result == 'success' || needs.admin-web.result == 'skipped')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
-      - name: Trigger Render API deploy hook
+      - name: Deploy safealert-api on Render
         if: needs.changes.outputs.backend == 'true'
         env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_API_SERVICE_ID }}
         run: |
           set -euo pipefail
-          if [ -z "${RENDER_DEPLOY_HOOK:-}" ]; then
-            echo "RENDER_DEPLOY_HOOK_API non configuré — auto-deploy Git Render éventuel."
-            exit 0
+          if [ -z "${RENDER_API_KEY:-}" ] || [ -z "${SERVICE_ID:-}" ]; then
+            echo "Secrets Render API manquants"
+            exit 1
           fi
-          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
-          echo "Déploiement Render safealert-api déclenché."
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":"clear"}' \
+            "https://api.render.com/v1/services/${SERVICE_ID}/deploys"
+          echo "Deploy API déclenché"
 
-      - name: Trigger Render admin static deploy hook
+      - name: Deploy safealert-admin on Render
         if: needs.changes.outputs.admin == 'true'
         env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_ADMIN }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_ADMIN_SERVICE_ID }}
         run: |
           set -euo pipefail
-          if [ -z "${RENDER_DEPLOY_HOOK:-}" ]; then
-            echo "RENDER_DEPLOY_HOOK_ADMIN non configuré — auto-deploy Git Render éventuel."
-            exit 0
+          if [ -z "${RENDER_API_KEY:-}" ] || [ -z "${SERVICE_ID:-}" ]; then
+            echo "Secrets Render admin manquants"
+            exit 1
           fi
-          curl -fsS -X POST "$RENDER_DEPLOY_HOOK"
-          echo "Déploiement Render safealert-admin déclenché."
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":"clear"}' \
+            "https://api.render.com/v1/services/${SERVICE_ID}/deploys"
+          echo "Deploy admin déclenché"
 
-      - name: Smoke test production (Render)
+      - name: Wait until API deploy is live
+        if: needs.changes.outputs.backend == 'true'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_API_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            status=$(curl -fsS \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Accept: application/json" \
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys?limit=1" \
+              | jq -r '.[0].deploy.status // empty')
+            echo "Deploy status: ${status} ($attempt/36)"
+            case "$status" in
+              live) exit 0 ;;
+              build_failed|update_failed|canceled|deactivated)
+                echo "Deploy Render en échec: $status"
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "Timeout attente deploy Render"
+          exit 1
+
+      - name: Smoke test production
         env:
           PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
         run: |
           set -euo pipefail
-          if [ -z "${PRODUCTION_URL:-}" ]; then
-            echo "PRODUCTION_URL non configuré — smoke ignoré."
-            exit 0
-          fi
-          BASE="${PRODUCTION_URL%/}"
-          echo "Attente cold start Render puis smoke sur ${BASE}"
+          BASE="${PRODUCTION_URL:-https://safealert-api.onrender.com}"
+          BASE="${BASE%/}"
           ok=0
           for attempt in $(seq 1 18); do
             code=$(curl -sS -o /tmp/smoke.json -w "%{http_code}" \
-              --connect-timeout 10 --max-time 30 "${BASE}/health/ready" || echo "000")
+              --connect-timeout 10 --max-time 45 "${BASE}/health/ready" || echo "000")
             if [ "$code" = "200" ]; then
-              echo "✓ /health/ready HTTP 200 (tentative $attempt)"
+              echo "✓ /health/ready HTTP 200"
               cat /tmp/smoke.json; echo
               ok=1
               break
             fi
-            echo "… HTTP $code ($attempt/18) — cold start possible"
+            echo "… HTTP $code ($attempt/18)"
             sleep 10
           done
-          if [ "$ok" -ne 1 ]; then
-            echo "Échec smoke /health/ready"
-            exit 1
-          fi
+          test "$ok" -eq 1
 
-  # AAB pour Play Store (signature debug en CI ; keystore store via secrets optionnels)
+  # AAB rebuild + upload artifact + GitHub Release (si frontend changé)
   mobile-aab:
     needs: [changes, frontend]
     if: |
       github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) &&
-      (needs.changes.outputs.frontend == 'true' || startsWith(github.ref, 'refs/tags/v')) &&
+      github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.frontend == 'true' &&
       (needs.frontend.result == 'success' || needs.frontend.result == 'skipped')
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
+    env:
+      PLAY_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
     defaults:
       run:
         working-directory: frontend
@@ -271,10 +306,10 @@ jobs:
             printf '%s\n' "$ANDROID_KEY_PROPERTIES" > android/key.properties
             echo "Keystore Play Store chargé."
           else
-            echo "Pas de secrets keystore — AAB signé debug (internal testing OK, pas prod store)."
+            echo "Pas de keystore secrets — AAB debug-signed (tests internes)."
           fi
 
-      - name: Build App Bundle (Play Store)
+      - name: Build App Bundle
         env:
           API_BASE_URL: ${{ vars.API_BASE_URL }}
         run: |
@@ -287,4 +322,29 @@ jobs:
         with:
           name: safealert-aab-${{ github.sha }}
           path: frontend/build/app/outputs/bundle/release/app-release.aab
-          retention-days: 14
+          retention-days: 30
+
+      - name: Publish AAB on GitHub Release (rolling tag aab-main)
+        uses: ncipollo/release-action@v1
+        with:
+          tag: aab-main
+          name: SafeAlert AAB (main)
+          body: |
+            AAB rebuild automatique depuis `main` (`${{ github.sha }}`).
+            API: `${{ vars.API_BASE_URL }}`
+          artifacts: frontend/build/app/outputs/bundle/release/app-release.aab
+          allowUpdates: true
+          replacesArtifacts: true
+          prerelease: true
+          commit: ${{ github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to Google Play internal track (optional)
+        if: ${{ env.PLAY_JSON != '' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.safealert.safealert
+          releaseFiles: frontend/build/app/outputs/bundle/release/app-release.aab
+          track: internal
+          status: draft

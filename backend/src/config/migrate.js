@@ -1,4 +1,8 @@
 require("dotenv").config();
+// Neon : préférer l'endpoint direct (sans -pooler) pour les migrations DDL
+if (process.env.DATABASE_URL_DIRECT) {
+  process.env.DATABASE_URL = process.env.DATABASE_URL_DIRECT;
+}
 const { pool } = require("./database");
 
 const migrate = async () => {
