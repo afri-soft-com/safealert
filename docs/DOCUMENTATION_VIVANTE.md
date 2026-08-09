@@ -195,13 +195,12 @@ cp .env.production.example .env.production   # JWT, Neon, CORS, SMS, FCM
 
 ## 7. Changelog
 
-### 2026-08-09 (Render, Play Store, SerdiPay, CI)
+### 2026-08-09 (branding, Postgres Render, robustesse)
 
-- **admin-web** : console déjà livrée (6 pages + OTP `platform_admin`).
-- **SerdiPay** : connecteur SMS/OTP prêt (`SERDIPAY_*`) — en attente des clés ; priorité auto SerdiPay → Twilio → AT.
-- **CI** : path filters, concurrency, hooks Render API+admin, smoke `/health/ready`, AAB Play Store (+ keystore secrets optionnels).
-- Guide Play Store : [PLAY_STORE.md](PLAY_STORE.md).
-- Compose / Docker / CORS / `deploy.ps1` : durcissement prod (session précédente).
+- **Logo + splash** : assets générés, `flutter_launcher_icons` + `flutter_native_splash`, splash Flutter pleine image.
+- **Postgres Render** `safealert-db` (Frankfurt) — Neon abandonné pour la prod ; migrations + PostGIS OK.
+- **Améliorations** : audit_logs admin, OTP par téléphone, Socket.io Redis adapter, SOS offline queue, feature flags, health redis.
+- **SerdiPay** / CI Render / Play Store : [PLAY_STORE.md](PLAY_STORE.md), [RENDER_DEPLOY.md](RENDER_DEPLOY.md).
 
 ### 2026-06-11 (console admin web)
 

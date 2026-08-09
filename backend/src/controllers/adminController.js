@@ -1,7 +1,11 @@
 const { pool } = require("../config/database");
 const { generateApiKey } = require("../middleware/partnerAuth");
+const { writeAudit } = require("../services/audit");
 
 const VALID_ROLES = ["citizen", "leader", "agent", "platform_admin"];
+
+const clientIp = (req) =>
+  req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || req.ip;
 
 const listUsers = async (req, res) => {
   const page = Math.max(parseInt(req.query.page) || 1, 1);
@@ -44,6 +48,14 @@ const updateUserRole = async (req, res) => {
       [role, id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur non trouvé" });
+    await writeAudit({
+      actorId: req.userId,
+      action: "user.role.update",
+      entityType: "user",
+      entityId: id,
+      metadata: { role },
+      ip: clientIp(req),
+    });
     return res.json(result.rows[0]);
   } catch (err) {
     console.error("updateUserRole error:", err);
@@ -63,6 +75,14 @@ const updateUserSector = async (req, res) => {
       [value, id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur non trouvé" });
+    await writeAudit({
+      actorId: req.userId,
+      action: "user.sector.update",
+      entityType: "user",
+      entityId: id,
+      metadata: { sector_name: value },
+      ip: clientIp(req),
+    });
     return res.json(result.rows[0]);
   } catch (err) {
     console.error("updateUserSector error:", err);
@@ -94,6 +114,14 @@ const createPartner = async (req, res) => {
        VALUES ($1, $2, $3) RETURNING *`,
       [partner_name, apiKey, rate_limit || 1000]
     );
+    await writeAudit({
+      actorId: req.userId,
+      action: "partner.create",
+      entityType: "partner",
+      entityId: result.rows[0].id,
+      metadata: { partner_name },
+      ip: clientIp(req),
+    });
     return res.status(201).json({
       partner_id: result.rows[0].id,
       partner_name: result.rows[0].partner_name,
@@ -114,6 +142,13 @@ const revokePartner = async (req, res) => {
       [id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: "Partenaire non trouvé" });
+    await writeAudit({
+      actorId: req.userId,
+      action: "partner.revoke",
+      entityType: "partner",
+      entityId: id,
+      ip: clientIp(req),
+    });
     return res.json({ message: "Clé révoquée", partner: result.rows[0] });
   } catch (err) {
     console.error("revokePartner error:", err);
@@ -177,6 +212,14 @@ const createEmergencyNumber = async (req, res) => {
         is_offline_available !== false,
       ]
     );
+    await writeAudit({
+      actorId: req.userId,
+      action: "emergency.create",
+      entityType: "emergency_number",
+      entityId: result.rows[0].id,
+      metadata: { service_name, phone_number },
+      ip: clientIp(req),
+    });
     return res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("createEmergencyNumber error:", err);
@@ -209,6 +252,13 @@ const updateEmergencyNumber = async (req, res) => {
       ]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: "Entrée non trouvée" });
+    await writeAudit({
+      actorId: req.userId,
+      action: "emergency.update",
+      entityType: "emergency_number",
+      entityId: id,
+      ip: clientIp(req),
+    });
     return res.json(result.rows[0]);
   } catch (err) {
     console.error("updateEmergencyNumber error:", err);
@@ -223,6 +273,13 @@ const deleteEmergencyNumber = async (req, res) => {
       id,
     ]);
     if (result.rows.length === 0) return res.status(404).json({ error: "Entrée non trouvée" });
+    await writeAudit({
+      actorId: req.userId,
+      action: "emergency.delete",
+      entityType: "emergency_number",
+      entityId: id,
+      ip: clientIp(req),
+    });
     return res.json({ message: "Numéro supprimé", id: result.rows[0].id });
   } catch (err) {
     console.error("deleteEmergencyNumber error:", err);

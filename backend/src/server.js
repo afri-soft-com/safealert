@@ -9,8 +9,9 @@ const { apiLimiter } = require("./middleware/rateLimit");
 const { pool } = require("./config/database");
 const { initFCM } = require("./config/firebase");
 const { initSMS } = require("./services/sms");
-const { initRedis } = require("./config/redis");
-const { log } = require("./utils/logger");
+const { initRedis, isRedisReady } = require("./config/redis");
+const { socketRedisAdapter } = require("./config/features");
+const { log, warn } = require("./utils/logger");
 
 const isProduction = process.env.NODE_ENV === "production";
 const jwtSecret = process.env.JWT_SECRET || "";
@@ -65,7 +66,6 @@ const corsOptions =
     ? {}
     : {
         origin(origin, callback) {
-          // Requêtes sans Origin (apps mobiles natives, curl, health checks)
           if (!origin || allowedOrigins.includes(origin)) {
             return callback(null, true);
           }
@@ -91,13 +91,23 @@ if (isProduction) {
 }
 
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", service: "SafeAlert API", version: "1.0.0" });
+  res.json({
+    status: "ok",
+    service: "SafeAlert API",
+    version: "1.0.0",
+    redis: isRedisReady() ? "up" : "down",
+  });
 });
 
 app.get("/health/ready", async (req, res) => {
   try {
     await pool.query("SELECT 1");
-    return res.json({ status: "ready", service: "SafeAlert API", db: "ok" });
+    return res.json({
+      status: "ready",
+      service: "SafeAlert API",
+      db: "ok",
+      redis: isRedisReady() ? "ok" : "disabled",
+    });
   } catch (err) {
     console.error("Readiness check failed:", err.message);
     return res.status(503).json({ status: "not_ready", db: "error" });
@@ -137,17 +147,41 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.HOST || "0.0.0.0";
 
-initFCM();
-initSMS();
-initRedis().catch((err) => console.warn("Redis init skipped:", err.message));
-
-if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
-  server.listen(PORT, HOST, () => {
-    log(`SafeAlert API running on ${HOST}:${PORT}`);
-  });
+async function attachSocketRedisAdapter() {
+  if (!socketRedisAdapter() || !process.env.REDIS_URL) return;
+  try {
+    const { createClient } = require("redis");
+    const { createAdapter } = require("@socket.io/redis-adapter");
+    const pubClient = createClient({ url: process.env.REDIS_URL });
+    const subClient = pubClient.duplicate();
+    pubClient.on("error", (err) => warn("Redis pub adapter:", err.message));
+    subClient.on("error", (err) => warn("Redis sub adapter:", err.message));
+    await Promise.all([pubClient.connect(), subClient.connect()]);
+    io.adapter(createAdapter(pubClient, subClient));
+    log("Socket.io Redis adapter enabled");
+  } catch (err) {
+    warn("Socket.io Redis adapter skipped:", err.message);
+  }
 }
 
-module.exports = { app, server, io };
+async function bootstrap() {
+  initFCM();
+  initSMS();
+  await initRedis().catch((err) => console.warn("Redis init skipped:", err.message));
+  await attachSocketRedisAdapter();
 
+  if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
+    server.listen(PORT, HOST, () => {
+      log(`SafeAlert API running on ${HOST}:${PORT}`);
+    });
+  }
+}
+
+bootstrap().catch((err) => {
+  console.error("Bootstrap failed:", err);
+  process.exit(1);
+});
+
+module.exports = { app, server, io };

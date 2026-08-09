@@ -20,7 +20,7 @@ class LocalDatabase {
     final path = join(dbPath, 'safealert_cache.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE cache (
@@ -29,6 +29,26 @@ class LocalDatabase {
             cached_at INTEGER NOT NULL
           )
         ''');
+        await db.execute('''
+          CREATE TABLE pending_sos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            payload TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0
+          )
+        ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS pending_sos (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              payload TEXT NOT NULL,
+              created_at INTEGER NOT NULL,
+              attempts INTEGER NOT NULL DEFAULT 0
+            )
+          ''');
+        }
       },
     );
   }
@@ -66,5 +86,36 @@ class LocalDatabase {
   Future<void> clear() async {
     final db = await database;
     await db.delete('cache');
+  }
+
+  Future<int> enqueuePendingSos(Map<String, dynamic> payload) async {
+    final db = await database;
+    return db.insert('pending_sos', {
+      'payload': jsonEncode(payload),
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+      'attempts': 0,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> listPendingSos() async {
+    final db = await database;
+    final rows = await db.query('pending_sos', orderBy: 'created_at ASC');
+    return rows
+        .map((r) => {
+              'id': r['id'],
+              'payload': jsonDecode(r['payload'] as String) as Map<String, dynamic>,
+              'attempts': r['attempts'],
+            })
+        .toList();
+  }
+
+  Future<void> removePendingSos(int id) async {
+    final db = await database;
+    await db.delete('pending_sos', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> bumpPendingSosAttempt(int id) async {
+    final db = await database;
+    await db.rawUpdate('UPDATE pending_sos SET attempts = attempts + 1 WHERE id = ?', [id]);
   }
 }

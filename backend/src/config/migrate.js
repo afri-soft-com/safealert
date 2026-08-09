@@ -180,6 +180,19 @@ const migrate = async () => {
       );
       CREATE INDEX IF NOT EXISTS idx_group_alerts_group_created
         ON group_alerts(group_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        action VARCHAR(80) NOT NULL,
+        entity_type VARCHAR(60) NOT NULL,
+        entity_id TEXT,
+        metadata JSONB,
+        ip VARCHAR(64),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id);
     `);
 
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;

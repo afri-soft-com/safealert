@@ -40,13 +40,24 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
 
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: assets/images/logo.png
-  adaptive_icon_background: "#0D1B2A"
+  adaptive_icon_background: "#0B6E6E"
   adaptive_icon_foreground: assets/images/logo.png
+  remove_alpha_ios: true
+
+flutter_native_splash:
+  color: "#0B6E6E"
+  image: assets/images/logo.png
+  android_12:
+    color: "#0B6E6E"
+    image: assets/images/logo.png
+  ios: true
+  web: false
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -61,6 +72,8 @@ flutter:
 
   assets:
     - assets/images/logo.png
+    - assets/branding/splash.png
+    - assets/branding/logo.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

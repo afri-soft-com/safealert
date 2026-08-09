@@ -94,6 +94,11 @@ class _AppShellState extends State<AppShell> {
           context.read<IncidentProvider>().triggerSOS(0, 0, type: 'sos_discret');
         }
       });
+      // Sync SOS mis en file hors-ligne
+      final auth = context.read<AuthProvider>();
+      if (auth.isAuthenticated) {
+        await context.read<IncidentProvider>().flushPendingSos();
+      }
     });
   }
 

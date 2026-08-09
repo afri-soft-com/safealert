@@ -111,22 +111,56 @@ class IncidentProvider extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> triggerSOS(double lat, double lng, {String? type, String? description}) async {
+    final pos = await LocationService().getCurrentPosition();
+    final useLat = pos?.latitude ?? lat;
+    final useLng = pos?.longitude ?? lng;
+    final payload = {
+      'lat': useLat,
+      'lng': useLng,
+      'incident_type': type ?? 'sos',
+      if (description != null) 'description': description,
+    };
     try {
-      final pos = await LocationService().getCurrentPosition();
-      final useLat = pos?.latitude ?? lat;
-      final useLng = pos?.longitude ?? lng;
       if (pos != null) {
         await LocationService().updatePosition(useLat, useLng);
       }
-      final res = await _api.post('/sos/trigger', {
-        'lat': useLat, 'lng': useLng,
-        'incident_type': type ?? 'sos',
-        if (description != null) 'description': description,
-      });
+      final res = await _api.post('/sos/trigger', payload);
       return res;
     } catch (_) {
-      return null;
+      // Offline-first : file d'attente locale, sync dès que possible
+      await _cache.enqueuePendingSos(payload);
+      _isOffline = true;
+      notifyListeners();
+      return {
+        'queued': true,
+        'message': 'SOS enregistré hors-ligne — envoi dès reconnexion',
+        ...payload,
+      };
     }
+  }
+
+  /// Renvoie les SOS en file locale (après perte réseau).
+  Future<int> flushPendingSos() async {
+    final pending = await _cache.listPendingSos();
+    var sent = 0;
+    for (final item in pending) {
+      final id = item['id'] as int;
+      final payload = item['payload'] as Map<String, dynamic>;
+      try {
+        await _api.post('/sos/trigger', payload);
+        await _cache.removePendingSos(id);
+        sent++;
+      } catch (_) {
+        await _cache.bumpPendingSosAttempt(id);
+        break;
+      }
+    }
+    if (sent > 0) {
+      _isOffline = false;
+      await fetchIncidents();
+      notifyListeners();
+    }
+    return sent;
   }
 
   Future<bool> cancelSOS() async {

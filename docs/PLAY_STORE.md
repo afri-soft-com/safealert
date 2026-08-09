@@ -2,74 +2,77 @@
 
 Compte Play Console disponible. App Store iOS : plus tard.
 
-## 1. Préparer la signature (une seule fois)
+## Checklist rapide (dans l’ordre)
 
-```bash
-cd frontend/android
-keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
-```
+### A. Assets (déjà générés dans le repo)
 
-Copier le modèle :
+| Fichier | Usage |
+|---------|--------|
+| `frontend/assets/images/logo.png` | Icône launcher Android/iOS |
+| `frontend/assets/branding/splash.png` | Écran d’accueil Flutter |
+| Splash natif | `flutter_native_splash` (fond `#0B6E6E` + logo) |
 
-```bash
-cp key.properties.example key.properties
-# Éditer storePassword, keyPassword, keyAlias, storeFile
-```
-
-**Sauvegarder le `.jks` hors Git** (perte = impossible de mettre à jour l’app).  
-Fichiers déjà ignorés : `key.properties`, `*.jks`.
-
-### Secrets CI (optionnel, pour AAB signé en Actions)
-
-| Secret GitHub | Contenu |
-|---------------|---------|
-| `ANDROID_KEYSTORE_BASE64` | `base64 -w0 upload-keystore.jks` |
-| `ANDROID_KEY_PROPERTIES` | contenu brut de `key.properties` |
-
-Variable repo : `API_BASE_URL` = `https://safealert-api.onrender.com/api` (ou votre URL Render).
-
-## 2. Build local signé
+Régénérer icônes / splash natif après changement de logo :
 
 ```bash
 cd frontend
 flutter pub get
+dart run flutter_launcher_icons
+dart run flutter_native_splash:create
+```
+
+### B. Signature (une seule fois — obligatoire Play Store)
+
+```bash
+cd frontend/android
+keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+cp key.properties.example key.properties
+# Éditer storePassword, keyPassword, keyAlias=upload, storeFile=../upload-keystore.jks
+```
+
+Sauvegarder le `.jks` hors Git (coffre-fort). Ne jamais committer `key.properties`.
+
+Secrets CI optionnels :
+
+| Secret | Contenu |
+|--------|---------|
+| `ANDROID_KEYSTORE_BASE64` | `certutil -encode upload-keystore.jks stdout` (ou `base64 -w0`) |
+| `ANDROID_KEY_PROPERTIES` | contenu de `key.properties` |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | JSON compte de service Play (upload internal auto) |
+
+### C. Build AAB pointant vers Render
+
+```bash
+cd frontend
 flutter build appbundle --release --dart-define=API_BASE_URL=https://safealert-api.onrender.com/api
 ```
 
-Fichier : `build/app/outputs/bundle/release/app-release.aab`
+Fichier : `build/app/outputs/bundle/release/app-release.aab`  
+Ou télécharger la release GitHub **`aab-main`** (CI, si `frontend/**` a changé).
 
-## 3. Play Console — checklist
+### D. Play Console — étapes
 
-1. **Créer l’application** → type App → gratuit → déclarations.
-2. **Fiche Play** : titre, description courte/longue, icône 512×512, feature graphic 1024×500, captures téléphone.
-3. **Classement du contenu** : questionnaire (sécurité personnelle / urgence).
-4. **Cible / public** : pas enfants si SOS adulte ; politique de confidentialité **URL HTTPS obligatoire**.
-5. **Data safety** : localisation, téléphone, notifications — déclarer usage SOS.
-6. **Accès apps sensibles** : si SOS / contacts d’urgence, préparer justification.
-7. **Pays** : RDC (+ autres) ; devise / distribution.
-8. **Production ou tests** :
-   - **Internal testing** : uploader l’AAB, ajouter testeurs e-mail → lien rapide.
-   - **Closed / Open testing** avant production.
-9. **Signer avec Play App Signing** : uploader la clé d’upload ; Google gère la clé app.
+1. **Créer l’app** → Application → Gratuit → déclarations.
+2. **Fiche Play** : titre SafeAlert, descriptions, icône 512×512 (exporterer le logo), feature graphic 1024×500, 2–8 captures téléphone.
+3. **Politique de confidentialité** : URL HTTPS publique obligatoire.
+4. **Data safety** : localisation, téléphone, notifications (usage SOS).
+5. **Classement du contenu** + public cible (pas enfants si SOS adulte).
+6. **Internal testing** : uploader l’AAB → ajouter testeurs e-mail → lien de test.
+7. **Play App Signing** : accepter (Google gère la clé app ; vous gardez la clé d’upload).
+8. Après tests : **Closed / Open testing** puis **Production** (pays : RDC + autres).
 
-## 4. Alignement Render
+### E. Avant soumission
 
-L’APK/AAB doit pointer vers l’API Render :
+- [ ] API Render live : `curl https://safealert-api.onrender.com/health/ready`
+- [ ] OTP SMS réel (SerdiPay / Twilio) configuré
+- [ ] Compte `platform_admin` pour admin-web
+- [ ] Incrémenter `version` dans `pubspec.yaml` (`1.0.0+1` → `1.0.1+2`) à chaque upload
 
-```text
---dart-define=API_BASE_URL=https://<votre-service>.onrender.com/api
-```
+### F. CI automatique
 
-Vérifier avant soumission :
+Sur push `main` si `frontend/**` change :
 
-```bash
-curl https://<votre-service>.onrender.com/health/ready
-```
-
-OTP réel = SerdiPay (clés à brancher) ou Twilio en secours. Sans SMS, les testeurs ne pourront pas se connecter en prod.
-
-## 5. Après publication
-
-- Suivre les crashs dans Play Console → Android Vitals.
-- Chaque version : incrémenter `version` / `versionCode` dans `frontend/pubspec.yaml` (`1.0.0+1` → `1.0.1+2`).
-- Tag Git `v1.0.1` pour déclencher le workflow Deploy (AAB artifact + image GHCR).
+1. Build AAB
+2. Artifact Actions
+3. Release prerelease `aab-main`
+4. Upload Play **internal** si `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` est défini

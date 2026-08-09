@@ -6,7 +6,7 @@ let connected = false;
 const initRedis = async () => {
   if (!process.env.REDIS_URL) {
     warn("Redis not configured — alert cache disabled");
-    return;
+    return null;
   }
   try {
     const { createClient } = require("redis");
@@ -18,12 +18,16 @@ const initRedis = async () => {
     await client.connect();
     connected = true;
     log("Redis connected");
+    return client;
   } catch (err) {
     warn("Redis connection failed — cache disabled:", err.message);
     client = null;
     connected = false;
+    return null;
   }
 };
+
+const getRedisClient = () => (isRedisReady() ? client : null);
 
 const isRedisReady = () => connected && client?.isOpen;
 
@@ -49,17 +53,40 @@ const cacheSet = async (key, value, ttlSeconds = 60) => {
 const invalidateActiveAlerts = async () => {
   if (!isRedisReady()) return;
   try {
-    const keys = await client.keys("map:incidents:*");
-    if (keys.length > 0) await client.del(keys);
+    // SCAN plutôt que KEYS (non bloquant)
+    let cursor = 0;
+    const toDelete = [];
+    do {
+      const result = await client.scan(cursor, { MATCH: "map:incidents:*", COUNT: 100 });
+      cursor = result.cursor;
+      toDelete.push(...result.keys);
+    } while (cursor !== 0);
+    if (toDelete.length > 0) await client.del(toDelete);
   } catch (err) {
     console.error("Redis invalidate error:", err.message);
   }
 };
 
+/** Compteur OTP par téléphone (fenêtre glissante). */
+const incrPhoneOtp = async (phone, windowSeconds = 900) => {
+  if (!isRedisReady()) return null;
+  const key = `otp:phone:${phone}`;
+  try {
+    const count = await client.incr(key);
+    if (count === 1) await client.expire(key, windowSeconds);
+    return count;
+  } catch (err) {
+    console.error("Redis OTP incr error:", err.message);
+    return null;
+  }
+};
+
 module.exports = {
   initRedis,
+  getRedisClient,
   isRedisReady,
   cacheGet,
   cacheSet,
   invalidateActiveAlerts,
+  incrPhoneOtp,
 };

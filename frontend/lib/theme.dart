@@ -5,6 +5,10 @@ class AppColors {
   static const rougeDark = Color(0xFF991515);
   static const rougeLight = Color(0xFFFCEBEB);
   static const bleuFonce = Color(0xFF0D1B2A);
+  /// Brand teal (logo / splash)
+  static const teal = Color(0xFF0B6E6E);
+  static const tealDeep = Color(0xFF063D3D);
+  static const mint = Color(0xFFB8E0D2);
   static const bleu = Color(0xFF185FA5);
   static const gris = Color(0xFF4A4A6A);
   static const grisClair = Color(0xFFF5F5F7);

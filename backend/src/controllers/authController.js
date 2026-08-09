@@ -4,17 +4,47 @@ const { pool } = require("../config/database");
 const { sendSMS, isSMSConfigured } = require("../services/sms");
 const { normalizePhone } = require("../utils/phone");
 const { log } = require("../utils/logger");
+const { incrPhoneOtp } = require("../config/redis");
+const { otpPhoneLimit } = require("../config/features");
 
 const OTP_TTL_SECONDS = 300;
+const OTP_PHONE_MAX = Number(process.env.OTP_PHONE_MAX_PER_WINDOW || 5);
 
 const requestCode = async (req, res) => {
   const phone = normalizePhone(req.body.phone);
   if (!phone) return res.status(400).json({ error: "Numéro de téléphone invalide" });
 
   try {
+    if (otpPhoneLimit()) {
+      const count = await incrPhoneOtp(phone);
+      if (count !== null && count > OTP_PHONE_MAX) {
+        return res.status(429).json({
+          error: "Trop de codes demandés pour ce numéro, réessayez dans 15 minutes",
+        });
+      }
+      // Fallback DB si Redis absent
+      if (count === null) {
+        const recent = await pool.query(
+          `SELECT COUNT(*)::int AS n FROM otp_codes
+           WHERE phone = $1 AND created_at > NOW() - INTERVAL '15 minutes'`,
+          [phone]
+        );
+        if ((recent.rows[0]?.n ?? 0) >= OTP_PHONE_MAX) {
+          return res.status(429).json({
+            error: "Trop de codes demandés pour ce numéro, réessayez dans 15 minutes",
+          });
+        }
+      }
+    }
+
+    // Invalider les codes non utilisés (conserver l'historique pour le rate-limit téléphone)
     await pool.query(
-      "DELETE FROM otp_codes WHERE phone = $1 OR expires_at < NOW() - INTERVAL '1 hour'",
+      `UPDATE otp_codes SET used_at = NOW()
+       WHERE phone = $1 AND used_at IS NULL`,
       [phone]
+    );
+    await pool.query(
+      "DELETE FROM otp_codes WHERE expires_at < NOW() - INTERVAL '1 hour'"
     );
 
     const code = String(Math.floor(100000 + Math.random() * 900000));

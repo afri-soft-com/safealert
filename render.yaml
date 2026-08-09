@@ -1,10 +1,15 @@
-# SafeAlert — Blueprint Render (API + Redis optionnel + admin-web optionnel)
+# SafeAlert — Blueprint Render (API + Postgres + Redis + admin-web)
 # Documentation : docs/RENDER_DEPLOY.md
-# PostgreSQL : Neon (externe) — pas de Postgres sur Render
-# Alternative au déploiement VPS SSH (.github/workflows/deploy.yml)
+
+databases:
+  - name: safealert-db
+    plan: basic_256mb
+    region: frankfurt
+    postgresMajorVersion: "16"
+    databaseName: safealert
+    user: safealert
 
 services:
-  # Cache alertes actives (optionnel — l'API démarre sans Redis)
   - type: keyvalue
     name: safealert-redis
     plan: free
@@ -13,13 +18,13 @@ services:
 
   - type: web
     name: safealert-api
-    runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    runtime: node
+    rootDir: backend
     plan: starter
     region: frankfurt
     healthCheckPath: /health/ready
-    preDeployCommand: sh -c 'DATABASE_URL="${DATABASE_URL_DIRECT:-$DATABASE_URL}" npm run migrate'
+    buildCommand: npm ci
+    startCommand: npm run migrate && npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -28,9 +33,13 @@ services:
       - key: HOST
         value: 0.0.0.0
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: safealert-db
+          property: connectionString
       - key: DATABASE_URL_DIRECT
-        sync: false
+        fromDatabase:
+          name: safealert-db
+          property: connectionString
       - key: JWT_SECRET
         sync: false
       - key: JWT_EXPIRES_IN
@@ -41,6 +50,14 @@ services:
         sync: false
       - key: NOMINATIM_USER_AGENT
         sync: false
+      - key: DB_CONNECTION_TIMEOUT_MS
+        value: "30000"
+      - key: FEATURE_SOCKET_REDIS_ADAPTER
+        value: "true"
+      - key: FEATURE_AUDIT_LOG
+        value: "true"
+      - key: FEATURE_OTP_PHONE_LIMIT
+        value: "true"
       - key: REDIS_URL
         fromService:
           type: keyvalue
@@ -71,7 +88,6 @@ services:
       - key: FCM_CLIENT_EMAIL
         sync: false
 
-  # Console admin plateforme (Static Site — voir docs/RENDER_DEPLOY.md)
   - type: web
     name: safealert-admin
     runtime: static
@@ -86,6 +102,5 @@ services:
         source: /*
         destination: /index.html
     envVars:
-      # Ex. https://safealert-api.onrender.com/api — à renseigner au 1er déploiement
       - key: VITE_API_BASE_URL
-        sync: false
+        value: https://safealert-api.onrender.com/api
