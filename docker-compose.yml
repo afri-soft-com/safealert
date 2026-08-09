@@ -34,12 +34,16 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: development
+      HOST: 0.0.0.0
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-safealert}
       JWT_SECRET: ${JWT_SECRET:-safealert-local-dev-jwt-secret-32chars!!}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      PLATFORM_ADMIN_PHONE: ${PLATFORM_ADMIN_PHONE:-}
+      NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT:-SafeAlert/1.0 (local-dev)}
+      ADMIN_WEB_DIST: ${ADMIN_WEB_DIST:-}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
@@ -50,6 +54,8 @@ services:
       FCM_CLIENT_EMAIL: ${FCM_CLIENT_EMAIL:-}
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     command: sh -c "npm run migrate && npm start"
     healthcheck:

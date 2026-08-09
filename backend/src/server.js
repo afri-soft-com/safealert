@@ -36,19 +36,50 @@ const historyRoutes = require("./routes/history");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
-app.set("io", io);
 
 const path = require("path");
 
 const defaultDevOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
 const corsOrigin = process.env.CORS_ORIGIN;
+
+function resolveCorsOrigin() {
+  if (corsOrigin === "*") return "*";
+  if (corsOrigin && corsOrigin.trim()) {
+    return corsOrigin.split(",").map((o) => o.trim()).filter(Boolean);
+  }
+  if (!isProduction) return defaultDevOrigins;
+  return null;
+}
+
+const allowedOrigins = resolveCorsOrigin();
+
+if (isProduction && !allowedOrigins) {
+  console.error(
+    "CORS_ORIGIN must be set in production (comma-separated origins, or * for public API)"
+  );
+  process.exit(1);
+}
+
 const corsOptions =
-  corsOrigin && corsOrigin !== "*"
-    ? { origin: corsOrigin.split(",").map((o) => o.trim()) }
-    : process.env.NODE_ENV !== "production"
-      ? { origin: defaultDevOrigins }
-      : {};
+  allowedOrigins === "*"
+    ? {}
+    : {
+        origin(origin, callback) {
+          // Requêtes sans Origin (apps mobiles natives, curl, health checks)
+          if (!origin || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+          }
+          return callback(null, false);
+        },
+      };
+
+const socketCors =
+  allowedOrigins === "*" || !allowedOrigins
+    ? { origin: "*" }
+    : { origin: allowedOrigins };
+
+const io = new Server(server, { cors: socketCors });
+app.set("io", io);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(corsOptions));

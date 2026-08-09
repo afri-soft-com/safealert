@@ -42,7 +42,19 @@ DATABASE_URL_DIRECT=postgresql://USER:PASS@ep-xxx.region.aws.neon.tech/safealert
 
 ---
 
-## 2. Twilio (SMS — OTP et alertes)
+## 2. SerdiPay (SMS / OTP — cible RDC)
+
+| | |
+|--|--|
+| **Objectif** | Envoi OTP (et alertes SMS) via partenaire SerdiPay |
+| **Variables** | `SERDIPAY_API_KEY`, `SERDIPAY_SMS_URL`, `SERDIPAY_SENDER_ID` (optionnel), `SMS_PROVIDER=serdipay\|auto` |
+| **Statut** | Connecteur prêt dans `backend/src/services/sms.js` — **en attente des clés API et de l’URL SMS** |
+
+La doc publique SerdiPay couvre surtout le **paiement mobile money**. Dès que vous recevez l’endpoint SMS + le format d’auth, renseigner `SERDIPAY_SMS_URL` sur Render et ajuster `SERDIPAY_API_KEY_HEADER` si besoin (`Bearer` par défaut, ou `apiKey`).
+
+Priorité automatique (`SMS_PROVIDER=auto`) : **SerdiPay → Twilio → Africa’s Talking → simulation**.
+
+## 3. Twilio (SMS — OTP et alertes, secours)
 
 | Champ | Valeur |
 |-------|--------|
@@ -57,7 +69,7 @@ DATABASE_URL_DIRECT=postgresql://USER:PASS@ep-xxx.region.aws.neon.tech/safealert
 
 ---
 
-## 3. Africa's Talking (SMS — alternative Afrique)
+## 4. Africa's Talking (SMS — alternative Afrique)
 
 | Champ | Valeur |
 |-------|--------|
@@ -230,7 +242,7 @@ Retries : 12 tentatives, intervalle 10 s. Secret requis : `PRODUCTION_URL`.
 - [ ] `DATABASE_URL` / `DATABASE_URL_DIRECT` (Neon) ou Postgres Docker local
 - [ ] `REDIS_URL=redis://redis:6379` (Redis sur VPS) ou Upstash si managé
 - [ ] `API_IMAGE=ghcr.io/afri-soft-com/safealert-api:latest` sur le VPS
-- [ ] SMS : Twilio **ou** Africa's Talking
+- [ ] SMS / OTP : SerdiPay (clés) **ou** Twilio **ou** Africa's Talking
 - [ ] Firebase : `google-services.json` + clés FCM backend
 - [ ] DNS `DOMAIN` → IP du VPS
 - [ ] `API_BASE_URL` dans le build APK/IPA

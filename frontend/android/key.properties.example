@@ -1,0 +1,9 @@
+# Copier vers key.properties (ne jamais committer key.properties ni le .jks)
+# Générer le keystore :
+#   keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+# Placer upload-keystore.jks dans frontend/android/ (déjà gitignored)
+
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=upload
+storeFile=../upload-keystore.jks

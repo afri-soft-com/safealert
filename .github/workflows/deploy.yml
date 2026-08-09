@@ -138,6 +138,54 @@ jobs:
             docker compose -f "$COMPOSE_FILE" --env-file .env.production exec -T api node -e \
               "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
+  mobile-aab:
+    needs: test-and-migrate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.32.6
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Decode Play Store keystore (optional)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
+        run: |
+          set -euo pipefail
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] && [ -n "${ANDROID_KEY_PROPERTIES:-}" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/upload-keystore.jks
+            printf '%s\n' "$ANDROID_KEY_PROPERTIES" > android/key.properties
+            echo "Keystore Play Store chargé."
+          else
+            echo "Pas de secrets keystore — AAB signé debug."
+          fi
+
+      - name: Build App Bundle (Play Store)
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          BASE="${API_BASE_URL:-https://safealert-api.onrender.com/api}"
+          flutter build appbundle --release --dart-define=API_BASE_URL="$BASE"
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: safealert-aab-${{ github.ref_name }}
+          path: frontend/build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
   smoke-production:
     needs: [build-and-push, deploy]
     runs-on: ubuntu-latest

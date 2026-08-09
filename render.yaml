@@ -37,11 +37,23 @@ services:
         value: 30d
       - key: CORS_ORIGIN
         sync: false
+      - key: PLATFORM_ADMIN_PHONE
+        sync: false
+      - key: NOMINATIM_USER_AGENT
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
           name: safealert-redis
           property: connectionString
+      - key: SMS_PROVIDER
+        value: auto
+      - key: SERDIPAY_API_KEY
+        sync: false
+      - key: SERDIPAY_SMS_URL
+        sync: false
+      - key: SERDIPAY_SENDER_ID
+        sync: false
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN

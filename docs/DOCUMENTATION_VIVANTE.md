@@ -114,10 +114,11 @@ Fichiers : `.github/workflows/ci.yml`, `.github/workflows/deploy.yml`.
 
 ### Pipeline CI (chaque push / PR)
 
-1. **Backend** : install → lint → migration test → `npm test` (Vitest + supertest, DB mockée).
+1. **Backend** : install → audit → migration test → `npm test` (Vitest + supertest).
 2. **Frontend** : `flutter pub get` → `flutter analyze` → `flutter test`.
 3. **Admin-web** : `npm ci` → `npm run build` (Vite + TypeScript).
 4. **Docker** : build image API (smoke, sans push) après succès des trois jobs ci-dessus.
+5. **APK** (push `main` / tags `v*`) : `flutter build apk --release` + artifact GitHub Actions.
 
 ### Déploiement admin-web (Render Static Site)
 
@@ -134,15 +135,19 @@ Variables Render (dashboard, pas GitHub) : `VITE_API_BASE_URL` sur le static sit
 
 - Déclenchement : tag `v*` ou `workflow_dispatch`.
 - Build image Docker backend → push **GHCR** (`ghcr.io/...`).
-- Déploiement SSH optionnel sur VPS (`deploy/deploy.sh`).
+- Build APK release (artifact) avec `API_BASE_URL` (secret GitHub optionnel).
+- Déploiement SSH optionnel sur VPS (`deploy/deploy.sh` ou `deploy/deploy.ps1`).
 
 ### Stack production (VPS)
 
 ```bash
-docker compose --env-file .env.production up -d
-# Neon : docker-compose.neon.yml
-# TLS : docker compose --profile proxy up -d
+cp .env.production.example .env.production   # JWT, Neon, CORS, SMS, FCM
+./deploy/deploy.sh                           # Neon + Redis + API (+ Caddy si DOMAIN)
+# Windows : .\deploy\deploy.ps1
+# TLS : profile proxy (Caddy)
 ```
+
+**Prod requis :** `JWT_SECRET` (32+), `CORS_ORIGIN`, `DATABASE_URL` (+ `DATABASE_URL_DIRECT` pour migrate Neon).
 
 ---
 
@@ -182,12 +187,21 @@ docker compose --env-file .env.production up -d
 
 - Appels téléphoniques depuis l'annuaire (bouton numéro non câblé à `url_launcher`).
 - Heatmap simplifiée (grille, pas de tuiles cartographiques).
-- Pas de publication Play Store automatisée dans CI.
+- Publication Play Store : CI produit un APK ; signature store = `key.properties` local (pas automatisée).
 - iOS : pas de SOS discret par volume.
+- Secrets prod (SMS, FCM, Neon) à renseigner hors dépôt — bloquent les utilisateurs réels tant qu’absents.
 
 ---
 
 ## 7. Changelog
+
+### 2026-08-09 (Render, Play Store, SerdiPay, CI)
+
+- **admin-web** : console déjà livrée (6 pages + OTP `platform_admin`).
+- **SerdiPay** : connecteur SMS/OTP prêt (`SERDIPAY_*`) — en attente des clés ; priorité auto SerdiPay → Twilio → AT.
+- **CI** : path filters, concurrency, hooks Render API+admin, smoke `/health/ready`, AAB Play Store (+ keystore secrets optionnels).
+- Guide Play Store : [PLAY_STORE.md](PLAY_STORE.md).
+- Compose / Docker / CORS / `deploy.ps1` : durcissement prod (session précédente).
 
 ### 2026-06-11 (console admin web)
 

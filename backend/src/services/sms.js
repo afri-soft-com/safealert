@@ -2,21 +2,88 @@ const { log, warn, error: logError } = require("../utils/logger");
 
 let twilioClient = null;
 let africasTalkingConfigured = false;
+let serdipayConfigured = false;
 
+/**
+ * Priorité d'envoi SMS :
+ * 1. SerdiPay (si SERDIPAY_API_KEY + SERDIPAY_SMS_URL) — OTP RDC cible
+ * 2. Twilio
+ * 3. Africa's Talking
+ * 4. Simulation console (dev uniquement utile)
+ *
+ * L'API SMS SerdiPay n'est pas encore publique ; l'URL et le format
+ * se configurent via env dès réception des clés / doc partenaire.
+ */
 const initSMS = () => {
+  if (process.env.SERDIPAY_API_KEY && process.env.SERDIPAY_SMS_URL) {
+    serdipayConfigured = true;
+    log("SerdiPay SMS initialized");
+  } else if (process.env.SERDIPAY_API_KEY && !process.env.SERDIPAY_SMS_URL) {
+    warn("SERDIPAY_API_KEY présent mais SERDIPAY_SMS_URL manquant — SerdiPay ignoré");
+  }
+
   if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
     twilioClient = require("twilio")(
       process.env.TWILIO_ACCOUNT_SID,
       process.env.TWILIO_AUTH_TOKEN
     );
     log("Twilio SMS initialized");
-  } else {
-    warn("Twilio not configured — trying Africa's Talking or console fallback");
   }
 
   if (process.env.AFRICASTALKING_API_KEY && process.env.AFRICASTALKING_USERNAME) {
     africasTalkingConfigured = true;
     log("Africa's Talking SMS initialized");
+  }
+
+  if (!serdipayConfigured && !twilioClient && !africasTalkingConfigured) {
+    warn("Aucun fournisseur SMS configuré — fallback simulation console");
+  }
+};
+
+const sendViaSerdiPay = async (to, body) => {
+  if (!serdipayConfigured) return null;
+  try {
+    const url = process.env.SERDIPAY_SMS_URL;
+    const payload = {
+      to,
+      phone: to,
+      message: body,
+      body,
+      sender: process.env.SERDIPAY_SENDER_ID || "SafeAlert",
+    };
+
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${process.env.SERDIPAY_API_KEY}`,
+    };
+    if (process.env.SERDIPAY_API_KEY_HEADER === "apiKey") {
+      delete headers.Authorization;
+      headers.apiKey = process.env.SERDIPAY_API_KEY;
+    }
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    const text = await res.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { raw: text };
+    }
+
+    if (!res.ok) {
+      logError("SerdiPay SMS error:", res.status, data);
+      return null;
+    }
+    return { provider: "serdipay", ...data };
+  } catch (err) {
+    logError("SerdiPay SMS error:", err.message);
+    return null;
   }
 };
 
@@ -65,16 +132,43 @@ const sendViaAfricasTalking = async (to, body) => {
 };
 
 const sendSMS = async (to, body) => {
-  const twilioResult = await sendViaTwilio(to, body);
-  if (twilioResult) return twilioResult;
+  const preferred = (process.env.SMS_PROVIDER || "auto").toLowerCase();
 
-  const atResult = await sendViaAfricasTalking(to, body);
-  if (atResult) return atResult;
+  const trySerdi = async () => sendViaSerdiPay(to, body);
+  const tryTwilio = async () => sendViaTwilio(to, body);
+  const tryAt = async () => sendViaAfricasTalking(to, body);
+
+  if (preferred === "serdipay") {
+    const r = await trySerdi();
+    if (r) return r;
+  } else if (preferred === "twilio") {
+    const r = await tryTwilio();
+    if (r) return r;
+  } else if (preferred === "africastalking") {
+    const r = await tryAt();
+    if (r) return r;
+  } else {
+    // auto : SerdiPay → Twilio → Africa's Talking
+    const serdi = await trySerdi();
+    if (serdi) return serdi;
+    const twilioResult = await tryTwilio();
+    if (twilioResult) return twilioResult;
+    const atResult = await tryAt();
+    if (atResult) return atResult;
+  }
 
   log(`[SMS simulated] To: ${to}, Body: ${body}`);
   return { simulated: true };
 };
 
-const isSMSConfigured = () => Boolean(twilioClient || africasTalkingConfigured);
+const isSMSConfigured = () =>
+  Boolean(serdipayConfigured || twilioClient || africasTalkingConfigured);
 
-module.exports = { initSMS, sendSMS, isSMSConfigured, sendViaTwilio, sendViaAfricasTalking };
+module.exports = {
+  initSMS,
+  sendSMS,
+  isSMSConfigured,
+  sendViaSerdiPay,
+  sendViaTwilio,
+  sendViaAfricasTalking,
+};
