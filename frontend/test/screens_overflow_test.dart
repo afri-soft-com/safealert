@@ -110,8 +110,19 @@ void main() {
         ],
       });
 
+      await fakeApi.setToken('admin-token');
+      fakeApi.onGet('/auth/profile', () => {
+        'id': 'admin1',
+        'phone': '+243800000000',
+        'role': 'platform_admin',
+        'pseudo': 'Admin',
+      });
+      final auth = AuthProvider(apiService: fakeApi);
+      await auth.checkAuth();
+
       await _pumpNarrow(tester, size, MultiProvider(
         providers: [
+          ChangeNotifierProvider.value(value: auth),
           ChangeNotifierProvider(create: (_) => IncidentProvider(apiService: fakeApi)),
           ChangeNotifierProvider(create: (_) => AdminProvider(apiService: fakeApi)),
         ],

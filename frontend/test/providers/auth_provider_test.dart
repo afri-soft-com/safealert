@@ -1,4 +1,5 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:safealert/providers/auth_provider.dart';
 import '../mocks.dart';
@@ -58,12 +59,13 @@ void main() {
     });
 
     test('returns false on network error', () async {
+      fakeApi.onPost('/auth/request-code', () => throw const SocketException('Connection failed'));
+
       final result = await provider.requestCode('+243811234567');
 
       expect(result, false);
       expect(provider.error, contains('réseau'));
     });
-  });
 
   group('verifyCode', () {
     test('returns false when phone is null', () async {
