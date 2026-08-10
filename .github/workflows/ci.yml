@@ -403,3 +403,5 @@ jobs:
           releaseFiles: frontend/build/app/outputs/bundle/release/app-release.aab
           track: internal
           status: draft
+
+# ci-trigger: 2026-08-10 web+mobile deploy
