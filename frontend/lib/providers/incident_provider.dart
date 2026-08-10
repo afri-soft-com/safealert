@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import '../services/local_database.dart';
 import '../services/location_service.dart';
 import '../services/socket_service.dart';
+import '../utils/network_error.dart';
 
 class IncidentProvider extends ChangeNotifier {
   final ApiService _api;
@@ -229,11 +230,8 @@ class IncidentProvider extends ChangeNotifier {
       await _api.post('/map/incidents/$id/verify', {});
       await fetchIncidents();
       return true;
-    } on ApiException catch (e) {
-      _lastVerifyError = e.message;
-      return false;
-    } catch (_) {
-      _lastVerifyError = null;
+    } catch (e) {
+      _lastVerifyError = userFacingError(e, fallback: 'Impossible de confirmer le signalement.');
       return false;
     }
   }

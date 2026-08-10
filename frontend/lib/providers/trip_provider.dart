@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
 import '../services/socket_service.dart';
+import '../utils/network_error.dart';
 
 class TripProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
@@ -75,12 +76,8 @@ class TripProvider extends ChangeNotifier {
       _followTripId = id;
       notifyListeners();
       return res;
-    } on ApiException catch (e) {
-      _error = e.message;
-      notifyListeners();
-      return null;
-    } catch (_) {
-      _error = 'Impossible de charger le trajet';
+    } catch (e) {
+      _error = userFacingError(e, fallback: 'Impossible de charger le trajet.');
       notifyListeners();
       return null;
     }
@@ -134,13 +131,8 @@ class TripProvider extends ChangeNotifier {
       _loading = false;
       notifyListeners();
       return _activeTrip;
-    } on ApiException catch (e) {
-      _error = e.message;
-      _loading = false;
-      notifyListeners();
-      return null;
     } catch (e) {
-      _error = 'Erreur trajet';
+      _error = userFacingError(e, fallback: 'Impossible de démarrer le trajet.');
       _loading = false;
       notifyListeners();
       return null;

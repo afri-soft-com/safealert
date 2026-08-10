@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { api } from "../api/client";
+import {
+  api,
+  INCIDENT_STATUS_LABELS,
+  INCIDENT_TYPE_LABELS,
+  SLA_STATUS_LABELS,
+} from "../api/client";
+import { userFacingError } from "../utils/userFacingError";
 
 type QueueItem = {
   id: string;
@@ -28,12 +34,19 @@ type OpsPayload = {
 export default function OpsPage() {
   const [data, setData] = useState<OpsPayload | null>(null);
   const [error, setError] = useState("");
+  const [exportMsg, setExportMsg] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const load = () => {
     api
       .getOpsQueue()
-      .then(setData)
-      .catch(() => setError("Impossible de charger la file ops (rôle leader/admin requis)"));
+      .then((payload) => {
+        setData(payload);
+        setError("");
+      })
+      .catch((err) =>
+        setError(userFacingError(err, "Impossible de charger la file d'attente."))
+      );
   };
 
   useEffect(() => {
@@ -42,14 +55,28 @@ export default function OpsPage() {
     return () => clearInterval(t);
   }, []);
 
+  const exportReport = async (format: "csv" | "pdf") => {
+    setExporting(true);
+    setExportMsg("");
+    try {
+      await api.downloadOpsReport(format, 7);
+      setExportMsg(format === "csv" ? "Export CSV téléchargé." : "Rapport PDF téléchargé.");
+    } catch (err) {
+      setError(userFacingError(err, "Impossible de télécharger le rapport."));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <>
       <header className="page-header">
         <h2>Ops temps réel</h2>
-        <p>File SOS, SLA et carte d&apos;activité — SafeAlert</p>
+        <p>File SOS, délais de prise en charge et zones actives</p>
       </header>
 
       {error && <div className="form-error">{error}</div>}
+      {exportMsg && <div className="form-success">{exportMsg}</div>}
 
       {data && (
         <>
@@ -59,11 +86,11 @@ export default function OpsPage() {
               <div className="value">{data.sla.open_sos}</div>
             </div>
             <div className="stat-card">
-              <div className="label">SLA dépassée (&gt;5 min)</div>
+              <div className="label">Délai dépassé (&gt;5 min)</div>
               <div className="value">{data.sla.sla_breach}</div>
             </div>
             <div className="stat-card">
-              <div className="label">Ack moyen (24h)</div>
+              <div className="label">Temps moyen de prise en charge (24h)</div>
               <div className="value">
                 {data.sla.avg_ack_seconds_24h != null
                   ? `${Math.round(data.sla.avg_ack_seconds_24h / 60)} min`
@@ -80,7 +107,7 @@ export default function OpsPage() {
                   <th>Type</th>
                   <th>Zone</th>
                   <th>Âge</th>
-                  <th>SLA</th>
+                  <th>Délai</th>
                   <th>Signalant</th>
                   <th>Assigné</th>
                   <th>Statut</th>
@@ -89,15 +116,17 @@ export default function OpsPage() {
               <tbody>
                 {data.queue.map((q) => (
                   <tr key={q.id}>
-                    <td>{q.incident_type}</td>
+                    <td>{INCIDENT_TYPE_LABELS[q.incident_type] ?? q.incident_type}</td>
                     <td>{q.zone_name || "—"}</td>
                     <td>{Math.round(q.age_seconds / 60)} min</td>
                     <td>
-                      <span className={`badge ${q.sla_status}`}>{q.sla_status}</span>
+                      <span className={`badge ${q.sla_status}`}>
+                        {SLA_STATUS_LABELS[q.sla_status] ?? q.sla_status}
+                      </span>
                     </td>
                     <td>{q.reporter}</td>
                     <td>{q.assignee_pseudo || "—"}</td>
-                    <td>{q.status}</td>
+                    <td>{INCIDENT_STATUS_LABELS[q.status] ?? q.status}</td>
                   </tr>
                 ))}
                 {data.queue.length === 0 && (
@@ -109,21 +138,39 @@ export default function OpsPage() {
             </table>
           </div>
 
-          <h3 style={{ marginTop: 24 }}>Zones occupées</h3>
-          <ul>
-            {data.busy_map.map((z) => (
-              <li key={z.zone_name}>
-                <strong>{z.zone_name}</strong> — {z.active_count} actif(s)
-              </li>
-            ))}
-          </ul>
+          <h3 style={{ marginTop: 24 }}>Zones actives</h3>
+          {data.busy_map.length === 0 ? (
+            <p className="empty">Aucune zone avec activité en cours.</p>
+          ) : (
+            <ul>
+              {data.busy_map.map((z) => (
+                <li key={z.zone_name}>
+                  <strong>{z.zone_name}</strong> — {z.active_count} actif(s)
+                </li>
+              ))}
+            </ul>
+          )}
 
           <p style={{ marginTop: 16, fontSize: 12, opacity: 0.7 }}>
             Mis à jour : {new Date(data.generated_at).toLocaleString("fr-FR")}
             {" · "}
-            <a href={`${import.meta.env.VITE_API_BASE_URL || "/api"}/ops/reports/sector?format=csv&days=7`}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={exporting}
+              onClick={() => exportReport("csv")}
+              style={{ marginRight: 8 }}
+            >
               Export CSV 7j
-            </a>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={exporting}
+              onClick={() => exportReport("pdf")}
+            >
+              Export PDF 7j
+            </button>
           </p>
         </>
       )}

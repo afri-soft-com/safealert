@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import '../utils/network_error.dart';
 
 class CheckInProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
@@ -29,13 +30,8 @@ class CheckInProvider extends ChangeNotifier {
       _loading = false;
       notifyListeners();
       return true;
-    } on ApiException catch (e) {
-      _error = e.message;
-      _loading = false;
-      notifyListeners();
-      return false;
-    } catch (_) {
-      _error = 'Impossible d\'envoyer le check-in';
+    } catch (e) {
+      _error = userFacingError(e, fallback: 'Impossible d\'envoyer le signal « en sécurité ».');
       _loading = false;
       notifyListeners();
       return false;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ROLE_LABELS, type UserRole, type UserRow } from "../api/client";
+import { userFacingError } from "../utils/userFacingError";
 
 const ROLES: UserRole[] = ["citizen", "leader", "agent", "platform_admin"];
 
@@ -8,15 +9,18 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [sectors, setSectors] = useState<Record<string, string>>({});
 
   const limit = 20;
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
-      const res = await api.getUsers(page, limit);
+      const res = await api.getUsers(page, limit, query);
       setUsers(res.data);
       setTotal(res.total);
       const map: Record<string, string> = {};
@@ -24,28 +28,33 @@ export default function UsersPage() {
         map[u.id] = u.sector_name ?? "";
       }
       setSectors(map);
+    } catch (err) {
+      setError(userFacingError(err, "Impossible de charger les utilisateurs."));
+      setUsers([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, query]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const filtered = users.filter(
-    (u) =>
-      u.phone.includes(search) ||
-      u.pseudo.toLowerCase().includes(search.toLowerCase()) ||
-      (u.sector_name ?? "").toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(1);
+      setQuery(search.trim());
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const handleRoleChange = async (id: string, role: UserRole) => {
     try {
       await api.updateUserRole(id, role);
       await load();
-    } catch {
-      alert("Erreur lors du changement de rôle");
+    } catch (err) {
+      alert(userFacingError(err, "Impossible de modifier le rôle."));
     }
   };
 
@@ -54,8 +63,8 @@ export default function UsersPage() {
     try {
       await api.updateUserSector(id, value);
       await load();
-    } catch {
-      alert("Erreur lors de la mise à jour du secteur");
+    } catch (err) {
+      alert(userFacingError(err, "Impossible de mettre à jour le secteur."));
     }
   };
 
@@ -67,6 +76,8 @@ export default function UsersPage() {
         <h2>Utilisateurs</h2>
         <p>Gestion des rôles et secteurs</p>
       </header>
+
+      {error && <div className="form-error">{error}</div>}
 
       <div className="card">
         <div className="card-toolbar">
@@ -95,14 +106,14 @@ export default function UsersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 ? (
+                  {users.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="empty">
                         Aucun utilisateur
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((u) => (
+                    users.map((u) => (
                       <tr key={u.id}>
                         <td>{u.pseudo}</td>
                         <td>{u.phone}</td>

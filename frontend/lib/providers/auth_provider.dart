@@ -12,6 +12,27 @@ const kAuthRequiredScreens = {
   'history', 'privacy', 'admin', 'help', 'trip', 'escort_map', 'trust_zones', 'neighborhood',
 };
 
+/// Écrans réservés aux responsables / agents (secteur).
+const kLeaderScreens = {'leader'};
+
+/// Écrans réservés à l'administrateur plateforme.
+const kAdminScreens = {'admin'};
+
+/// Rôles plateforme SafeAlert (chaînes API).
+abstract final class UserRoles {
+  static const citizen = 'citizen';
+  static const leader = 'leader';
+  static const agent = 'agent';
+  static const platformAdmin = 'platform_admin';
+
+  static const labels = {
+    citizen: 'Citoyen',
+    leader: 'Responsable',
+    agent: 'Agent',
+    platformAdmin: 'Administrateur',
+  };
+}
+
 class AuthProvider extends ChangeNotifier {
   final ApiService _api;
 
@@ -32,6 +53,15 @@ class AuthProvider extends ChangeNotifier {
   String? get phone => _phone;
   /// OTP de test renvoyé par l'API en dev quand SMS n'est pas configuré.
   String? get devCode => _devCode;
+
+  String get role => _user?['role'] as String? ?? UserRoles.citizen;
+  String get roleLabel => UserRoles.labels[role] ?? 'Citoyen';
+  bool get isCitizen => role == UserRoles.citizen;
+  bool get isLeader => role == UserRoles.leader;
+  bool get isAgent => role == UserRoles.agent;
+  bool get isPlatformAdmin => role == UserRoles.platformAdmin;
+  bool get canAccessOps => isLeader || isAgent || isPlatformAdmin;
+  bool get canAccessAdmin => isPlatformAdmin;
 
   Future<void> checkAuth() async {
     await _api.init();
@@ -68,13 +98,8 @@ class AuthProvider extends ChangeNotifier {
       _loading = false;
       notifyListeners();
       return true;
-    } on ApiException catch (e) {
-      _error = e.message;
-      _loading = false;
-      notifyListeners();
-      return false;
     } catch (e) {
-      _error = describeNetworkError(e);
+      _error = userFacingError(e);
       _loading = false;
       notifyListeners();
       return false;
@@ -102,13 +127,8 @@ class AuthProvider extends ChangeNotifier {
       _applyPrivacySettings();
       _startRealtimeServices();
       return true;
-    } on ApiException catch (e) {
-      _error = e.message;
-      _loading = false;
-      notifyListeners();
-      return false;
     } catch (e) {
-      _error = describeNetworkError(e);
+      _error = userFacingError(e);
       _loading = false;
       notifyListeners();
       return false;
@@ -129,6 +149,14 @@ class AuthProvider extends ChangeNotifier {
 
   bool requiresAuth(String screen) =>
       kAuthRequiredScreens.contains(screen) && !_isAuthenticated;
+
+  /// Garde d'accès par rôle (complément de [requiresAuth]).
+  bool canAccessScreen(String screen) {
+    if (requiresAuth(screen)) return false;
+    if (kAdminScreens.contains(screen) && !canAccessAdmin) return false;
+    if (kLeaderScreens.contains(screen) && !canAccessOps) return false;
+    return true;
+  }
 
   Future<bool> updateProfile({bool? isDiscreetMode, bool? sharePresence, bool? sosNotifyGroups}) async {
     if (!_isAuthenticated) return false;

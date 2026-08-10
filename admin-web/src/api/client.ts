@@ -58,9 +58,64 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const body = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    throw new ApiError(body.error || "Erreur réseau", res.status);
+    const raw = typeof body.error === "string" ? body.error.trim() : "";
+    const technical =
+      !raw ||
+      /exception|sql|postgres|redis|econnrefused|internal server|stack/i.test(raw) ||
+      /^erreur\s+\d{3}$/i.test(raw);
+    const message = technical
+      ? statusMessage(res.status) || "Une erreur est survenue. Réessayez."
+      : raw;
+    throw new ApiError(message, res.status);
   }
   return body as T;
+}
+
+function statusMessage(status: number): string {
+  switch (status) {
+    case 400:
+      return "Demande invalide. Vérifiez les informations saisies.";
+    case 401:
+      return "Session expirée. Veuillez vous reconnecter.";
+    case 403:
+      return "Accès non autorisé pour votre profil.";
+    case 404:
+      return "Élément introuvable.";
+    case 429:
+      return "Trop de tentatives. Réessayez dans quelques instants.";
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      return "Service temporairement indisponible. Réessayez plus tard.";
+    default:
+      return "";
+  }
+}
+
+async function downloadAuthenticated(path: string, filename: string): Promise<void> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const raw = typeof body.error === "string" ? body.error : "";
+    throw new ApiError(
+      statusMessage(res.status) || raw || "Téléchargement impossible",
+      res.status
+    );
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export const api = {
@@ -85,10 +140,18 @@ export const api = {
       groups: number;
     }>("/admin/stats"),
 
-  getUsers: (page = 1, limit = 20) =>
-    request<{ data: UserRow[]; page: number; limit: number; total: number }>(
-      `/admin/users?page=${page}&limit=${limit}`
-    ),
+  getProfile: () => request<AuthUser>("/auth/profile"),
+
+  getUsers: (page = 1, limit = 20, q = "") => {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (q.trim()) params.set("q", q.trim());
+    return request<{ data: UserRow[]; page: number; limit: number; total: number }>(
+      `/admin/users?${params}`
+    );
+  },
 
   updateUserRole: (id: string, role: UserRole) =>
     request<UserRow>(`/admin/users/${id}/role`, {
@@ -171,6 +234,12 @@ export const api = {
       }>;
       generated_at: string;
     }>("/ops/queue"),
+
+  downloadOpsReport: (format: "csv" | "pdf" = "csv", days = 7) =>
+    downloadAuthenticated(
+      `/ops/reports/sector?format=${format}&days=${days}`,
+      `rapport-secteur-${days}j.${format}`
+    ),
 };
 
 export interface UserRow {
@@ -256,6 +325,21 @@ export const INCIDENT_STATUS_LABELS: Record<string, string> = {
   false_alarm: "Fausse alerte",
   acknowledged: "Pris en charge",
   in_progress: "En cours",
+};
+
+export const INCIDENT_TYPE_LABELS: Record<string, string> = {
+  sos: "SOS",
+  agression: "Agression",
+  vol: "Vol",
+  suspect: "Présence suspecte",
+  incendie: "Incendie",
+  incident: "Incident",
+};
+
+export const SLA_STATUS_LABELS: Record<string, string> = {
+  ok: "Dans les délais",
+  breach: "Retard",
+  warning: "Attention",
 };
 
 export const SEVERITY_LABELS: Record<string, string> = {

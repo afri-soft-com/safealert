@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../providers/incident_provider.dart';
 import '../providers/checkin_provider.dart';
@@ -19,6 +20,7 @@ class _SOSScreenState extends State<SOSScreen> {
   int _step = 0;
   bool _completed = false;
   bool _failed = false;
+  bool _sending = false;
   bool _cancelling = false;
   bool _checkingIn = false;
   String? _incidentId;
@@ -50,12 +52,13 @@ class _SOSScreenState extends State<SOSScreen> {
   }
 
   Future<void> _sendSOS() async {
-    if (_completed) return;
+    if (_completed || _sending) return;
     _progressTimer?.cancel();
     setState(() {
       _step = 0;
       _failed = false;
       _completed = false;
+      _sending = true;
       _statusMsg = null;
       _incidentId = null;
     });
@@ -66,7 +69,10 @@ class _SOSScreenState extends State<SOSScreen> {
 
     if (!mounted) return;
     if (result == null) {
-      setState(() => _failed = true);
+      setState(() {
+        _failed = true;
+        _sending = false;
+      });
       return;
     }
 
@@ -80,7 +86,10 @@ class _SOSScreenState extends State<SOSScreen> {
       if (i >= 4) {
         timer.cancel();
         if (mounted) {
-          setState(() => _completed = true);
+          setState(() {
+            _completed = true;
+            _sending = false;
+          });
           _startLiveStatus();
         }
       }
@@ -141,7 +150,7 @@ class _SOSScreenState extends State<SOSScreen> {
                     ),
                   const SizedBox(height: 24),
                   GestureDetector(
-                    onTap: _sendSOS,
+                    onTap: (_sending && !_failed && !_completed) ? null : _sendSOS,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       width: 160, height: 160,
@@ -218,7 +227,8 @@ class _SOSScreenState extends State<SOSScreen> {
                             ? null
                             : () async {
                                 setState(() => _checkingIn = true);
-                                final ok = await context.read<CheckInProvider>().imSafe(incidentId: _incidentId);
+                                final checkIn = context.read<CheckInProvider>();
+                                final ok = await checkIn.imSafe(incidentId: _incidentId);
                                 _liveTimer?.cancel();
                                 if (mounted) {
                                   setState(() {
@@ -230,6 +240,15 @@ class _SOSScreenState extends State<SOSScreen> {
                                       _incidentId = null;
                                     }
                                   });
+                                  if (!ok) {
+                                    showAppSnackBar(
+                                      context,
+                                      checkIn.error ??
+                                          'Envoi impossible. Vérifiez votre connexion.',
+                                      isError: true,
+                                      fallback: 'Envoi impossible. Vérifiez votre connexion.',
+                                    );
+                                  }
                                 }
                               },
                         style: ElevatedButton.styleFrom(

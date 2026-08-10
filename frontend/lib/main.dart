@@ -181,6 +181,15 @@ class _AppShellState extends State<AppShell> {
       });
       return;
     }
+    if (!auth.canAccessScreen(screen)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Accès réservé à un autre profil.', style: TextStyle(fontSize: 12)),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     setState(() {
       if (kMainTabScreens.contains(screen)) {
         _navStack..clear()..add(screen);
@@ -290,14 +299,15 @@ class _AppShellState extends State<AppShell> {
       case 'neighborhood':
         screen = NeighborhoodScreen(onBack: _goBack);
       case 'help':
-        screen = HelpManualScreen(onBack: _goBack);
+        screen = HelpManualScreen(onBack: _goBack, role: auth.role);
       case 'settings':
         screen = SettingsScreen(
           onBack: _goBack,
           onPrivacy: () => _navigate('privacy'),
           onHelp: () => _navigate('help'),
           onNavigate: _navigate,
-          onAdmin: auth.user?['role'] == 'platform_admin' ? () => _navigate('admin') : null,
+          onLeader: auth.canAccessOps ? () => _navigate('leader') : null,
+          onAdmin: auth.canAccessAdmin ? () => _navigate('admin') : null,
           onLogout: () {
             auth.logout();
             setState(() {

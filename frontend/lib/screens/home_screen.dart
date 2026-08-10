@@ -53,8 +53,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userRole = context.watch<AuthProvider>().user?['role'] as String?;
-    final incidents = context.watch<IncidentProvider>().incidents;
+    final auth = context.watch<AuthProvider>();
+    final incidentProvider = context.watch<IncidentProvider>();
+    final pseudo = auth.user?['pseudo'] as String?;
+    final greetingName = (pseudo != null && pseudo.trim().isNotEmpty)
+        ? pseudo.trim()
+        : auth.roleLabel;
+    final incidents = incidentProvider.incidents;
+    final loadingIncidents = incidentProvider.loading && incidents.isEmpty;
     final activeCount = incidents.length;
     final latest = incidents.isNotEmpty ? incidents.first : null;
 
@@ -62,12 +68,37 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(sub: 'Bonjour, Citoyen 👋', onMenuTap: () => widget.onNavigate('settings')),
+          TopBar(sub: 'Bonjour, $greetingName', onMenuTap: () => widget.onNavigate('settings')),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
               children: [
-                if (latest != null)
+                if (loadingIncidents)
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.blanc,
+                      border: Border.all(color: const Color(0xFFEEEEEE)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Row(
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Chargement des alertes…',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.gris),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (latest != null)
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
@@ -160,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildCard('📊', 'Statistiques', 'Votre quartier', () => widget.onNavigate('dashboard'), AppColors.gris),
                     _buildCard('🏘', 'Groupes voisins', 'Voisins & entraide', () => widget.onNavigate('groups'), AppColors.bleuFonce),
                     _buildCard('🏠', 'Zones confiance', 'Domicile / travail', () => widget.onNavigate('trust_zones'), AppColors.bleuFonce),
-                    _buildCard('🏘️', 'Veille quartier', 'Digest push', () => widget.onNavigate('neighborhood'), AppColors.orange),
+                    _buildCard('🏘️', 'Veille quartier', 'Résumé quotidien', () => widget.onNavigate('neighborhood'), AppColors.orange),
                     _buildCard('🛡', 'Conseils sécurité', 'Astuces hors-ligne', () => widget.onNavigate('safety'), AppColors.rouge),
                     _buildCard('🔥', 'Carte chaleur', 'Densité incidents', () => widget.onNavigate('heatmap'), AppColors.orange),
                     _buildCard('📋', 'Mon historique', 'Mes alertes', () => widget.onNavigate('history'), AppColors.gris),
@@ -196,13 +227,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
-                if (userRole == 'leader' || userRole == 'agent')
+                if (auth.canAccessOps)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
                     child: _buildCard('👑', 'Mode responsable', 'Gérer les incidents du secteur',
                         () => widget.onNavigate('leader'), AppColors.bleuFonce),
                   ),
-                if (userRole == 'platform_admin')
+                if (auth.canAccessAdmin)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
                     child: _buildCard('⚙️', 'Administration', 'Utilisateurs, rôles et partenaires API',

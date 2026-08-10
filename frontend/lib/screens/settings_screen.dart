@@ -9,6 +9,7 @@ import '../providers/locale_provider.dart';
 import '../providers/contacts_provider.dart';
 import '../services/api_service.dart';
 import '../services/contact_backup_service.dart';
+import '../widgets/app_feedback.dart';
 import 'calculator_screen.dart' show kDiscreetUnlockCode;
 
 class SettingsScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class SettingsScreen extends StatefulWidget {
   final VoidCallback onLogout;
   final VoidCallback? onPrivacy;
   final VoidCallback? onHelp;
+  final VoidCallback? onLeader;
   final VoidCallback? onAdmin;
   final ValueChanged<String>? onNavigate;
   const SettingsScreen({
@@ -24,6 +26,7 @@ class SettingsScreen extends StatefulWidget {
     required this.onLogout,
     this.onPrivacy,
     this.onHelp,
+    this.onLeader,
     this.onAdmin,
     this.onNavigate,
   });
@@ -420,13 +423,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             final list = await _contactsAsMaps();
                             await ContactBackupService().backup(list, pass);
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Contacts sauvegardés (chiffrés)')),
-                              );
+                              showAppSnackBar(context, 'Contacts sauvegardés (chiffrés)');
                             }
                           } catch (e) {
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                              showAppSnackBar(
+                                context,
+                                e,
+                                isError: true,
+                                fallback: 'Impossible de sauvegarder les contacts.',
+                              );
                             }
                           }
                         },
@@ -440,15 +446,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           try {
                             final restored = await ContactBackupService().restore(pass);
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(restored == null
-                                    ? 'Aucune sauvegarde'
-                                    : '${restored.length} contact(s) déchiffrés — réajoutez-les si besoin')),
+                              showAppSnackBar(
+                                context,
+                                restored == null
+                                    ? 'Aucune sauvegarde trouvée'
+                                    : '${restored.length} contact(s) déchiffrés — réajoutez-les si besoin',
                               );
                             }
                           } catch (e) {
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                              showAppSnackBar(
+                                context,
+                                e,
+                                isError: true,
+                                fallback: 'Impossible de restaurer les contacts.',
+                              );
                             }
                           }
                         },
@@ -529,7 +541,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('COMPTE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.gris, letterSpacing: 1)),
-                      if (user?['role'] == 'platform_admin' && widget.onAdmin != null) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Profil : ${auth.roleLabel}',
+                          style: const TextStyle(fontSize: 11, color: AppColors.gris),
+                        ),
+                      ),
+                      if (widget.onLeader != null) ...[
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: widget.onLeader,
+                            icon: const Icon(Icons.shield_outlined, size: 16),
+                            label: const Text('Mode responsable', style: TextStyle(fontSize: 13)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.bleuFonce,
+                              side: const BorderSide(color: AppColors.bleuFonce),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (widget.onAdmin != null) ...[
                         const SizedBox(height: 10),
                         SizedBox(
                           width: double.infinity,
@@ -551,6 +587,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         width: double.infinity,
                         child: OutlinedButton.icon(
                           onPressed: auth.loading ? null : () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Se déconnecter ?',
+                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                                content: const Text(
+                                  'Vous pourrez vous reconnecter avec votre numéro.',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('Déconnexion'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (ok != true || !mounted) return;
                             await auth.logout();
                             widget.onLogout();
                           },

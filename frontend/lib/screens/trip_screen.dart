@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/trip_provider.dart';
 import '../providers/contacts_provider.dart';
+import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 
@@ -77,7 +78,12 @@ class _TripScreenState extends State<TripScreen> {
     if (!mounted) return;
     if (trip == null) {
       final err = context.read<TripProvider>().error;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err ?? 'Erreur')));
+      showAppSnackBar(
+        context,
+        err ?? 'Une erreur est survenue. Réessayez.',
+        isError: true,
+        fallback: 'Impossible de démarrer le trajet.',
+      );
       return;
     }
     _maybeStartPing();

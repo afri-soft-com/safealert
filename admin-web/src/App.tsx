@@ -11,6 +11,7 @@ import IncidentsPage from "./pages/IncidentsPage";
 import GroupsPage from "./pages/GroupsPage";
 import OpsPage from "./pages/OpsPage";
 import PartnerPortalPage from "./pages/PartnerPortalPage";
+import HelpPage from "./pages/HelpPage";
 
 export default function App() {
   return (
@@ -18,16 +19,18 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/connexion" element={<LoginPage />} />
+          {/* Portail partenaire : authentification par clé API, hors console admin */}
+          <Route path="/portail-partenaire" element={<PartnerPortalPage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route index element={<DashboardPage />} />
               <Route path="ops" element={<OpsPage />} />
               <Route path="utilisateurs" element={<UsersPage />} />
               <Route path="partenaires" element={<PartnersPage />} />
-              <Route path="portail-partenaire" element={<PartnerPortalPage />} />
               <Route path="annuaire" element={<EmergencyPage />} />
               <Route path="incidents" element={<IncidentsPage />} />
               <Route path="groupes" element={<GroupsPage />} />
+              <Route path="aide" element={<HelpPage />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

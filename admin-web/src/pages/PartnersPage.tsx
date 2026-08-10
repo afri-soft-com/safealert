@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, type PartnerRow } from "../api/client";
+import { userFacingError } from "../utils/userFacingError";
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState<PartnerRow[]>([]);
@@ -7,12 +8,16 @@ export default function PartnersPage() {
   const [name, setName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
 
   const load = async () => {
     setLoading(true);
+    setError("");
     try {
       const res = await api.getPartners();
       setPartners(res.data);
+    } catch (err) {
+      setError(userFacingError(err, "Impossible de charger les partenaires."));
     } finally {
       setLoading(false);
     }
@@ -24,15 +29,16 @@ export default function PartnersPage() {
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || creating) return;
     setCreating(true);
+    setError("");
     try {
       const res = await api.createPartner(name.trim());
       setNewKey(res.api_key);
       setName("");
       await load();
-    } catch {
-      alert("Erreur lors de la création");
+    } catch (err) {
+      setError(userFacingError(err, "Impossible de créer le partenaire."));
     } finally {
       setCreating(false);
     }
@@ -40,11 +46,12 @@ export default function PartnersPage() {
 
   const handleRevoke = async (id: string, partnerName: string) => {
     if (!confirm(`Révoquer la clé de « ${partnerName} » ?`)) return;
+    setError("");
     try {
       await api.revokePartner(id);
       await load();
-    } catch {
-      alert("Erreur lors de la révocation");
+    } catch (err) {
+      setError(userFacingError(err, "Impossible de révoquer la clé."));
     }
   };
 
@@ -56,6 +63,8 @@ export default function PartnersPage() {
         <h2>Partenaires API</h2>
         <p>Clés d'accès pour les organisations partenaires (ONG, etc.)</p>
       </header>
+
+      {error && <div className="form-error">{error}</div>}
 
       <div className="card" style={{ marginBottom: "1.5rem" }}>
         <div className="card-toolbar">

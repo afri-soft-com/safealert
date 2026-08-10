@@ -200,7 +200,7 @@ class _MapScreenState extends State<MapScreen> {
                             if (shot != null) setSheetState(() => photoPath = shot.path);
                           },
                           icon: const Icon(Icons.photo_camera, size: 16),
-                          label: Text(photoPath == null ? 'Photo' : 'Photo OK', style: const TextStyle(fontSize: 11)),
+                          label: Text(photoPath == null ? 'Photo' : 'Photo ajoutée', style: const TextStyle(fontSize: 11)),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -245,7 +245,7 @@ class _MapScreenState extends State<MapScreen> {
                     },
                     icon: const Icon(Icons.audiotrack, size: 16),
                     label: Text(
-                      audioPath == null ? 'Choisir un audio' : 'Audio OK',
+                      audioPath == null ? 'Choisir un audio' : 'Audio ajouté',
                       style: const TextStyle(fontSize: 11),
                     ),
                   ),

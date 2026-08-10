@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../services/api_service.dart';
 import '../providers/leader_provider.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/nav_bar.dart';
@@ -52,18 +53,20 @@ class _LeaderScreenState extends State<LeaderScreen> {
       await file.writeAsBytes(res.bodyBytes);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('PDF sauvegardé : ${file.path}', style: const TextStyle(fontSize: 11)),
-          backgroundColor: AppColors.vert,
+        showAppSnackBar(
+          context,
+          'Rapport PDF enregistré dans vos documents.',
           duration: const Duration(seconds: 4),
-        ));
+        );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Erreur lors du téléchargement', style: TextStyle(fontSize: 11)),
-          backgroundColor: AppColors.rouge,
-        ));
+        showAppSnackBar(
+          context,
+          e,
+          isError: true,
+          fallback: 'Impossible de télécharger le rapport.',
+        );
       }
     }
     if (mounted) setState(() => _downloading = false);
@@ -71,8 +74,16 @@ class _LeaderScreenState extends State<LeaderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.watch<LeaderProvider>();
     final auth = context.watch<AuthProvider>();
+    if (!auth.canAccessOps) {
+      return AccessDeniedView(
+        title: 'Accès réservé',
+        message: 'Le mode responsable est réservé aux responsables, agents et administrateurs.',
+        onBack: widget.onBack,
+      );
+    }
+
+    final p = context.watch<LeaderProvider>();
     final stats = p.stats;
     final incidents = p.incidents;
     final sectorName = auth.user?['sector_name'] as String? ?? stats?['sector_name'] as String?;

@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -18,6 +19,7 @@ import {
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  ready: boolean;
   login: (phone: string, code: string) => Promise<void>;
   logout: () => void;
 }
@@ -30,6 +32,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const stored = getStoredUser();
     return token && stored?.role === "platform_admin" ? stored : null;
   });
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const token = getToken();
+      if (!token) {
+        if (!cancelled) {
+          setUser(null);
+          setReady(true);
+        }
+        return;
+      }
+      try {
+        const profile = await api.getProfile();
+        if (cancelled) return;
+        if (profile.role !== "platform_admin") {
+          clearSession();
+          setUser(null);
+        } else {
+          saveSession(token, profile);
+          setUser(profile);
+        }
+      } catch {
+        if (!cancelled) {
+          clearSession();
+          setUser(null);
+        }
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const login = useCallback(async (phone: string, code: string) => {
     const { token, user: authUser } = await api.verifyCode(phone, code);
@@ -49,11 +87,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       user,
-      isAuthenticated: !!user,
+      isAuthenticated: !!user && user.role === "platform_admin",
+      ready,
       login,
       logout,
     }),
-    [user, login, logout]
+    [user, ready, login, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

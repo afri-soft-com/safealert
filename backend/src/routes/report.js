@@ -4,6 +4,6 @@ const ctrl = require("../controllers/reportController");
 
 const router = Router();
 
-router.get("/", authenticate, requireRole("leader", "agent"), ctrl.generateReport);
+router.get("/", authenticate, requireRole("leader", "agent", "platform_admin"), ctrl.generateReport);
 
 module.exports = router;
