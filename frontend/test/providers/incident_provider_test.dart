@@ -130,10 +130,14 @@ void main() {
       expect(result!['incident']['id'], 1);
     });
 
-    test('returns null on failure', () async {
+    test('queues SOS offline on failure', () async {
       final result = await provider.triggerSOS(-4.3, 15.3);
 
-      expect(result, isNull);
+      expect(result, isNotNull);
+      expect(result!['queued'], true);
+      expect(provider.isOffline, true);
+      final pending = await fakeDb.listPendingSos();
+      expect(pending, isNotEmpty);
     });
   });
 

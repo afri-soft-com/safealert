@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:safealert/providers/admin_provider.dart';
 import 'package:safealert/providers/auth_provider.dart';
 import 'package:safealert/providers/incident_provider.dart';
+import 'package:safealert/providers/locale_provider.dart';
 import 'package:safealert/screens/admin_screen.dart';
 import 'package:safealert/screens/dashboard_screen.dart';
 import 'package:safealert/screens/help_manual_screen.dart';
@@ -150,6 +151,7 @@ Widget _wrapProviders(Widget child) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider(create: (_) => AuthProvider(apiService: fakeApi)),
+      ChangeNotifierProvider(create: (_) => LocaleProvider()),
       ChangeNotifierProvider(
         create: (_) => IncidentProvider(apiService: fakeApi, localDatabase: FakeLocalDatabase()),
       ),

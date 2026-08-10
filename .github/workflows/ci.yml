@@ -194,31 +194,44 @@ jobs:
             echo "Secrets Render API manquants"
             exit 1
           fi
-          # Cancel stuck queued/in-progress deploys so the new one can start
-          curl -fsS \
+          # Best-effort: cancel stuck queued deploys (do not fail the job)
+          mapfile -t stuck < <(curl -fsS \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
             -H "Accept: application/json" \
             "https://api.render.com/v1/services/${SERVICE_ID}/deploys?limit=10" \
-            | jq -r '.[] | select(.deploy.status=="queued") | .deploy.id // empty' \
-            | while read -r old_id; do
-                [ -z "$old_id" ] && continue
-                echo "Annulation deploy bloqué: $old_id"
-                curl -fsS -X POST \
-                  -H "Authorization: Bearer ${RENDER_API_KEY}" \
-                  -H "Accept: application/json" \
-                  "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${old_id}/cancel" \
-                  >/dev/null || true
-              done
-          resp=$(curl -fsS -X POST \
+            | jq -r '.[] | select(.deploy.status=="queued") | .deploy.id // empty' || true)
+          for old_id in "${stuck[@]:-}"; do
+            [ -z "${old_id:-}" ] && continue
+            echo "Annulation deploy bloqué: $old_id"
+            curl -sS -X POST \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Accept: application/json" \
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${old_id}/cancel" \
+              >/dev/null || true
+          done
+          http_code=$(curl -sS -o /tmp/render-deploy.json -w "%{http_code}" -X POST \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
             -H "Accept: application/json" \
             -H "Content-Type: application/json" \
             -d '{"clearCache":"clear"}' \
             "https://api.render.com/v1/services/${SERVICE_ID}/deploys")
-          echo "$resp" | jq .
-          deploy_id=$(echo "$resp" | jq -r '.id // .deploy.id // empty')
+          echo "Render deploy HTTP ${http_code}"
+          cat /tmp/render-deploy.json; echo
+          deploy_id=$(jq -r '(.id // .deploy.id // empty)' /tmp/render-deploy.json)
+          if [ -z "$deploy_id" ]; then
+            sleep 2
+            deploy_id=$(curl -fsS \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Accept: application/json" \
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys?limit=1" \
+              | jq -r '.[0].deploy.id // empty')
+          fi
           if [ -z "$deploy_id" ]; then
             echo "Impossible de lire l'ID du deploy Render"
+            exit 1
+          fi
+          if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then
+            echo "Deploy Render HTTP inattendu: ${http_code}"
             exit 1
           fi
           echo "DEPLOY_ID=${deploy_id}" >> "$GITHUB_ENV"
@@ -251,6 +264,14 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${DEPLOY_ID:-}" ]; then
+            echo "DEPLOY_ID manquant — fallback dernier deploy"
+            DEPLOY_ID=$(curl -fsS \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Accept: application/json" \
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys?limit=1" \
+              | jq -r '.[0].deploy.id // empty')
+          fi
+          if [ -z "${DEPLOY_ID:-}" ]; then
             echo "DEPLOY_ID manquant"
             exit 1
           fi
@@ -259,14 +280,18 @@ jobs:
             body=$(curl -fsS \
               -H "Authorization: Bearer ${RENDER_API_KEY}" \
               -H "Accept: application/json" \
-              "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${DEPLOY_ID}")
-            status=$(echo "$body" | jq -r '.status // .deploy.status // empty')
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${DEPLOY_ID}" \
+              || curl -fsS \
+                -H "Authorization: Bearer ${RENDER_API_KEY}" \
+                -H "Accept: application/json" \
+                "https://api.render.com/v1/services/${SERVICE_ID}/deploys?limit=1")
+            status=$(echo "$body" | jq -r '.status // .deploy.status // .[0].deploy.status // empty')
             echo "Deploy ${DEPLOY_ID} status: ${status} ($attempt/80)"
             case "$status" in
               live) exit 0 ;;
               build_failed|update_failed|canceled|deactivated)
                 echo "Deploy Render en échec: $status"
-                echo "$body" | jq .
+                echo "$body" | jq . || true
                 exit 1
                 ;;
             esac
