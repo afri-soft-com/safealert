@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/network_error.dart';
 
+export '../utils/network_error.dart' show ApiException;
+
 class ApiService {
   /// Production Render. Override at build time for local dev:
   /// `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000/api`
@@ -112,5 +114,3 @@ class ApiService {
     throw ApiException(messageForStatusCode(res.statusCode), res.statusCode);
   }
 }
-
-export '../utils/network_error.dart' show ApiException;

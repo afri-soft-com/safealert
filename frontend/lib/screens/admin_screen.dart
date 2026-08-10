@@ -190,7 +190,28 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                       .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 11))))
                       .toList(),
                   onChanged: (v) {
-                    if (v != null) p.updateUserRole(id, v);
+                    if (v != null && v != role) {
+                      showDialog<bool>(
+                        context: context,
+                        builder: (dlg) => AlertDialog(
+                          title: const Text('Changer le rôle ?',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                          content: Text(
+                            'Nouveau rôle : ${AdminProvider.roleLabels[v] ?? v}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(dlg, false), child: const Text('Annuler')),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(dlg, true),
+                              child: const Text('Confirmer'),
+                            ),
+                          ],
+                        ),
+                      ).then((ok) {
+                        if (ok == true) p.updateUserRole(id, v);
+                      });
+                    }
                   },
                 ),
               ),
