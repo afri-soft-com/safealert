@@ -206,8 +206,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Dump prod DB before Render deploy (migrate runs at container start on Render).
-  # Skips with warning if no DB URL secret is configured — does not block deploys.
+  # Dump Render Postgres before deploy (migrate runs at container start).
+  # Use secrets.PROD_DATABASE_URL = External Database URL from safealert-db
+  # (Internal URL is unreachable from GitHub Actions). Skip if unset.
   db-backup:
     needs: [changes, backend]
     if: |
@@ -230,6 +231,7 @@ jobs:
       - name: Backup production database
         id: backup
         env:
+          # Prefer PROD_DATABASE_URL = Render Postgres External Database URL
           PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
           DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

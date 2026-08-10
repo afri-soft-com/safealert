@@ -106,6 +106,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
 
   # Optional GH-side dump before SSH migrate (artifact). Skips if secret missing.
+  # PROD_DATABASE_URL must be a publicly reachable Postgres URL (e.g. Render External).
   db-backup:
     needs: test-and-migrate
     runs-on: ubuntu-latest
@@ -152,7 +153,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy via SSH (Neon + Redis sur VPS)
+      - name: Deploy via SSH (Postgres + Redis sur VPS)
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}

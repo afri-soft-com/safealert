@@ -15,6 +15,7 @@ Le serveur MCP `user-render` permet de créer et configurer les services depuis 
 | Élément | Statut |
 |---------|--------|
 | Workspace | **My Workspace** (`celestinkas@gmail.com`) |
+| PostgreSQL `safealert-db` | ✅ Frankfurt (Blueprint `render.yaml`) |
 | Key Value `safealert-redis` | Créé (Frankfurt, free) — peut être **suspended** après inactivité |
 | Web Service `safealert-api` | ✅ Live — `https://safealert-api.onrender.com` (`srv-d8le8e8js32c7397i4tg`) |
 | Static Site `safealert-admin` | ✅ Live — `https://safealert-admin.onrender.com` (`srv-d8ltt3nlk1mc73bl4c9g`) |
@@ -44,7 +45,7 @@ Une fois le dépôt connecté dans [Render Dashboard → Account → GitHub](htt
 Variables d’environnement à définir via MCP `update_environment_variables` ou le dashboard (ne jamais committer) :
 
 - `NODE_ENV=production`, `HOST=0.0.0.0`, `JWT_EXPIRES_IN=30d`
-- `DATABASE_URL` (Neon poolée), `DATABASE_URL_DIRECT` (Neon direct pour migrations)
+- `DATABASE_URL` / `DATABASE_URL_DIRECT` — injectés depuis Postgres **`safealert-db`** (Blueprint) ; sinon coller l’URL Internal depuis Connect
 - `JWT_SECRET`, `TWILIO_*`, `FCM_*`
 - `REDIS_URL` (copier depuis le dashboard Key Value `safealert-redis`)
 - `NOMINATIM_USER_AGENT` (ex. `SafeAlert/1.0 (safealert-api.onrender.com)`)
@@ -69,27 +70,27 @@ create_static_site:
 
 ## Verdict de compatibilité
 
-**Oui, partiellement compatible.**
+**Oui — stack prod cible sur Render.**
 
-SafeAlert peut tourner sur Render en remplacement (ou en complément) du déploiement VPS actuel (`docker-compose.neon.yml` + SSH dans `.github/workflows/deploy.yml`). L’architecture cible reste la même : **PostgreSQL sur Neon**, **Redis managé**, **API Node.js** en Web Service Render.
+SafeAlert tourne sur Render : **PostgreSQL `safealert-db`**, **Redis Key Value**, **API Node.js** (`safealert-api`), **admin-web** static. Un déploiement VPS alternatif (`docker-compose.neon.yml` + SSH) existe encore dans `.github/workflows/deploy.yml` mais n’est plus le chemin principal.
 
 | Composant | Render | Notes |
 |-----------|--------|-------|
-| API Node (`backend/`) | ✅ | Dockerfile existant, `npm start` → `node src/server.js` |
-| PostgreSQL | ✅ (Neon) | Pas de Postgres local sur Render — `DATABASE_URL` Neon |
-| Redis | ✅ (optionnel) | Render Key Value, Upstash, ou sans Redis (cache désactivé) |
-| Health checks | ✅ | `/health` et `/health/ready` déjà implémentés |
-| Socket.io (SOS temps réel) | ⚠️ | OK sur **une seule instance** ; pas de scaling horizontal sans adaptateur Redis |
-| admin-web | ✅ (optionnel) | Static Site Render ou servi via `ADMIN_WEB_DIST` sur l’API |
-| CI/CD actuel (GHCR + SSH) | — | Alternative indépendante ; Render peut builder depuis Git |
+| API Node (`backend/`) | ✅ | `npm run migrate && npm start` (`render.yaml`) |
+| PostgreSQL | ✅ `safealert-db` | Frankfurt, Postgres 16 — `DATABASE_URL` depuis Blueprint |
+| Redis | ✅ | Key Value `safealert-redis` (ou Upstash) |
+| Health checks | ✅ | `/health` et `/health/ready` |
+| Socket.io (SOS temps réel) | ⚠️ | OK sur **une seule instance** ; adaptateur Redis si scaling |
+| admin-web | ✅ | Static Site `safealert-admin` |
+| CI/CD | ✅ | Push `main` → backup + deploy Render ([CI.md](./CI.md)) |
 
 ### Limitations importantes
 
 1. **Plan gratuit Render** : le Web Service s’endort après ~15 min d’inactivité. Au réveil, cold start de 30–60 s — **déconseillé pour une app SOS en production**.
-2. **Socket.io** : fonctionne sur une instance unique. Ne pas activer l’autoscaling Render sans ajouter `@socket.io/redis-adapter` au backend.
-3. **Latence Afrique (RDC)** : Render propose surtout **Frankfurt**, **Oregon**, **Singapore**. Neon est en `aws-us-east-1`. Les utilisateurs à Kinshasa subiront une latence plus élevée qu’avec un VPS régional (ex. Afrique du Sud).
+2. **Socket.io** : fonctionne sur une instance unique. Ne pas activer l’autoscaling Render sans adaptateur Redis.
+3. **Latence Afrique (RDC)** : Render propose surtout **Frankfurt**, **Oregon**, **Singapore**. Frankfurt est le meilleur compromis documenté ; un VPS régional (ex. Afrique du Sud) peut rester plus proche.
 4. **Redis** : recommandé pour le cache des alertes actives (`/api/map/incidents`). Sans `REDIS_URL`, l’API fonctionne mais interroge Postgres à chaque requête.
-5. **Migrations Neon** : utiliser `DATABASE_URL_DIRECT` (endpoint sans `-pooler`) pour le `preDeployCommand`.
+5. **Backup CI** : depuis GitHub Actions, utiliser l’**External Database URL** de `safealert-db` (l’Internal n’est pas joignable hors Render). Voir [CI.md](./CI.md).
 
 ---
 
@@ -103,8 +104,8 @@ SafeAlert peut tourner sur Render en remplacement (ou en complément) du déploi
          │
     ┌────┴────┐
     ▼         ▼
- [Neon]   [Redis Render Key Value ou Upstash]
-PostgreSQL
+ [safealert-db]   [Redis safealert-redis]
+ PostgreSQL
 ```
 
 ---
@@ -116,7 +117,6 @@ Le fichier `render.yaml` à la racine du dépôt décrit l’infrastructure.
 ### 1. Prérequis
 
 - Compte [render.com](https://render.com)
-- Projet Neon configuré ([docs/NEON_SETUP.md](./NEON_SETUP.md))
 - Secrets : `JWT_SECRET` (32+ caractères), Twilio, FCM (voir [docs/FIREBASE_SETUP.md](./FIREBASE_SETUP.md))
 
 ### 2. Créer le Blueprint
@@ -129,8 +129,10 @@ Le fichier `render.yaml` à la racine du dépôt décrit l’infrastructure.
 
 Render crée :
 
+- **PostgreSQL** `safealert-db` (Frankfurt, Postgres 16)
 - **Key Value** `safealert-redis` (Redis compatible, plan free)
-- **Web Service** `safealert-api` (Docker, région Frankfurt par défaut)
+- **Web Service** `safealert-api` (région Frankfurt)
+- **Static Site** `safealert-admin`
 
 ### 3. Déploiement manuel (sans Blueprint)
 
@@ -145,7 +147,7 @@ Si vous préférez créer les services à la main :
 | Root Directory | `backend` |
 | Dockerfile | `./Dockerfile` |
 | Health Check Path | `/health/ready` |
-| Pre-Deploy Command | `sh -c 'DATABASE_URL="${DATABASE_URL_DIRECT:-$DATABASE_URL}" npm run migrate'` |
+| Pre-Deploy Command | *(optionnel)* `npm run migrate` — sinon migrate au start (`render.yaml`) |
 | Start Command | *(défaut Dockerfile)* `node src/server.js` |
 | Region | Frankfurt (meilleur compromis pour l’Afrique) |
 | Plan | Starter minimum pour prod (pas de sleep) |
@@ -185,7 +187,7 @@ Voir le guide détaillé : **[CI.md](./CI.md)** (ordre des jobs, backup, secrets
 Le workflow `.github/workflows/ci.yml` :
 
 - **Vérifie** backend / frontend / `admin-web` selon les chemins (PR + push).
-- **`db-backup`** — `pg_dump` prod **avant** le deploy Render si `backend/**` change (secret `PROD_DATABASE_URL` ou `DATABASE_URL_DIRECT` / `DATABASE_URL`). Skip + warning si secret absent.
+- **`db-backup`** — `pg_dump` prod **avant** le deploy Render si `backend/**` change. Secret recommandé : `PROD_DATABASE_URL` = **External Database URL** de `safealert-db` (pas Internal). Fallbacks : `DATABASE_URL_DIRECT` / `DATABASE_URL`. Skip + warning si secret absent.
 - **Déclenche** le déploiement Render sur `main` (API + admin) via `RENDER_API_KEY` + IDs de service.
 - **mobile-aab** — AAB + Release GitHub + upload Play internal (si secrets keystore / Play présents).
 - **Run workflow** manuel avec `force_deploy_web` / `force_mobile_aab`.
@@ -200,11 +202,13 @@ Render migre toujours au démarrage (`startCommand: npm run migrate && npm start
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | URL **poolée** Neon (`-pooler`, `?sslmode=require`) |
-| `DATABASE_URL_DIRECT` | URL **directe** Neon (migrations / DDL) |
+| `DATABASE_URL` | Connexion Postgres **`safealert-db`** (Blueprint : Internal / `connectionString`) |
+| `DATABASE_URL_DIRECT` | Même URL Render (alias legacy pour migrations) |
 | `JWT_SECRET` | Secret fort, 32+ caractères |
 | `NODE_ENV` | `production` |
 | `PORT` | `3000` (Render injecte aussi `PORT` automatiquement) |
+
+Pour le backup CI depuis GitHub Actions, **ne pas** réutiliser l’URL Internal : copier l’**External Database URL** dans le secret GitHub `PROD_DATABASE_URL` (Dashboard → `safealert-db` → **Connect**). Détails : [CI.md](./CI.md).
 
 ### Recommandées
 
@@ -262,19 +266,19 @@ Configurer `PRODUCTION_URL` dans les secrets GitHub si vous réutilisez le job `
 
 ---
 
-## Comparaison Render vs VPS (déploiement actuel)
+## Comparaison Render vs VPS (déploiement alternatif)
 
-| | Render | VPS + docker-compose.neon.yml |
+| | Render (prod actuelle) | VPS + docker-compose |
 |---|--------|-------------------------------|
-| Postgres | Neon (externe) | Neon (externe) |
+| Postgres | Render `safealert-db` | Postgres local ou URL externe |
 | Redis | Key Value / Upstash | Conteneur local |
-| Déploiement | Git push / Blueprint | GHCR + SSH |
+| Déploiement | Git push / Blueprint + CI | GHCR + SSH |
 | HTTPS | Automatique (`*.onrender.com`) | Caddy (profil `proxy`) |
 | Coût entrée | Free (avec sleep) / ~7 $/mo Starter | Coût VPS |
-| Latence RDC | Élevée (EU/US) | Configurable (région VPS) |
+| Latence RDC | Frankfurt (EU) | Configurable (région VPS) |
 | Socket.io | 1 instance | 1 instance |
 
-Les deux approches sont valides. Pour la **production SOS en RDC**, un **VPS régional** ou un plan Render **Starter sans sleep** + région **Frankfurt** reste préférable au plan gratuit.
+Pour la **production SOS en RDC**, un plan Render **Starter sans sleep** + région **Frankfurt**, ou un **VPS régional**, reste préférable au plan gratuit.
 
 ---
 
@@ -284,10 +288,10 @@ Une fois l’API déployée, depuis votre machine locale :
 
 ```bash
 cd backend
-DATABASE_URL="postgresql://...direct..." npm run seed
+DATABASE_URL="postgresql://..." npm run seed
 ```
 
-Ou via un one-off Render Shell avec `DATABASE_URL_DIRECT`.
+Ou via un one-off **Render Shell** sur `safealert-api` (variables déjà injectées).
 
 ---
 
@@ -305,8 +309,8 @@ UPDATE users SET role = 'platform_admin' WHERE phone = '+243XXXXXXXXX';
 
 | Symptôme | Cause probable | Action |
 |----------|----------------|--------|
-| 503 sur `/health/ready` | Neon inaccessible ou mauvaise URL | Vérifier `DATABASE_URL`, IP allowlist Neon |
-| Migration échoue | URL poolée pour DDL | Utiliser `DATABASE_URL_DIRECT` en pre-deploy |
+| 503 sur `/health/ready` | Postgres `safealert-db` inaccessible ou mauvaise URL | Vérifier `DATABASE_URL` / statut du service DB |
+| Migration échoue | Mauvaise URL ou DB suspendue | Vérifier logs Render + `safealert-db` |
 | Cold start long | Plan free | Passer au plan Starter |
 | WebSocket SOS instable | Scaling > 1 instance | Désactiver autoscaling ou ajouter Redis adapter Socket.io |
 | OTP SMS échoue | Twilio trial / geo | Voir [EXTERNAL_APIS.md](./EXTERNAL_APIS.md) |

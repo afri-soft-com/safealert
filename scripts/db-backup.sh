@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Pre-migrate Postgres dump for SafeAlert (Neon / Render / VPS).
+# Pre-migrate Postgres dump for SafeAlert (Render Postgres / any Postgres URL).
 # Usage (CI or local):
 #   DATABASE_URL='postgresql://...' ./scripts/db-backup.sh
 #   PROD_DATABASE_URL='...' ./scripts/db-backup.sh [output.sql.gz]
 #
 # Prefers PROD_DATABASE_URL, then DATABASE_URL_DIRECT, then DATABASE_URL.
+# From GitHub Actions: set PROD_DATABASE_URL to the Render Postgres
+# External Database URL (not Internal — runners are outside Render's private network).
 set -euo pipefail
 
 OUT="${1:-}"
@@ -29,7 +31,7 @@ fi
 mkdir -p "$(dirname "${OUT}")"
 
 echo "→ pg_dump → ${OUT}"
-# Neon and most managed Postgres require TLS; urls usually include sslmode=require.
+# Render Postgres External URL usually includes sslmode=require.
 pg_dump \
   --dbname="${URL}" \
   --no-owner \

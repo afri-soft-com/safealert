@@ -27,13 +27,27 @@ Render exécute encore `npm run migrate && npm start` au démarrage du conteneur
 
 ## Backup avant migrate
 
-Script : [`scripts/db-backup.sh`](../scripts/db-backup.sh)
+Script : [`scripts/db-backup.sh`](../scripts/db-backup.sh) — `pg_dump` générique (Postgres / Render).
 
 Ordre des variables (première non vide) :
 
-1. `PROD_DATABASE_URL` (**recommandé** — URL Neon **directe**, sans `-pooler`)
-2. `DATABASE_URL_DIRECT`
-3. `DATABASE_URL`
+1. `PROD_DATABASE_URL` (**recommandé**)
+2. `DATABASE_URL_DIRECT` (fallback legacy)
+3. `DATABASE_URL` (fallback)
+
+### Secret `PROD_DATABASE_URL` (Render Postgres)
+
+Les runners GitHub Actions sont **hors** du réseau privé Render. Il faut l’**External Database URL** (pas l’Internal) :
+
+1. [Render Dashboard](https://dashboard.render.com) → service PostgreSQL **`safealert-db`**
+2. Onglet **Connect** → **External Database URL**
+3. Copier l’URL (généralement avec `sslmode=require`)
+4. GitHub → Settings → Secrets → Actions → secret `PROD_DATABASE_URL`
+
+| URL Render | Utilisable depuis GH Actions ? |
+|------------|--------------------------------|
+| **External Database URL** | ✅ Oui (requis pour `db-backup`) |
+| **Internal Database URL** | ❌ Non — réservée au réseau privé Render (API ↔ DB) |
 
 | Chemin | Comportement |
 |--------|----------------|
@@ -46,8 +60,8 @@ Ordre des variables (première non vide) :
 
 | Secret | Rôle |
 |--------|------|
-| `PROD_DATABASE_URL` | Dump prod (recommandé, Neon direct + `sslmode=require`) |
-| `DATABASE_URL_DIRECT` / `DATABASE_URL` | Fallbacks pour le dump |
+| `PROD_DATABASE_URL` | Dump prod — **External Database URL** de `safealert-db` (+ SSL) |
+| `DATABASE_URL_DIRECT` / `DATABASE_URL` | Fallbacks pour le dump (éviter l’URL Internal) |
 | `RENDER_API_KEY` | Deploy API Render |
 | `RENDER_API_SERVICE_ID` | ID service `safealert-api` |
 | `RENDER_ADMIN_SERVICE_ID` | ID service `safealert-admin` |
