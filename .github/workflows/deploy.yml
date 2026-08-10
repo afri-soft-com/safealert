@@ -105,10 +105,50 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
 
-  deploy:
-    needs: build-and-push
+  # Optional GH-side dump before SSH migrate (artifact). Skips if secret missing.
+  db-backup:
+    needs: test-and-migrate
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true'
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Backup production database
+        id: backup
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/db-backup.sh
+          ./scripts/db-backup.sh "backups/safealert-deploy-${{ github.sha }}.sql.gz"
+
+      - name: Upload DB backup artifact
+        if: steps.backup.outputs.file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-deploy-${{ github.sha }}
+          path: ${{ steps.backup.outputs.file }}
+          retention-days: 14
+          if-no-files-found: warn
+
+  deploy:
+    needs: [build-and-push, db-backup]
+    runs-on: ubuntu-latest
+    if: |
+      always() &&
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.deploy == 'true' &&
+      needs.build-and-push.result == 'success' &&
+      (needs.db-backup.result == 'success' || needs.db-backup.result == 'skipped')
     steps:
       - uses: actions/checkout@v4
 
@@ -131,6 +171,22 @@ jobs:
             docker compose -f "$COMPOSE_FILE" --env-file .env.production pull api
             docker compose -f "$COMPOSE_FILE" --env-file .env.production up -d redis
             MIGRATE_URL="${DATABASE_URL_DIRECT:-$DATABASE_URL}"
+            # Backup on VPS before migrate (pg_dump via official Postgres image)
+            mkdir -p backups
+            STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+            BACKUP_FILE="backups/pre-migrate-${STAMP}.sql.gz"
+            echo "→ pg_dump before migrate → ${BACKUP_FILE}"
+            docker run --rm postgres:16-alpine \
+              pg_dump --dbname="$MIGRATE_URL" --no-owner --no-acl --clean --if-exists \
+              | gzip -c > "$BACKUP_FILE"
+            SIZE=$(wc -c < "$BACKUP_FILE" | tr -d ' ')
+            if [ "${SIZE}" -lt 100 ]; then
+              echo "Backup trop petit (${SIZE} octets) — abort migrate"
+              exit 1
+            fi
+            echo "✓ Backup OK (${SIZE} bytes)"
+            # Keep last 10 dumps on disk
+            ls -1t backups/pre-migrate-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
             docker compose -f "$COMPOSE_FILE" --env-file .env.production run --rm \
               -e DATABASE_URL="$MIGRATE_URL" \
               api npm run migrate

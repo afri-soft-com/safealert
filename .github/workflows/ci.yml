@@ -5,6 +5,18 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_deploy_web:
+        description: "Force Render deploy (API + admin) even without path changes"
+        required: false
+        default: true
+        type: boolean
+      force_mobile_aab:
+        description: "Force mobile AAB build + upload"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -19,10 +31,10 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-      admin: ${{ steps.filter.outputs.admin }}
-      deploy_web: ${{ steps.filter.outputs.deploy_web }}
+      backend: ${{ steps.flags.outputs.backend }}
+      frontend: ${{ steps.flags.outputs.frontend }}
+      admin: ${{ steps.flags.outputs.admin }}
+      deploy_web: ${{ steps.flags.outputs.deploy_web }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -43,6 +55,30 @@ jobs:
               - 'admin-web/**'
               - 'render.yaml'
               - '.github/workflows/**'
+      - name: Resolve change flags
+        id: flags
+        run: |
+          set -euo pipefail
+          backend="${{ steps.filter.outputs.backend }}"
+          frontend="${{ steps.filter.outputs.frontend }}"
+          admin="${{ steps.filter.outputs.admin }}"
+          deploy_web="${{ steps.filter.outputs.deploy_web }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.force_deploy_web }}" = "true" ]; then
+              backend=true
+              admin=true
+              deploy_web=true
+            fi
+            if [ "${{ inputs.force_mobile_aab }}" = "true" ]; then
+              frontend=true
+            fi
+          fi
+          {
+            echo "backend=${backend}"
+            echo "frontend=${frontend}"
+            echo "admin=${admin}"
+            echo "deploy_web=${deploy_web}"
+          } >> "$GITHUB_OUTPUT"
 
   backend:
     needs: changes
@@ -170,16 +206,58 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Déploiement web automatique Render (API + admin) via API Render
-  deploy-render:
-    needs: [changes, backend, admin-web]
+  # Dump prod DB before Render deploy (migrate runs at container start on Render).
+  # Skips with warning if no DB URL secret is configured — does not block deploys.
+  db-backup:
+    needs: [changes, backend]
     if: |
       always() &&
       github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.changes.outputs.backend == 'true' &&
+      (needs.backend.result == 'success' || needs.backend.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Backup production database
+        id: backup
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/db-backup.sh
+          ./scripts/db-backup.sh "backups/safealert-${{ github.sha }}.sql.gz"
+
+      - name: Upload DB backup artifact
+        if: steps.backup.outputs.file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.sha }}
+          path: ${{ steps.backup.outputs.file }}
+          retention-days: 14
+          if-no-files-found: warn
+
+  # Déploiement web automatique Render (API + admin) via API Render
+  deploy-render:
+    needs: [changes, backend, admin-web, db-backup]
+    if: |
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       needs.changes.outputs.deploy_web == 'true' &&
       (needs.backend.result == 'success' || needs.backend.result == 'skipped') &&
-      (needs.admin-web.result == 'success' || needs.admin-web.result == 'skipped')
+      (needs.admin-web.result == 'success' || needs.admin-web.result == 'skipped') &&
+      (needs.db-backup.result == 'success' || needs.db-backup.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -327,10 +405,10 @@ jobs:
   mobile-aab:
     needs: [changes, frontend]
     if: |
-      github.event_name == 'push' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       github.ref == 'refs/heads/main' &&
       needs.changes.outputs.frontend == 'true' &&
-      (needs.frontend.result == 'success' || needs.frontend.result == 'skipped')
+      needs.frontend.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -403,5 +481,3 @@ jobs:
           releaseFiles: frontend/build/app/outputs/bundle/release/app-release.aab
           track: internal
           status: draft
-
-# ci-trigger: 2026-08-10 web+mobile deploy

@@ -180,17 +180,17 @@ Mettre à jour `CORS_ORIGIN` sur l’API avec l’URL du site admin.
 
 ### CI/CD GitHub Actions
 
+Voir le guide détaillé : **[CI.md](./CI.md)** (ordre des jobs, backup, secrets, Run workflow).
+
 Le workflow `.github/workflows/ci.yml` :
 
-- **Vérifie** le build `admin-web` à chaque push / PR.
-- **Déclenche** le déploiement Render sur `main` si `admin-web/**` ou `render.yaml` a changé.
+- **Vérifie** backend / frontend / `admin-web` selon les chemins (PR + push).
+- **`db-backup`** — `pg_dump` prod **avant** le deploy Render si `backend/**` change (secret `PROD_DATABASE_URL` ou `DATABASE_URL_DIRECT` / `DATABASE_URL`). Skip + warning si secret absent.
+- **Déclenche** le déploiement Render sur `main` (API + admin) via `RENDER_API_KEY` + IDs de service.
+- **mobile-aab** — AAB + Release GitHub + upload Play internal (si secrets keystore / Play présents).
+- **Run workflow** manuel avec `force_deploy_web` / `force_mobile_aab`.
 
-Configurer le secret GitHub **`RENDER_DEPLOY_HOOK_ADMIN`** (optionnel) :
-
-1. Render Dashboard → **safealert-admin** → **Settings** → **Deploy Hook** → copier l’URL.
-2. GitHub → repo → **Settings** → **Secrets and variables** → **Actions** → New secret.
-
-Sans ce secret, le déploiement repose sur l’auto-deploy Render branché au dépôt GitHub.
+Render migre toujours au démarrage (`startCommand: npm run migrate && npm start` dans `render.yaml`). Le backup CI est donc le filet de sécurité côté GitHub avant le trigger.
 
 ---
 
