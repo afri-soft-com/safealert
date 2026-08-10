@@ -69,7 +69,41 @@ Après `POST /api/auth/request-code` :
 - admin-web : hint « Code de test : XXXXXX » (même en build prod)
 
 Admin URL : `https://safealert-admin.onrender.com`  
-Numéro de test documenté : `+243971163574`
+Numéro **admin** documenté : `+243971163574` — **ne pas** l’utiliser pour tester l’UX citoyen (Flutter).
+
+#### Numéros client (Flutter) — hors admin
+
+Avec `ALLOW_DEV_OTP=true`, **n’importe quel** numéro E.164 valide fonctionne : OTP renvoyé dans `devCode` + UI (« Code de test : … ») ; au premier login, cocher **Nouveau compte** + pseudo → rôle `citizen` par défaut.
+
+| Numéro | Rôle suggéré | Usage |
+|--------|--------------|--------|
+| `+243810000001` | `citizen` | UX citoyen (défaut après signup) |
+| `+243810000002` | `leader` | flux leader / secteur |
+| `+243810000003` | `agent` | flux agent / terrain |
+
+**Ne pas** tester le client avec `+243971163574` (`platform_admin`).
+
+Promouvoir les rôles après création (ou upsert) :
+
+```sql
+-- Créer / promouvoir (Render Shell ou psql avec DATABASE_URL) :
+INSERT INTO users (phone, pseudo, role) VALUES
+  ('+243810000001', 'TestCitoyen', 'citizen'),
+  ('+243810000002', 'TestLeader', 'leader'),
+  ('+243810000003', 'TestAgent', 'agent')
+ON CONFLICT (phone) DO UPDATE SET role = EXCLUDED.role, updated_at = NOW();
+```
+
+Ou via admin-web → Utilisateurs → changer le rôle (`citizen` / `leader` / `agent`).  
+Script optionnel : `node backend/scripts/seed-client-test-phones.js` (avec `DATABASE_URL` prod).
+
+APK / Play Internal pointant vers la prod :
+
+```bash
+cd frontend
+flutter build apk --release --dart-define=API_BASE_URL=https://safealert-api.onrender.com/api
+# ou appbundle (voir PLAY_STORE.md)
+```
 
 Promouvoir admin (une fois le compte créé via OTP) :
 

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
@@ -32,7 +31,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _sendCode() async {
     final auth = context.read<AuthProvider>();
     final ok = await auth.requestCode(_phoneCtrl.text.trim());
-    if (ok && mounted) setState(() => _codeSent = true);
+    if (ok && mounted) {
+      // Show whenever API returns devCode (local DEV or temporary prod ALLOW_DEV_OTP)
+      final code = auth.devCode;
+      if (code != null && code.isNotEmpty) {
+        _codeCtrl.text = code;
+      }
+      setState(() => _codeSent = true);
+    }
   }
 
   Future<void> _verify() async {
@@ -107,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ] else ...[
-                  if (kDebugMode && auth.devCode != null) ...[
+                  if (auth.devCode != null) ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
@@ -117,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         border: Border.all(color: AppColors.orange.withValues(alpha: 0.5)),
                       ),
                       child: Text(
-                        'Mode dev — code OTP : ${auth.devCode}',
+                        'Code de test : ${auth.devCode}',
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

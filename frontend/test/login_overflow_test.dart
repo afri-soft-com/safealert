@@ -62,7 +62,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Vérifier'), findsOneWidget);
-    expect(find.textContaining('Mode dev'), findsOneWidget);
+    expect(find.textContaining('Code de test'), findsOneWidget);
 
     await tester.tap(find.text('Nouveau compte'));
     await tester.pumpAndSettle();
