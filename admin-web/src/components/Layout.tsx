@@ -3,8 +3,10 @@ import { useAuth } from "../context/AuthContext";
 
 const NAV = [
   { to: "/", label: "Tableau de bord", icon: "📊" },
+  { to: "/ops", label: "Ops temps réel", icon: "📡" },
   { to: "/utilisateurs", label: "Utilisateurs", icon: "👥" },
   { to: "/partenaires", label: "Partenaires API", icon: "🔑" },
+  { to: "/portail-partenaire", label: "Portail partenaire", icon: "🔗" },
   { to: "/annuaire", label: "Annuaire d'urgence", icon: "📞" },
   { to: "/incidents", label: "Incidents", icon: "🚨" },
   { to: "/groupes", label: "Groupes", icon: "🏘️" },

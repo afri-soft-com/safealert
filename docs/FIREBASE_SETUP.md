@@ -146,15 +146,18 @@ Sans ces variables, l'API fonctionne mais les push sont désactivés.
 
 ---
 
-## 6. Vérification
+## 6. Vérification / readiness production
 
 | Étape | Vérification |
 |-------|----------------|
 | Android | `flutter run` — pas d'erreur Firebase au démarrage |
 | iOS | `flutter run` sur Mac — pas d'erreur Firebase ; plist présent dans `ios/Runner/` |
-| Token FCM | Logs : `FCM initialized` dans la console Flutter |
+| Token FCM | Logs : `FCM initialized` puis `FCM token registered with API` après login |
+| Refresh | Rotation token → `onTokenRefresh` re-uploade automatiquement |
 | Backend | Log serveur : `Firebase FCM initialized` |
 | Upload token | Après connexion, `PUT /api/auth/fcm-token` enregistre le token |
+| DB | `SELECT fcm_token FROM users WHERE phone = '…'` non null après login |
+| Push test | Déclencher SOS → contact avec FCM reçoit la notif |
 
 ---
 

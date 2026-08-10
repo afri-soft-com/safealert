@@ -77,4 +77,49 @@ class LeaderProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  Future<bool> assignAgent(String incidentId, String agentId, {int? etaMinutes}) async {
+    try {
+      await _api.post('/leader/incidents/$incidentId/assign', {
+        'agent_id': agentId,
+        if (etaMinutes != null) 'eta_minutes': etaMinutes,
+      });
+      await fetchSectorIncidents();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> closeWithReason(String incidentId, String reason, {bool falseAlarm = false}) async {
+    try {
+      await _api.post('/leader/incidents/$incidentId/close', {
+        'reason': reason,
+        if (falseAlarm) 'status': 'false_alarm',
+      });
+      await fetchSectorIncidents();
+      await fetchSectorStats();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchChat(String incidentId) async {
+    try {
+      final res = await _api.get('/leader/incidents/$incidentId/chat');
+      return (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<bool> postChat(String incidentId, String body) async {
+    try {
+      await _api.post('/leader/incidents/$incidentId/chat', {'body': body});
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

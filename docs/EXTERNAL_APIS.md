@@ -47,10 +47,17 @@ DATABASE_URL_DIRECT=postgresql://USER:PASS@ep-xxx.region.aws.neon.tech/safealert
 | | |
 |--|--|
 | **Objectif** | Envoi OTP (et alertes SMS) via partenaire SerdiPay |
-| **Variables** | `SERDIPAY_API_KEY`, `SERDIPAY_SMS_URL`, `SERDIPAY_SENDER_ID` (optionnel), `SMS_PROVIDER=serdipay\|auto` |
+| **Variables** | `SERDIPAY_API_KEY`, `SERDIPAY_SMS_URL`, `SERDIPAY_SENDER_ID` (optionnel), `SERDIPAY_API_KEY_HEADER` (`Bearer` \| `apiKey`), `SMS_PROVIDER=serdipay\|auto` |
 | **Statut** | Connecteur prêt dans `backend/src/services/sms.js` — **en attente des clés API et de l’URL SMS** |
 
-La doc publique SerdiPay couvre surtout le **paiement mobile money**. Dès que vous recevez l’endpoint SMS + le format d’auth, renseigner `SERDIPAY_SMS_URL` sur Render et ajuster `SERDIPAY_API_KEY_HEADER` si besoin (`Bearer` par défaut, ou `apiKey`).
+### Checklist prod OTP (ne pas inventer de secrets)
+
+1. Obtenir auprès de SerdiPay : URL SMS, clé API, format d’auth, sender ID.
+2. Sur Render (ou `.env` local) : `SERDIPAY_API_KEY`, `SERDIPAY_SMS_URL`, éventuellement `SERDIPAY_SENDER_ID=SafeAlert`.
+3. Si l’auth n’est pas Bearer : `SERDIPAY_API_KEY_HEADER=apiKey`.
+4. Fallback recommandé : configurer aussi Twilio (`TWILIO_*`) pour secours.
+5. Vérifier : `POST /api/auth/request-code` → SMS reçu (en prod `devCode` n’est **jamais** renvoyé).
+6. Sans aucun fournisseur : simulation console uniquement (OK en dev).
 
 Priorité automatique (`SMS_PROVIDER=auto`) : **SerdiPay → Twilio → Africa’s Talking → simulation**.
 

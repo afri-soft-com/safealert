@@ -143,6 +143,34 @@ export const api = {
     request<{ data: GroupRow[]; page: number; limit: number; total: number }>(
       `/admin/groups?page=${page}&limit=${limit}`
     ),
+
+  getOpsQueue: () =>
+    request<{
+      queue: Array<{
+        id: string;
+        incident_type: string;
+        status: string;
+        zone_name: string | null;
+        age_seconds: number;
+        sla_status: string;
+        reporter: string;
+        assignee_pseudo: string | null;
+        lat: number;
+        lng: number;
+      }>;
+      sla: {
+        open_sos: number;
+        sla_breach: number;
+        avg_ack_seconds_24h: number | null;
+      };
+      busy_map: Array<{
+        zone_name: string;
+        active_count: number;
+        avg_lat: number;
+        avg_lng: number;
+      }>;
+      generated_at: string;
+    }>("/ops/queue"),
 };
 
 export interface UserRow {

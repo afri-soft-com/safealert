@@ -155,9 +155,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     _buildCard('🗺', 'Carte des zones', '$activeCount alerte${activeCount > 1 ? 's' : ''} (24h)', () => widget.onNavigate('map'), AppColors.bleu),
                     _buildCard('👥', 'Mes contacts', 'Cercle de confiance', () => widget.onNavigate('contacts'), AppColors.vert),
-                    _buildCard('📞', 'Urgences', 'Accès hors-ligne', () => widget.onNavigate('annuaire'), AppColors.orange),
+                    _buildCard('📞', 'Urgences', 'Appel en 1 tap', () => widget.onNavigate('annuaire'), AppColors.orange),
+                    _buildCard('🛣️', 'Trajet sécurisé', 'ETA + alerte auto', () => widget.onNavigate('trip'), AppColors.vert),
                     _buildCard('📊', 'Statistiques', 'Votre quartier', () => widget.onNavigate('dashboard'), AppColors.gris),
                     _buildCard('🏘', 'Groupes voisins', 'Voisins & entraide', () => widget.onNavigate('groups'), AppColors.bleuFonce),
+                    _buildCard('🏠', 'Zones confiance', 'Domicile / travail', () => widget.onNavigate('trust_zones'), AppColors.bleuFonce),
+                    _buildCard('🏘️', 'Veille quartier', 'Digest push', () => widget.onNavigate('neighborhood'), AppColors.orange),
                     _buildCard('🛡', 'Conseils sécurité', 'Astuces hors-ligne', () => widget.onNavigate('safety'), AppColors.rouge),
                     _buildCard('🔥', 'Carte chaleur', 'Densité incidents', () => widget.onNavigate('heatmap'), AppColors.orange),
                     _buildCard('📋', 'Mon historique', 'Mes alertes', () => widget.onNavigate('history'), AppColors.gris),

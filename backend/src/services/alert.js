@@ -122,10 +122,10 @@ const sendCancelAlert = async (userId, lat, lng) => {
       client,
       userId,
       user,
-      "✅ Alerte annulée — SafeAlert",
-      `${user.pseudo} a annulé son alerte SOS (fausse alerte).`,
-      `✅ SafeAlert — ${user.pseudo} a annulé son alerte SOS. Tout va bien.`,
-      "sos_cancelled"
+      "✅ Fausse alerte — SafeAlert",
+      `${user.pseudo} : fausse alerte. Situation sous contrôle, aucune intervention nécessaire.`,
+      `✅ FAUSSE ALERTE SafeAlert — ${user.pseudo} a annulé son SOS. Situation sous contrôle.`,
+      "false_alarm"
     );
 
     const nearbyUsers = await getNearbyUsers(client, userId, lat, lng);
@@ -134,11 +134,11 @@ const sendCancelAlert = async (userId, lat, lng) => {
       if (nu.fcm_token) {
         await sendPush(nu.fcm_token, {
           notification: {
-            title: "Alerte annulée dans votre quartier",
-            body: `${user.pseudo} a annulé son alerte — fausse alerte.`,
+            title: "Fausse alerte — quartier",
+            body: `${user.pseudo} : fausse alerte. Situation sous contrôle.`,
           },
           data: {
-            type: "sos_cancelled",
+            type: "false_alarm",
             userId: String(userId),
           },
         });

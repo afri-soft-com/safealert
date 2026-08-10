@@ -34,6 +34,14 @@ const reportRoutes = require("./routes/report");
 const partnerRoutes = require("./routes/partner");
 const adminRoutes = require("./routes/admin");
 const historyRoutes = require("./routes/history");
+const checkinRoutes = require("./routes/checkin");
+const tripsRoutes = require("./routes/trips");
+const liveStatusRoutes = require("./routes/liveStatus");
+const trustZonesRoutes = require("./routes/trustZones");
+const neighborhoodRoutes = require("./routes/neighborhood");
+const backupRoutes = require("./routes/backup");
+const premiumRoutes = require("./routes/premium");
+const opsRoutes = require("./routes/ops");
 
 const app = express();
 const server = http.createServer(app);
@@ -81,6 +89,20 @@ const socketCors =
 const io = new Server(server, { cors: socketCors });
 app.set("io", io);
 
+io.on("connection", (socket) => {
+  socket.on("authenticate", (payload) => {
+    const userId =
+      typeof payload === "string"
+        ? payload
+        : payload && typeof payload === "object"
+          ? payload.userId || payload.user_id
+          : null;
+    if (userId && typeof userId === "string" && userId.length < 80) {
+      socket.join(`user:${userId}`);
+    }
+  });
+});
+
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -125,6 +147,14 @@ app.use("/api/report", reportRoutes);
 app.use("/api/partner", partnerRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/history", historyRoutes);
+app.use("/api/checkin", checkinRoutes);
+app.use("/api/trips", tripsRoutes);
+app.use("/api/live-status", liveStatusRoutes);
+app.use("/api/trust-zones", trustZonesRoutes);
+app.use("/api/neighborhood", neighborhoodRoutes);
+app.use("/api/backup", backupRoutes);
+app.use("/api/premium", premiumRoutes);
+app.use("/api/ops", opsRoutes);
 
 const adminWebDist = process.env.ADMIN_WEB_DIST;
 if (adminWebDist) {
@@ -166,11 +196,44 @@ async function attachSocketRedisAdapter() {
   }
 }
 
+function startBackgroundJobs() {
+  if (process.env.NODE_ENV === "test" || process.env.VITEST) return;
+
+  const { processOverdueTrips } = require("./controllers/tripController");
+  const { purgeExpired } = require("./controllers/liveStatusController");
+  const { sendDigests } = require("./controllers/neighborhoodController");
+
+  // Overdue safe trips — every 60s
+  setInterval(() => {
+    processOverdueTrips().catch((err) => warn("trip overdue job:", err.message));
+  }, 60_000);
+
+  // Purge expired live status — every 2 min
+  setInterval(() => {
+    purgeExpired().catch((err) => warn("live status purge:", err.message));
+  }, 120_000);
+
+  // Neighborhood digests — every 15 min
+  setInterval(() => {
+    sendDigests().catch((err) => warn("neighborhood digest:", err.message));
+  }, 15 * 60_000);
+
+  // Purge evidence past retention — daily
+  setInterval(async () => {
+    try {
+      await pool.query(`DELETE FROM incident_evidence WHERE retention_until < NOW()`);
+    } catch (err) {
+      warn("evidence purge:", err.message);
+    }
+  }, 24 * 60 * 60_000);
+}
+
 async function bootstrap() {
   initFCM();
   initSMS();
   await initRedis().catch((err) => console.warn("Redis init skipped:", err.message));
   await attachSocketRedisAdapter();
+  startBackgroundJobs();
 
   if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
     server.listen(PORT, HOST, () => {

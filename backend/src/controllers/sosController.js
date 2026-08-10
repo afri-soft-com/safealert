@@ -3,6 +3,10 @@ const { sendAlert, sendCancelAlert } = require("../services/alert");
 const { notifyUserGroupsOnSOS } = require("../services/groupNotify");
 const { invalidateActiveAlerts } = require("../config/redis");
 const { resolveZoneName } = require("../utils/incidentZone");
+const { deliverEvent } = require("../services/partnerWebhooks");
+const { notifyLeadersForSOS } = require("../services/sectorNotify");
+const { findMatchingZones } = require("./trustZoneController");
+const { sendPush } = require("../config/firebase");
 
 const CANCEL_WINDOW_MS = 2 * 60 * 1000;
 
@@ -42,6 +46,43 @@ const triggerSOS = async (req, res) => {
     notification.groupSos = groupNotification;
 
     await invalidateActiveAlerts();
+
+    const sectorNotify = await notifyLeadersForSOS(incident);
+    notification.sectorLeaders = sectorNotify;
+
+    // Targeted alerts for trust zones containing this SOS
+    try {
+      const zones = await findMatchingZones(lat, lng);
+      for (const z of zones) {
+        if (z.user_id === req.userId) continue;
+        const contacts = await pool.query(
+          `SELECT u.fcm_token FROM trust_contacts tc
+           LEFT JOIN users u ON tc.contact_phone = u.phone
+           WHERE tc.user_id = $1 AND u.fcm_token IS NOT NULL`,
+          [z.user_id]
+        );
+        for (const c of contacts.rows) {
+          await sendPush(c.fcm_token, {
+            notification: {
+              title: `📍 Alerte près de ${z.label}`,
+              body: `SOS signalé dans votre zone ${z.zone_type}`,
+            },
+            data: { type: "trust_zone_alert", zoneId: String(z.id), incidentId: String(incident.id) },
+          });
+        }
+      }
+    } catch (tzErr) {
+      console.error("trust zone notify error:", tzErr.message);
+    }
+
+    deliverEvent("sos", {
+      id: incident.id,
+      lat: incident.lat,
+      lng: incident.lng,
+      incident_type: incident.incident_type,
+      zone_name: incident.zone_name,
+      created_at: incident.created_at,
+    }).catch(() => {});
 
     const io = req.app.get("io");
     if (io) {
@@ -83,14 +124,31 @@ const cancelSOS = async (req, res) => {
     );
 
     const notification = await sendCancelAlert(req.userId, incident.lat, incident.lng);
+    await pool.query(`DELETE FROM sos_live_status WHERE incident_id = $1`, [incident.id]);
     await invalidateActiveAlerts();
+
+    deliverEvent("cancel", {
+      id: incident.id,
+      resolution: "false_alarm",
+      message: "Fausse alerte — alerte annulée par l'utilisateur",
+    }).catch(() => {});
 
     const io = req.app.get("io");
     if (io) {
-      io.emit("sos_cancelled", { id: incident.id, user_id: req.userId });
+      io.emit("sos_cancelled", {
+        id: incident.id,
+        user_id: req.userId,
+        resolution: "false_alarm",
+        message: "Fausse alerte",
+      });
     }
 
-    return res.json({ message: "Alerte annulée", incident: result.rows[0], notification });
+    return res.json({
+      message: "Fausse alerte — vos contacts ont été notifiés",
+      resolution: "false_alarm",
+      incident: result.rows[0],
+      notification,
+    });
   } catch (err) {
     console.error("cancelSOS error:", err);
     return res.status(500).json({ error: "Erreur serveur" });
@@ -120,14 +178,31 @@ const cancelLatestSOS = async (req, res) => {
     );
 
     const notification = await sendCancelAlert(req.userId, incident.lat, incident.lng);
+    await pool.query(`DELETE FROM sos_live_status WHERE incident_id = $1`, [incident.id]);
     await invalidateActiveAlerts();
+
+    deliverEvent("cancel", {
+      id: incident.id,
+      resolution: "false_alarm",
+      message: "Fausse alerte — alerte annulée par l'utilisateur",
+    }).catch(() => {});
 
     const io = req.app.get("io");
     if (io) {
-      io.emit("sos_cancelled", { id: incident.id, user_id: req.userId });
+      io.emit("sos_cancelled", {
+        id: incident.id,
+        user_id: req.userId,
+        resolution: "false_alarm",
+        message: "Fausse alerte",
+      });
     }
 
-    return res.json({ message: "Alerte annulée", incident: result.rows[0], notification });
+    return res.json({
+      message: "Fausse alerte — vos contacts ont été notifiés",
+      resolution: "false_alarm",
+      incident: result.rows[0],
+      notification,
+    });
   } catch (err) {
     console.error("cancelLatestSOS error:", err);
     return res.status(500).json({ error: "Erreur serveur" });

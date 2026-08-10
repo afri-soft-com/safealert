@@ -9,6 +9,8 @@ import PartnersPage from "./pages/PartnersPage";
 import EmergencyPage from "./pages/EmergencyPage";
 import IncidentsPage from "./pages/IncidentsPage";
 import GroupsPage from "./pages/GroupsPage";
+import OpsPage from "./pages/OpsPage";
+import PartnerPortalPage from "./pages/PartnerPortalPage";
 
 export default function App() {
   return (
@@ -19,8 +21,10 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route index element={<DashboardPage />} />
+              <Route path="ops" element={<OpsPage />} />
               <Route path="utilisateurs" element={<UsersPage />} />
               <Route path="partenaires" element={<PartnersPage />} />
+              <Route path="portail-partenaire" element={<PartnerPortalPage />} />
               <Route path="annuaire" element={<EmergencyPage />} />
               <Route path="incidents" element={<IncidentsPage />} />
               <Route path="groupes" element={<GroupsPage />} />

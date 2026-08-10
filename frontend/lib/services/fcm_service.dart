@@ -44,8 +44,17 @@ class FCMService extends ChangeNotifier {
       _available = true;
       debugPrint('FCM initialized');
 
+      messaging.onTokenRefresh.listen((t) {
+        _token = t;
+        uploadToken();
+      });
+
       _messageSub = FirebaseMessaging.onMessage.listen(_handleMessage);
       FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
+
+      // Upload if already authenticated (token may already be in ApiService)
+      await _api.init();
+      if (_api.hasToken) await uploadToken();
 
       notifyListeners();
     } catch (e) {
@@ -56,8 +65,13 @@ class FCMService extends ChangeNotifier {
   Future<void> uploadToken() async {
     if (!_available || _token == null) return;
     try {
+      await _api.init();
+      if (!_api.hasToken) return;
       await _api.put('/auth/fcm-token', {'fcm_token': _token!});
-    } catch (_) {}
+      debugPrint('FCM token registered with API');
+    } catch (e) {
+      debugPrint('FCM token upload failed: $e');
+    }
   }
 
   void _handleMessage(RemoteMessage message) {

@@ -120,7 +120,13 @@ class GroupsProvider extends ChangeNotifier {
       await fetchMessages(groupId);
       return true;
     } catch (_) {
-      return false;
+      await _cache.enqueue('group_message', {
+        'group_id': groupId,
+        'content': content,
+      });
+      _isOffline = true;
+      notifyListeners();
+      return true; // queued locally
     }
   }
 

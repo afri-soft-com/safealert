@@ -195,6 +195,153 @@ const migrate = async () => {
       CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_id);
     `);
 
+    // ── Feature expansions (check-in, trips, trust zones, ops, partners, etc.) ──
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_locale VARCHAR(8) DEFAULT 'fr';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS reliability_score INTEGER DEFAULT 50;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS reliability_score INTEGER DEFAULT 50;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS assignment_eta TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS close_reason TEXT;
+      ALTER TABLE partner_api_keys ADD COLUMN IF NOT EXISTS webhook_url TEXT;
+      ALTER TABLE partner_api_keys ADD COLUMN IF NOT EXISTS webhook_secret TEXT;
+      ALTER TABLE partner_api_keys ADD COLUMN IF NOT EXISTS webhook_events TEXT DEFAULT 'sos,incident,cancel';
+
+      CREATE TABLE IF NOT EXISTS check_ins (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        incident_id UUID REFERENCES incidents(id) ON DELETE SET NULL,
+        trip_id UUID,
+        lat DOUBLE PRECISION,
+        lng DOUBLE PRECISION,
+        message TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_check_ins_user ON check_ins(user_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS safe_trips (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        origin_lat DOUBLE PRECISION NOT NULL,
+        origin_lng DOUBLE PRECISION NOT NULL,
+        dest_lat DOUBLE PRECISION NOT NULL,
+        dest_lng DOUBLE PRECISION NOT NULL,
+        dest_label VARCHAR(200),
+        eta_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        status VARCHAR(30) DEFAULT 'active'
+          CHECK (status IN ('active','arrived','alerted','cancelled','expired')),
+        last_lat DOUBLE PRECISION,
+        last_lng DOUBLE PRECISION,
+        last_ping_at TIMESTAMP WITH TIME ZONE,
+        abnormal_stop_at TIMESTAMP WITH TIME ZONE,
+        escort_contact_ids UUID[] DEFAULT '{}',
+        notify_on_delay BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        arrived_at TIMESTAMP WITH TIME ZONE
+      );
+      CREATE INDEX IF NOT EXISTS idx_safe_trips_user ON safe_trips(user_id);
+      CREATE INDEX IF NOT EXISTS idx_safe_trips_status ON safe_trips(status) WHERE status = 'active';
+
+      CREATE TABLE IF NOT EXISTS sos_live_status (
+        incident_id UUID PRIMARY KEY REFERENCES incidents(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        lat DOUBLE PRECISION NOT NULL,
+        lng DOUBLE PRECISION NOT NULL,
+        battery_pct SMALLINT,
+        accuracy_m REAL,
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_sos_live_expires ON sos_live_status(expires_at);
+
+      CREATE TABLE IF NOT EXISTS trust_zones (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        label VARCHAR(100) NOT NULL,
+        zone_type VARCHAR(30) NOT NULL CHECK (zone_type IN ('home','work','school','custom')),
+        lat DOUBLE PRECISION NOT NULL,
+        lng DOUBLE PRECISION NOT NULL,
+        radius_m INTEGER NOT NULL DEFAULT 200,
+        notify_contacts BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_trust_zones_user ON trust_zones(user_id);
+
+      CREATE TABLE IF NOT EXISTS neighborhood_subscriptions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        quartier VARCHAR(120) NOT NULL,
+        digest_hour SMALLINT DEFAULT 18,
+        last_digest_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(user_id, quartier)
+      );
+      CREATE INDEX IF NOT EXISTS idx_neighborhood_subs_quartier ON neighborhood_subscriptions(quartier);
+
+      CREATE TABLE IF NOT EXISTS incident_evidence (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        incident_id UUID NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        media_type VARCHAR(20) NOT NULL CHECK (media_type IN ('photo','audio')),
+        storage_key TEXT NOT NULL,
+        consent_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        retention_until TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_incident_evidence_incident ON incident_evidence(incident_id);
+      CREATE INDEX IF NOT EXISTS idx_incident_evidence_retention ON incident_evidence(retention_until);
+
+      CREATE TABLE IF NOT EXISTS incident_chat_messages (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        incident_id UUID NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        body TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_incident_chat_incident
+        ON incident_chat_messages(incident_id, created_at ASC);
+
+      CREATE TABLE IF NOT EXISTS leader_sectors (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        leader_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(120) NOT NULL,
+        polygon GEOGRAPHY(Polygon, 4326),
+        center_lat DOUBLE PRECISION,
+        center_lng DOUBLE PRECISION,
+        radius_m INTEGER DEFAULT 2000,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_leader_sectors_leader ON leader_sectors(leader_id);
+      CREATE INDEX IF NOT EXISTS idx_leader_sectors_poly ON leader_sectors USING GIST (polygon);
+
+      CREATE TABLE IF NOT EXISTS contact_backups (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        ciphertext TEXT NOT NULL,
+        nonce TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        version SMALLINT DEFAULT 1,
+        contact_count INTEGER DEFAULT 0,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS partner_webhook_deliveries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        partner_id UUID NOT NULL REFERENCES partner_api_keys(id) ON DELETE CASCADE,
+        event_type VARCHAR(40) NOT NULL,
+        payload JSONB NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        response_code INTEGER,
+        attempts INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        delivered_at TIMESTAMP WITH TIME ZONE
+      );
+      CREATE INDEX IF NOT EXISTS idx_partner_webhook_partner
+        ON partner_webhook_deliveries(partner_id, created_at DESC);
+    `);
+
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;
     if (adminPhone) {
       const normalized = adminPhone.trim();

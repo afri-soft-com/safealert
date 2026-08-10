@@ -20,7 +20,7 @@ class LocalDatabase {
     final path = join(dbPath, 'safealert_cache.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE cache (
@@ -30,8 +30,9 @@ class LocalDatabase {
           )
         ''');
         await db.execute('''
-          CREATE TABLE pending_sos (
+          CREATE TABLE pending_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
             payload TEXT NOT NULL,
             created_at INTEGER NOT NULL,
             attempts INTEGER NOT NULL DEFAULT 0
@@ -48,6 +49,29 @@ class LocalDatabase {
               attempts INTEGER NOT NULL DEFAULT 0
             )
           ''');
+        }
+        if (oldVersion < 3) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS pending_queue (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              kind TEXT NOT NULL,
+              payload TEXT NOT NULL,
+              created_at INTEGER NOT NULL,
+              attempts INTEGER NOT NULL DEFAULT 0
+            )
+          ''');
+          // Migrate legacy pending_sos → pending_queue
+          try {
+            final rows = await db.query('pending_sos');
+            for (final r in rows) {
+              await db.insert('pending_queue', {
+                'kind': 'sos',
+                'payload': r['payload'],
+                'created_at': r['created_at'],
+                'attempts': r['attempts'] ?? 0,
+              });
+            }
+          } catch (_) {}
         }
       },
     );
@@ -89,8 +113,13 @@ class LocalDatabase {
   }
 
   Future<int> enqueuePendingSos(Map<String, dynamic> payload) async {
+    return enqueue('sos', payload);
+  }
+
+  Future<int> enqueue(String kind, Map<String, dynamic> payload) async {
     final db = await database;
-    return db.insert('pending_sos', {
+    return db.insert('pending_queue', {
+      'kind': kind,
       'payload': jsonEncode(payload),
       'created_at': DateTime.now().millisecondsSinceEpoch,
       'attempts': 0,
@@ -98,11 +127,19 @@ class LocalDatabase {
   }
 
   Future<List<Map<String, dynamic>>> listPendingSos() async {
+    final all = await listPending(kind: 'sos');
+    return all;
+  }
+
+  Future<List<Map<String, dynamic>>> listPending({String? kind}) async {
     final db = await database;
-    final rows = await db.query('pending_sos', orderBy: 'created_at ASC');
+    final rows = kind == null
+        ? await db.query('pending_queue', orderBy: 'created_at ASC')
+        : await db.query('pending_queue', where: 'kind = ?', whereArgs: [kind], orderBy: 'created_at ASC');
     return rows
         .map((r) => {
               'id': r['id'],
+              'kind': r['kind'],
               'payload': jsonDecode(r['payload'] as String) as Map<String, dynamic>,
               'attempts': r['attempts'],
             })
@@ -110,12 +147,20 @@ class LocalDatabase {
   }
 
   Future<void> removePendingSos(int id) async {
+    await removePending(id);
+  }
+
+  Future<void> removePending(int id) async {
     final db = await database;
-    await db.delete('pending_sos', where: 'id = ?', whereArgs: [id]);
+    await db.delete('pending_queue', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> bumpPendingSosAttempt(int id) async {
+    await bumpPendingAttempt(id);
+  }
+
+  Future<void> bumpPendingAttempt(int id) async {
     final db = await database;
-    await db.rawUpdate('UPDATE pending_sos SET attempts = attempts + 1 WHERE id = ?', [id]);
+    await db.rawUpdate('UPDATE pending_queue SET attempts = attempts + 1 WHERE id = ?', [id]);
   }
 }

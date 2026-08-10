@@ -1,6 +1,8 @@
 const { pool } = require("../config/database");
 const { cacheGet, cacheSet, invalidateActiveAlerts } = require("../config/redis");
 const { resolveZoneName } = require("../utils/incidentZone");
+const { deliverEvent } = require("../services/partnerWebhooks");
+const { witnessEvidence, reliabilityScore } = require("../config/features");
 
 const buildIncidentsCacheKey = (hours, status) =>
   `map:incidents:h${hours}:s${status || "all"}`;
@@ -24,6 +26,7 @@ const getIncidents = async (req, res) => {
     let query = `
       SELECT i.id, i.incident_type, i.description, i.lat, i.lng,
              i.severity, i.status, i.verified_by, i.is_anonymous, i.created_at,
+             COALESCE(i.reliability_score, 50) as reliability_score,
              CASE WHEN i.is_anonymous THEN 'Anonyme' ELSE u.pseudo END as reporter
       FROM incidents i
       JOIN users u ON i.user_id = u.id
@@ -73,20 +76,63 @@ const getIncidents = async (req, res) => {
 };
 
 const reportIncident = async (req, res) => {
-  const { lat, lng, incident_type, description, is_anonymous } = req.body;
+  const { lat, lng, incident_type, description, is_anonymous, evidence, consent_evidence } = req.body;
   if (!lat || !lng || !incident_type) {
     return res.status(400).json({ error: "Position et type d'incident requis" });
   }
   try {
+    // Anti-spam: max 5 reports / hour
+    const recent = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM incidents
+       WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'
+         AND severity = 'vigilance'`,
+      [req.userId]
+    );
+    if (recent.rows[0].c >= 5) {
+      return res.status(429).json({ error: "Trop de signalements — réessayez plus tard" });
+    }
+
+    const userScore = await pool.query(
+      `SELECT COALESCE(reliability_score, 50) AS score FROM users WHERE id = $1`,
+      [req.userId]
+    );
+    const baseScore = reliabilityScore() ? userScore.rows[0].score : 50;
+
     const zoneName = await resolveZoneName(lat, lng);
     const result = await pool.query(
-      `INSERT INTO incidents (user_id, incident_type, description, lat, lng, location, severity, is_anonymous, zone_name)
-       VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326), 'vigilance', $8, $9)
+      `INSERT INTO incidents (user_id, incident_type, description, lat, lng, location, severity, is_anonymous, zone_name, reliability_score)
+       VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326), 'vigilance', $8, $9, $10)
        RETURNING *`,
-      [req.userId, incident_type, description, lat, lng, lng, lat, is_anonymous || false, zoneName]
+      [req.userId, incident_type, description, lat, lng, lng, lat, is_anonymous || false, zoneName, baseScore]
     );
+    const incident = result.rows[0];
+
+    // Optional witness evidence (base64 data URL or storage key) — short retention 7 days
+    if (witnessEvidence() && evidence && consent_evidence === true) {
+      const items = Array.isArray(evidence) ? evidence : [evidence];
+      for (const item of items.slice(0, 3)) {
+        const mediaType = item.media_type === "audio" ? "audio" : "photo";
+        const key = item.storage_key || item.data_url || null;
+        if (!key || String(key).length > 2_000_000) continue;
+        await pool.query(
+          `INSERT INTO incident_evidence (incident_id, user_id, media_type, storage_key, retention_until)
+           VALUES ($1, $2, $3, $4, NOW() + INTERVAL '7 days')`,
+          [incident.id, req.userId, mediaType, String(key)]
+        );
+      }
+    }
+
     await invalidateActiveAlerts();
-    return res.status(201).json(result.rows[0]);
+    deliverEvent("incident", {
+      id: incident.id,
+      incident_type: incident.incident_type,
+      lat: incident.lat,
+      lng: incident.lng,
+      zone_name: incident.zone_name,
+      reliability_score: incident.reliability_score,
+    }).catch(() => {});
+
+    return res.status(201).json(incident);
   } catch (err) {
     console.error("reportIncident error:", err);
     return res.status(500).json({ error: "Erreur serveur" });
@@ -120,9 +166,28 @@ const verifyIncident = async (req, res) => {
       newSeverity = "danger";
     }
 
+    // Reliability score: +8 per confirmation, cap 100; bump reporter score
+    let relScore = null;
+    if (reliabilityScore()) {
+      const cur = await pool.query(
+        `SELECT reliability_score, user_id FROM incidents WHERE id = $1`,
+        [id]
+      );
+      relScore = Math.min(100, (cur.rows[0].reliability_score || 50) + 8);
+      await pool.query(
+        `UPDATE users SET reliability_score = LEAST(100, COALESCE(reliability_score, 50) + 2)
+         WHERE id = $1`,
+        [cur.rows[0].user_id]
+      );
+    }
+
     const result = await pool.query(
-      `UPDATE incidents SET verified_by = $1, status = $2, severity = $3 WHERE id = $4 RETURNING *`,
-      [newCount, newStatus, newSeverity, id]
+      `UPDATE incidents SET verified_by = $1, status = $2, severity = $3
+         ${relScore != null ? ", reliability_score = $5" : ""}
+       WHERE id = $4 RETURNING *`,
+      relScore != null
+        ? [newCount, newStatus, newSeverity, id, relScore]
+        : [newCount, newStatus, newSeverity, id]
     );
     await invalidateActiveAlerts();
     return res.json(result.rows[0]);

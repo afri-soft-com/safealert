@@ -1,3 +1,4 @@
+import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/foundation.dart';
 import '../services/api_service.dart';
 import '../services/local_database.dart';
@@ -66,15 +67,50 @@ class IncidentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> reportIncident(double lat, double lng, String type, {String? description, bool anonymous = false}) async {
+  Future<void> reportIncident(
+    double lat,
+    double lng,
+    String type, {
+    String? description,
+    bool anonymous = false,
+    dynamic evidence,
+    bool consentEvidence = false,
+  }) async {
+    final payload = {
+      'lat': lat,
+      'lng': lng,
+      'incident_type': type,
+      if (description != null) 'description': description,
+      'is_anonymous': anonymous,
+      if (evidence != null && consentEvidence) ...{
+        'evidence': evidence is List ? evidence : [evidence],
+        'consent_evidence': true,
+      },
+    };
     try {
-      await _api.post('/map/incidents', {
-        'lat': lat, 'lng': lng,
-        'incident_type': type,
-        if (description != null) 'description': description,
-        'is_anonymous': anonymous,
-      });
+      await _api.post('/map/incidents', payload);
       await fetchIncidents();
+    } catch (_) {
+      await _cache.enqueue('report', payload);
+      _isOffline = true;
+      notifyListeners();
+    }
+  }
+
+  Future<void> publishLiveStatus(String incidentId) async {
+    try {
+      final pos = await LocationService().getCurrentPosition();
+      if (pos == null) return;
+      int? battery;
+      try {
+        battery = await Battery().batteryLevel;
+      } catch (_) {}
+      await _api.post('/sos/live', {
+        'incident_id': incidentId,
+        'lat': pos.latitude,
+        'lng': pos.longitude,
+        if (battery != null) 'battery_pct': battery,
+      });
     } catch (_) {}
   }
 
@@ -140,18 +176,34 @@ class IncidentProvider extends ChangeNotifier {
   }
 
   /// Renvoie les SOS en file locale (après perte réseau).
-  Future<int> flushPendingSos() async {
-    final pending = await _cache.listPendingSos();
+  Future<int> flushPendingSos() async => flushOfflineQueue(kinds: const ['sos']);
+
+  /// Flush SOS + signalements + messages groupe hors-ligne.
+  Future<int> flushOfflineQueue({List<String>? kinds}) async {
+    final pending = await _cache.listPending();
     var sent = 0;
     for (final item in pending) {
+      final kind = item['kind'] as String;
+      if (kinds != null && !kinds.contains(kind)) continue;
       final id = item['id'] as int;
       final payload = item['payload'] as Map<String, dynamic>;
       try {
-        await _api.post('/sos/trigger', payload);
-        await _cache.removePendingSos(id);
+        if (kind == 'sos') {
+          await _api.post('/sos/trigger', payload);
+        } else if (kind == 'report') {
+          await _api.post('/map/incidents', payload);
+        } else if (kind == 'group_message') {
+          final groupId = payload['group_id'];
+          await _api.post('/groups/$groupId/messages', {
+            'content': payload['content'],
+          });
+        } else {
+          continue;
+        }
+        await _cache.removePending(id);
         sent++;
       } catch (_) {
-        await _cache.bumpPendingSosAttempt(id);
+        await _cache.bumpPendingAttempt(id);
         break;
       }
     }

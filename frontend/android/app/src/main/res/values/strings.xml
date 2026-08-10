@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SafeAlert</string>
+    <string name="sos_widget_description">Déclenche un SOS discret SafeAlert depuis l\'écran d\'accueil</string>
+</resources>

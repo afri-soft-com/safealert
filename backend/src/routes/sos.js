@@ -2,6 +2,7 @@ const { Router } = require("express");
 const { body } = require("express-validator");
 const { authenticate } = require("../middleware/auth");
 const ctrl = require("../controllers/sosController");
+const live = require("../controllers/liveStatusController");
 
 const router = Router();
 
@@ -13,5 +14,9 @@ router.post("/trigger", authenticate, [
 router.post("/:id/cancel", authenticate, ctrl.cancelSOS);
 router.post("/cancel", authenticate, ctrl.cancelLatestSOS);
 router.get("/my", authenticate, ctrl.getMyAlerts);
+
+/** Live status during active SOS (also under /api/live-status) */
+router.post("/live", authenticate, live.upsertLiveStatus);
+router.get("/live/:incidentId", authenticate, live.getLiveStatus);
 
 module.exports = router;

@@ -1,7 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:record/record.dart';
 import '../theme.dart';
 import '../providers/incident_provider.dart';
 import '../services/location_service.dart';
@@ -89,6 +94,12 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  Future<String?> _fileToDataUrl(File file, String mime) async {
+    final bytes = await file.readAsBytes();
+    if (bytes.length > 1_400_000) return null;
+    return 'data:$mime;base64,${base64Encode(bytes)}';
+  }
+
   void _showReportSheet() async {
     if (widget.isGuest) {
       _requireLogin('signaler un incident');
@@ -98,103 +109,230 @@ class _MapScreenState extends State<MapScreen> {
     final pos = await LocationService().getCurrentPosition();
     final lat = pos?.latitude ?? _center.latitude;
     final lng = pos?.longitude ?? _center.longitude;
+    final picker = ImagePicker();
+    final recorder = AudioRecorder();
 
     if (!mounted) return;
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
         String selectedType = 'agression';
         bool anonymous = false;
+        bool consentEvidence = false;
+        String? photoPath;
+        String? audioPath;
+        bool recording = false;
         return StatefulBuilder(
           builder: (ctx, setSheetState) => Padding(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(ctx).viewInsets.bottom,
               left: 20, right: 20, top: 20,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Signaler un incident', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
-                const SizedBox(height: 6),
-                Text('Position : ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}',
-                    style: const TextStyle(fontSize: 10, color: AppColors.gris)),
-                const SizedBox(height: 14),
-                const Text('Type d\'incident', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.gris)),
-                const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  value: selectedType,
-                  items: ['agression', 'vol', 'suspect', 'incendie', 'autre'].map((t) =>
-                    DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13))),
-                  ).toList(),
-                  onChanged: (v) => setSheetState(() => selectedType = v ?? 'agression'),
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    isDense: true,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Signaler un incident', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
+                  const SizedBox(height: 6),
+                  Text('Position : ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}',
+                      style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                  const SizedBox(height: 14),
+                  const Text('Type d\'incident', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.gris)),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: selectedType,
+                    items: ['agression', 'vol', 'suspect', 'incendie', 'autre'].map((t) =>
+                      DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13))),
+                    ).toList(),
+                    onChanged: (v) => setSheetState(() => selectedType = v ?? 'agression'),
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      isDense: true,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: descCtrl,
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    hintText: 'Description (optionnelle)',
-                    hintStyle: const TextStyle(fontSize: 12, color: AppColors.gris),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    contentPadding: const EdgeInsets.all(12),
-                    isDense: true,
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: descCtrl,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Description (optionnelle)',
+                      hintStyle: const TextStyle(fontSize: 12, color: AppColors.gris),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.all(12),
+                      isDense: true,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    SizedBox(
-                      height: 24,
-                      child: Checkbox(
-                        value: anonymous,
-                        onChanged: (v) => setSheetState(() => anonymous = v ?? false),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      SizedBox(
+                        height: 24,
+                        child: Checkbox(
+                          value: anonymous,
+                          onChanged: (v) => setSheetState(() => anonymous = v ?? false),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    const Expanded(
-                      child: Text('Signaler anonymement', style: TextStyle(fontSize: 11, color: AppColors.gris)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      await context.read<IncidentProvider>().reportIncident(
-                        lat, lng, selectedType,
-                        description: descCtrl.text.isEmpty ? null : descCtrl.text,
-                        anonymous: anonymous,
-                      );
-                      await _loadIncidents();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.rouge,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: const Text('ENVOYER LE SIGNALEMENT', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                      const SizedBox(width: 6),
+                      const Expanded(
+                        child: Text('Signaler anonymement', style: TextStyle(fontSize: 11, color: AppColors.gris)),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 20),
-              ],
+                  const SizedBox(height: 10),
+                  const Text('Preuves témoin (optionnel)',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final shot = await picker.pickImage(
+                              source: ImageSource.camera,
+                              maxWidth: 1280,
+                              imageQuality: 70,
+                            );
+                            if (shot != null) setSheetState(() => photoPath = shot.path);
+                          },
+                          icon: const Icon(Icons.photo_camera, size: 16),
+                          label: Text(photoPath == null ? 'Photo' : 'Photo OK', style: const TextStyle(fontSize: 11)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final gallery = await picker.pickImage(
+                              source: ImageSource.gallery,
+                              maxWidth: 1280,
+                              imageQuality: 70,
+                            );
+                            if (gallery != null) setSheetState(() => photoPath = gallery.path);
+                          },
+                          icon: const Icon(Icons.photo_library, size: 16),
+                          label: const Text('Galerie', style: TextStyle(fontSize: 11)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      if (recording) {
+                        final path = await recorder.stop();
+                        setSheetState(() {
+                          recording = false;
+                          audioPath = path ?? audioPath;
+                        });
+                        return;
+                      }
+                      if (!await recorder.hasPermission()) {
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(content: Text('Permission micro refusée')),
+                          );
+                        }
+                        return;
+                      }
+                      final dir = await getTemporaryDirectory();
+                      final path = '${dir.path}/evidence_${DateTime.now().millisecondsSinceEpoch}.m4a';
+                      await recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+                      setSheetState(() {
+                        recording = true;
+                        audioPath = path;
+                      });
+                    },
+                    icon: Icon(recording ? Icons.stop : Icons.mic, size: 16),
+                    label: Text(
+                      recording ? 'Arrêter l\'audio' : (audioPath == null ? 'Enregistrer audio' : 'Audio OK — réenregistrer'),
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        height: 24,
+                        child: Checkbox(
+                          value: consentEvidence,
+                          onChanged: (v) => setSheetState(() => consentEvidence = v ?? false),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Expanded(
+                        child: Text(
+                          'J\'accepte l\'envoi de ces preuves (rétention 7 jours, usage sécurité citoyenne).',
+                          style: TextStyle(fontSize: 11, color: AppColors.gris),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        if ((photoPath != null || audioPath != null) && !consentEvidence) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(content: Text('Cochez le consentement pour envoyer des preuves')),
+                          );
+                          return;
+                        }
+                        Navigator.pop(ctx);
+                        final evidence = <Map<String, dynamic>>[];
+                        if (consentEvidence && photoPath != null) {
+                          final url = await _fileToDataUrl(File(photoPath!), 'image/jpeg');
+                          if (url != null) {
+                            evidence.add({'media_type': 'photo', 'data_url': url});
+                          }
+                        }
+                        if (consentEvidence && audioPath != null && File(audioPath!).existsSync()) {
+                          final url = await _fileToDataUrl(File(audioPath!), 'audio/mp4');
+                          if (url != null) {
+                            evidence.add({'media_type': 'audio', 'data_url': url});
+                          }
+                        }
+                        await context.read<IncidentProvider>().reportIncident(
+                          lat, lng, selectedType,
+                          description: descCtrl.text.isEmpty ? null : descCtrl.text,
+                          anonymous: anonymous,
+                          evidence: evidence.isEmpty ? null : evidence,
+                          consentEvidence: consentEvidence && evidence.isNotEmpty,
+                        );
+                        await recorder.dispose();
+                        await _loadIncidents();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.rouge,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('ENVOYER LE SIGNALEMENT', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
           ),
         );
       },
-    );
+    ).whenComplete(() async {
+      try {
+        if (await recorder.isRecording()) await recorder.stop();
+      } catch (_) {}
+      await recorder.dispose();
+    });
   }
 
   void _showVerifySheet(dynamic id) {

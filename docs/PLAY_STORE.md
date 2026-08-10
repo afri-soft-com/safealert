@@ -64,7 +64,10 @@ Ou télécharger la release GitHub **`aab-main`** (CI, si `frontend/**` a chang�
 ### E. Avant soumission
 
 - [ ] API Render live : `curl https://safealert-api.onrender.com/health/ready`
-- [ ] OTP SMS réel (SerdiPay / Twilio) configuré
+- [ ] OTP SMS réel (SerdiPay / Twilio) configuré — voir `docs/EXTERNAL_APIS.md`
+- [ ] FCM prod : `google-services.json` + vars `FCM_*` backend — voir `docs/FIREBASE_SETUP.md`
+- [ ] Migrations DB à jour (`npm run migrate`) pour les nouvelles tables (trajets, check-in, etc.)
+- [ ] Feature flags revue (`docs/FEATURES.md`) — `FEATURE_PREMIUM` off par défaut
 - [ ] Compte `platform_admin` pour admin-web
 - [ ] Incrémenter `version` dans `pubspec.yaml` (`1.0.0+1` → `1.0.1+2`) à chaque upload
 

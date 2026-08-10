@@ -2,8 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
+import '../l10n/app_localizations.dart';
 import '../widgets/status_bar.dart';
 import '../providers/incident_provider.dart';
+import '../providers/checkin_provider.dart';
 
 class SOSScreen extends StatefulWidget {
   final VoidCallback onBack;
@@ -18,7 +20,11 @@ class _SOSScreenState extends State<SOSScreen> {
   bool _completed = false;
   bool _failed = false;
   bool _cancelling = false;
+  bool _checkingIn = false;
+  String? _incidentId;
+  String? _statusMsg;
   Timer? _progressTimer;
+  Timer? _liveTimer;
   static const _steps = [
     _StepData('📍', 'GPS localisé', AppColors.vert),
     _StepData('📲', 'Contacts alertés', AppColors.vert),
@@ -29,7 +35,18 @@ class _SOSScreenState extends State<SOSScreen> {
   @override
   void dispose() {
     _progressTimer?.cancel();
+    _liveTimer?.cancel();
     super.dispose();
+  }
+
+  void _startLiveStatus() {
+    _liveTimer?.cancel();
+    if (_incidentId == null) return;
+    _liveTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (!mounted || _incidentId == null) return;
+      context.read<IncidentProvider>().publishLiveStatus(_incidentId!);
+    });
+    context.read<IncidentProvider>().publishLiveStatus(_incidentId!);
   }
 
   Future<void> _sendSOS() async {
@@ -39,6 +56,8 @@ class _SOSScreenState extends State<SOSScreen> {
       _step = 0;
       _failed = false;
       _completed = false;
+      _statusMsg = null;
+      _incidentId = null;
     });
 
     final result = await context.read<IncidentProvider>().triggerSOS(
@@ -51,13 +70,19 @@ class _SOSScreenState extends State<SOSScreen> {
       return;
     }
 
+    final incident = result['incident'] as Map<String, dynamic>?;
+    _incidentId = incident?['id'] as String?;
+
     int i = 0;
     _progressTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {
       i++;
       if (mounted) setState(() => _step = i);
       if (i >= 4) {
         timer.cancel();
-        if (mounted) setState(() => _completed = true);
+        if (mounted) {
+          setState(() => _completed = true);
+          _startLiveStatus();
+        }
       }
     });
   }
@@ -172,21 +197,76 @@ class _SOSScreenState extends State<SOSScreen> {
                       ),
                     );
                   }),
+                  if (_statusMsg != null) ...[
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.vertClair,
+                        border: Border.all(color: AppColors.vert),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(_statusMsg!, style: const TextStyle(fontSize: 12, color: AppColors.vert)),
+                    ),
+                  ],
                   if (_completed && !_cancelling) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _checkingIn
+                            ? null
+                            : () async {
+                                setState(() => _checkingIn = true);
+                                final ok = await context.read<CheckInProvider>().imSafe(incidentId: _incidentId);
+                                _liveTimer?.cancel();
+                                if (mounted) {
+                                  setState(() {
+                                    _checkingIn = false;
+                                    if (ok) {
+                                      _statusMsg = AppLocalizations.of(context).checkInSent;
+                                      _completed = false;
+                                      _step = 0;
+                                      _incidentId = null;
+                                    }
+                                  });
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.vert,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: _checkingIn
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.verified_user, size: 18),
+                        label: Text(AppLocalizations.of(context).imSafe,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () async {
                           setState(() => _cancelling = true);
                           try {
-                            await context.read<IncidentProvider>().cancelSOS();
-                          } catch (_) {}
-                          if (mounted) {
-                            setState(() {
-                              _cancelling = false;
-                              _step = 0;
-                              _completed = false;
-                            });
+                            final ok = await context.read<IncidentProvider>().cancelSOS();
+                            _liveTimer?.cancel();
+                            if (mounted) {
+                              setState(() {
+                                _cancelling = false;
+                                _step = 0;
+                                _completed = false;
+                                _incidentId = null;
+                                _statusMsg = ok
+                                    ? AppLocalizations.of(context).falseAlarm
+                                    : 'Annulation impossible';
+                              });
+                            }
+                          } catch (_) {
+                            if (mounted) setState(() => _cancelling = false);
                           }
                         },
                         style: ElevatedButton.styleFrom(
@@ -198,7 +278,7 @@ class _SOSScreenState extends State<SOSScreen> {
                         icon: _cancelling
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                             : const Icon(Icons.cancel, size: 18),
-                        label: Text(_cancelling ? 'Annulation...' : 'Annuler l\'alerte',
+                        label: Text(_cancelling ? 'Annulation...' : 'Fausse alerte — annuler',
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                       ),
                     ),
@@ -211,14 +291,15 @@ class _SOSScreenState extends State<SOSScreen> {
                       color: AppColors.grisClair,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Column(
+                    child: const Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text('MODE DISCRET', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
                         SizedBox(height: 6),
                         Text('Pour déclencher sans afficher l\'app :', style: TextStyle(fontSize: 11, color: AppColors.gris)),
                         SizedBox(height: 4),
-                        Text('Appuyer 3× sur le bouton Volume ↓', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.rouge)),
+                        Text('• 3× Volume ↓  ·  Secouer le téléphone  ·  Raccourci SOS',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.rouge)),
                       ],
                     ),
                   ),

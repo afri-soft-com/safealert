@@ -23,6 +23,7 @@ const authenticatePartner = async (req, res, next) => {
     }
 
     req.partner = partner;
+    req.partnerId = partner.id;
     next();
   } catch (err) {
     console.error("partnerAuth error:", err);

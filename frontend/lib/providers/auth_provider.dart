@@ -8,7 +8,8 @@ import '../services/socket_service.dart';
 
 /// Routes nécessitant une authentification (US-14 mode invité).
 const kAuthRequiredScreens = {
-  'home', 'sos', 'contacts', 'dashboard', 'settings', 'leader', 'groups', 'history', 'privacy', 'admin', 'help',
+  'home', 'sos', 'contacts', 'dashboard', 'settings', 'leader', 'groups',
+  'history', 'privacy', 'admin', 'help', 'trip', 'escort_map', 'trust_zones', 'neighborhood',
 };
 
 class AuthProvider extends ChangeNotifier {
@@ -167,7 +168,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _startRealtimeServices() {
-    SocketService().connect();
+    SocketService().connect(userId: _user?['id']?.toString());
     LocationService().startPeriodicUpdates();
   }
 

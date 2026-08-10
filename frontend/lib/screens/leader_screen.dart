@@ -131,6 +131,45 @@ class _LeaderScreenState extends State<LeaderScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        try {
+                          final api = ApiService();
+                          final token = api.token;
+                          if (token == null) return;
+                          final url = '${ApiService.baseUrl}/ops/reports/sector?format=csv&days=7';
+                          final res = await http.get(Uri.parse(url), headers: {'Authorization': 'Bearer $token'});
+                          if (res.statusCode != 200) throw Exception('Erreur');
+                          final dir = await getApplicationDocumentsDirectory();
+                          final file = File('${dir.path}/secteur-7j.csv');
+                          await file.writeAsBytes(res.bodyBytes);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('CSV : ${file.path}', style: const TextStyle(fontSize: 11))),
+                            );
+                          }
+                        } catch (_) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Export CSV impossible'), backgroundColor: AppColors.rouge),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.table_chart, size: 16),
+                      label: const Text('📊  Export CSV secteur (7 jours)',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.vert,
+                        side: const BorderSide(color: AppColors.vert),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   const Text('INCIDENTS RÉCENTS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
                   const SizedBox(height: 8),
@@ -277,9 +316,35 @@ class _LeaderScreenState extends State<LeaderScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () => p.resolveIncident(id),
+                  onPressed: () async {
+                    final ctrl = TextEditingController();
+                    final reason = await showDialog<String>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Clôturer avec motif', style: TextStyle(fontSize: 15)),
+                        content: TextField(
+                          controller: ctrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Motif',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 2,
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                            child: const Text('Clôturer'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (reason != null && reason.length >= 3) {
+                      await p.closeWithReason(id, reason);
+                    }
+                  },
                   icon: const Icon(Icons.check_circle, size: 16),
-                  label: const Text('Marquer comme résolu',
+                  label: const Text('Clôturer (motif requis)',
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.bleuFonce,
@@ -290,6 +355,52 @@ class _LeaderScreenState extends State<LeaderScreen> {
                 ),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: TextButton(
+              onPressed: () async {
+                final ctrl = TextEditingController();
+                final msgs = await p.fetchChat(id);
+                if (!mounted) return;
+                await showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Chat incident', style: TextStyle(fontSize: 15)),
+                    content: SizedBox(
+                      width: double.maxFinite,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            height: 160,
+                            child: ListView(
+                              children: msgs
+                                  .map((m) => Text('${m['pseudo']}: ${m['body']}',
+                                      style: const TextStyle(fontSize: 12)))
+                                  .toList(),
+                            ),
+                          ),
+                          TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Message')),
+                        ],
+                      ),
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fermer')),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (ctrl.text.trim().isEmpty) return;
+                          await p.postChat(id, ctrl.text.trim());
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        },
+                        child: const Text('Envoyer'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              child: const Text('💬 Chat ops', style: TextStyle(fontSize: 11)),
+            ),
+          ),
         ],
       ),
     );

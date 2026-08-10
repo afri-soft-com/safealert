@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
+import '../l10n/app_localizations.dart';
 import '../widgets/status_bar.dart';
 import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
+import '../providers/contacts_provider.dart';
 import '../services/api_service.dart';
-import '../screens/calculator_screen.dart';
+import '../services/contact_backup_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onBack;
@@ -13,7 +16,16 @@ class SettingsScreen extends StatefulWidget {
   final VoidCallback? onPrivacy;
   final VoidCallback? onHelp;
   final VoidCallback? onAdmin;
-  const SettingsScreen({super.key, required this.onBack, required this.onLogout, this.onPrivacy, this.onHelp, this.onAdmin});
+  final ValueChanged<String>? onNavigate;
+  const SettingsScreen({
+    super.key,
+    required this.onBack,
+    required this.onLogout,
+    this.onPrivacy,
+    this.onHelp,
+    this.onAdmin,
+    this.onNavigate,
+  });
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -74,6 +86,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _saving = true);
       await auth.updateProfile(sosNotifyGroups: value);
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _navTile(String label, String screen, IconData icon) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: Icon(icon, size: 20, color: AppColors.bleuFonce),
+      title: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      trailing: const Icon(Icons.chevron_right, size: 18),
+      onTap: () => widget.onNavigate?.call(screen),
+    );
+  }
+
+  Future<String?> _askPassphrase(String title) async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title, style: const TextStyle(fontSize: 15)),
+        content: TextField(
+          controller: ctrl,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Phrase secrète', border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (result == null || result.length < 6) return null;
+    return result;
+  }
+
+  Future<List<Map<String, dynamic>>> _contactsAsMaps() async {
+    try {
+      final list = context.read<ContactsProvider>().contacts;
+      return list.map((c) {
+        if (c is Map) return Map<String, dynamic>.from(c);
+        try {
+          return {
+            'name': (c as dynamic).name,
+            'phone': (c as dynamic).phone,
+          };
+        } catch (_) {
+          return <String, dynamic>{};
+        }
+      }).where((m) => m.isNotEmpty).toList();
+    } catch (_) {
+      return [];
     }
   }
 
@@ -302,6 +369,96 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 style: TextStyle(fontSize: 10, color: AppColors.gris, fontStyle: FontStyle.italic)),
                           ],
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.blanc,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFEEEEEE)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(AppLocalizations.of(context).language.toUpperCase(),
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.gris, letterSpacing: 1)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final code in ['fr', 'ln', 'sw', 'en'])
+                            ChoiceChip(
+                              label: Text({'fr': 'FR', 'ln': 'LN', 'sw': 'SW', 'en': 'EN'}[code]!),
+                              selected: context.watch<LocaleProvider>().locale.languageCode == code,
+                              onSelected: (_) => context.read<LocaleProvider>().setLocale(code),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.blanc,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFEEEEEE)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('SÉCURITÉ AVANCÉE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.gris, letterSpacing: 1)),
+                      const SizedBox(height: 8),
+                      _navTile(AppLocalizations.of(context).safeTrip, 'trip', Icons.route),
+                      _navTile(AppLocalizations.of(context).trustZones, 'trust_zones', Icons.home_work_outlined),
+                      _navTile(AppLocalizations.of(context).neighborhood, 'neighborhood', Icons.apartment),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final pass = await _askPassphrase('Phrase secrète (sauvegarde)');
+                          if (pass == null || !mounted) return;
+                          try {
+                            final list = await _contactsAsMaps();
+                            await ContactBackupService().backup(list, pass);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Contacts sauvegardés (chiffrés)')),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.cloud_upload_outlined, size: 16),
+                        label: const Text('Sauvegarder contacts (chiffré)', style: TextStyle(fontSize: 13)),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          final pass = await _askPassphrase('Phrase secrète (restauration)');
+                          if (pass == null || !mounted) return;
+                          try {
+                            final restored = await ContactBackupService().restore(pass);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(restored == null
+                                    ? 'Aucune sauvegarde'
+                                    : '${restored.length} contact(s) déchiffrés — réajoutez-les si besoin')),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                            }
+                          }
+                        },
+                        child: const Text('Restaurer contacts', style: TextStyle(fontSize: 12)),
                       ),
                     ],
                   ),

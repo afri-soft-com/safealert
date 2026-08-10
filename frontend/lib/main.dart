@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:quick_actions/quick_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'theme.dart';
+import 'l10n/app_localizations.dart';
 import 'providers/auth_provider.dart';
 import 'providers/incident_provider.dart';
 import 'providers/contacts_provider.dart';
@@ -11,6 +14,9 @@ import 'providers/leader_provider.dart';
 import 'providers/groups_provider.dart';
 import 'providers/history_provider.dart';
 import 'providers/admin_provider.dart';
+import 'providers/locale_provider.dart';
+import 'providers/trip_provider.dart';
+import 'providers/checkin_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -29,7 +35,12 @@ import 'screens/admin_screen.dart';
 import 'screens/privacy_screen.dart';
 import 'screens/calculator_screen.dart';
 import 'screens/help_manual_screen.dart';
+import 'screens/trip_screen.dart';
+import 'screens/escort_map_screen.dart';
+import 'screens/trust_zones_screen.dart';
+import 'screens/neighborhood_screen.dart';
 import 'services/volume_sos_service.dart';
+import 'services/shake_sos_service.dart';
 import 'services/fcm_service.dart';
 
 /// Onglets principaux de la barre de navigation inférieure.
@@ -48,6 +59,7 @@ class SafeAlertApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => LocaleProvider()..load()),
         ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuth()),
         ChangeNotifierProvider(create: (_) => IncidentProvider()),
         ChangeNotifierProvider(create: (_) => ContactsProvider()),
@@ -56,12 +68,26 @@ class SafeAlertApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => GroupsProvider()),
         ChangeNotifierProvider(create: (_) => HistoryProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
+        ChangeNotifierProvider(create: (_) => TripProvider()),
+        ChangeNotifierProvider(create: (_) => CheckInProvider()),
       ],
-      child: MaterialApp(
-        title: 'SafeAlert',
-        theme: AppTheme.light,
-        debugShowCheckedModeBanner: false,
-        home: const AppShell(),
+      child: Consumer<LocaleProvider>(
+        builder: (context, localeProv, _) {
+          return MaterialApp(
+            title: 'SafeAlert',
+            theme: AppTheme.light,
+            debugShowCheckedModeBanner: false,
+            locale: localeProv.locale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizationsDelegate(),
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: const AppShell(),
+          );
+        },
       ),
     );
   }
@@ -78,10 +104,19 @@ class _AppShellState extends State<AppShell> {
   final List<String> _navStack = ['splash'];
   bool _discreetLocked = false;
   bool _discreetChecked = false;
+  final QuickActions _quickActions = const QuickActions();
 
   String get _currentScreen => _navStack.last;
 
   bool get _canShowBackButton => _navStack.length > 1;
+
+  void _triggerSilentSos() {
+    if (!mounted) return;
+    if (context.read<AuthProvider>().isAuthenticated) {
+      context.read<IncidentProvider>().triggerSOS(0, 0, type: 'sos_discret');
+      _navigate('sos');
+    }
+  }
 
   @override
   void initState() {
@@ -89,17 +124,29 @@ class _AppShellState extends State<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _checkDiscreetMode();
       if (!mounted) return;
-      VolumeSOSService.init(() {
-        if (mounted && context.read<AuthProvider>().isAuthenticated) {
-          context.read<IncidentProvider>().triggerSOS(0, 0, type: 'sos_discret');
-        }
+
+      VolumeSOSService.init(_triggerSilentSos);
+      ShakeSOSService.init(_triggerSilentSos);
+
+      _quickActions.initialize((shortcutType) {
+        if (shortcutType == 'sos') _triggerSilentSos();
       });
-      // Sync SOS mis en file hors-ligne
+      _quickActions.setShortcutItems(const [
+        ShortcutItem(type: 'sos', localizedTitle: 'SOS SafeAlert', icon: 'ic_launcher'),
+      ]);
+
       final auth = context.read<AuthProvider>();
       if (auth.isAuthenticated) {
-        await context.read<IncidentProvider>().flushPendingSos();
+        await FCMService().uploadToken();
+        await context.read<IncidentProvider>().flushOfflineQueue();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    ShakeSOSService.dispose();
+    super.dispose();
   }
 
   Future<void> _checkDiscreetMode() async {
@@ -204,6 +251,8 @@ class _AppShellState extends State<AppShell> {
         screen = LoginScreen(
           onSuccess: () {
             auth.exitGuestMode();
+            FCMService().uploadToken();
+            context.read<IncidentProvider>().flushOfflineQueue();
             _navigate('home');
           },
           onBack: _navStack.length > 1 ? _goBack : () {
@@ -232,6 +281,14 @@ class _AppShellState extends State<AppShell> {
         screen = GroupsScreen(onNavigate: _navigate, onBack: _onBack);
       case 'leader':
         screen = LeaderScreen(onNavigate: _navigate, onBack: _onBack);
+      case 'trip':
+        screen = TripScreen(onBack: _goBack, onNavigate: _navigate);
+      case 'escort_map':
+        screen = EscortMapScreen(onBack: _goBack);
+      case 'trust_zones':
+        screen = TrustZonesScreen(onBack: _goBack);
+      case 'neighborhood':
+        screen = NeighborhoodScreen(onBack: _goBack);
       case 'help':
         screen = HelpManualScreen(onBack: _goBack);
       case 'settings':
@@ -239,6 +296,7 @@ class _AppShellState extends State<AppShell> {
           onBack: _goBack,
           onPrivacy: () => _navigate('privacy'),
           onHelp: () => _navigate('help'),
+          onNavigate: _navigate,
           onAdmin: auth.user?['role'] == 'platform_admin' ? () => _navigate('admin') : null,
           onLogout: () {
             auth.logout();
