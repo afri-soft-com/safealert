@@ -59,10 +59,11 @@ Ou télécharger la release GitHub **`aab-main`** (CI, si `frontend/**` a chang�
 2. **Fiche Play** : titre SafeAlert, descriptions, icône 512×512 (exporterer le logo), feature graphic 1024×500, 2–8 captures téléphone.
 3. **Politique de confidentialité** : URL HTTPS publique obligatoire.
 4. **Data safety** : localisation, téléphone, notifications (usage SOS).
-5. **Classement du contenu** + public cible (pas enfants si SOS adulte).
-6. **Internal testing** : uploader l’AAB → ajouter testeurs e-mail → lien de test.
-7. **Play App Signing** : accepter (Google gère la clé app ; vous gardez la clé d’upload).
-8. Après tests : **Closed / Open testing** puis **Production** (pays : RDC + autres).
+5. **Permissions photos/vidéos** : l’AAB ne doit **pas** déclarer `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` (preuves témoin via photo picker + CAMERA seulement). Si Play Console affiche encore « Photo and video permissions », choisir que l’accès large n’est **pas** requis / migrer vers le sélecteur, puis uploader un AAB sans ces permissions. Ne pas tenter une déclaration « core gallery » — SafeAlert n’est pas une app galerie.
+6. **Classement du contenu** + public cible (pas enfants si SOS adulte).
+7. **Internal testing** : uploader l’AAB → ajouter testeurs e-mail → lien de test.
+8. **Play App Signing** : accepter (Google gère la clé app ; vous gardez la clé d’upload).
+9. Après tests : **Closed / Open testing** puis **Production** (pays : RDC + autres).
 
 ### E. Avant soumission
 
