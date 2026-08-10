@@ -125,10 +125,14 @@ export const api = {
       body: JSON.stringify({ phone }),
     }),
 
-  verifyCode: (phone: string, code: string) =>
+  verifyCode: (phone: string, code: string, pseudo?: string) =>
     request<{ token: string; user: AuthUser }>("/auth/verify-code", {
       method: "POST",
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({
+        phone,
+        code,
+        ...(pseudo?.trim() ? { pseudo: pseudo.trim() } : {}),
+      }),
     }),
 
   getStats: () =>

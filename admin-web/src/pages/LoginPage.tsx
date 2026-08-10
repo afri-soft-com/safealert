@@ -1,13 +1,20 @@
 import { FormEvent, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { api } from "../api/client";
+import { ApiError, api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { userFacingError } from "../utils/userFacingError";
+
+function needsPseudo(err: unknown): boolean {
+  if (!(err instanceof ApiError) && !(err instanceof Error)) return false;
+  return /pseudo\s+requis/i.test(err.message);
+}
 
 export default function LoginPage() {
   const { isAuthenticated, ready, login } = useAuth();
   const [phone, setPhone] = useState("+243");
   const [code, setCode] = useState("");
+  const [pseudo, setPseudo] = useState("");
+  const [needPseudo, setNeedPseudo] = useState(false);
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -20,6 +27,8 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setDevHint("");
+    setNeedPseudo(false);
+    setPseudo("");
     setLoading(true);
     try {
       const res = await api.requestCode(phone.trim());
@@ -41,9 +50,14 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login(phone.trim(), code.trim());
+      await login(phone.trim(), code.trim(), needPseudo ? pseudo.trim() : undefined);
     } catch (err) {
-      setError(userFacingError(err, "Connexion impossible. Vérifiez le code."));
+      if (needsPseudo(err)) {
+        setNeedPseudo(true);
+        setError("Choisissez un pseudo pour créer votre compte administrateur, puis réessayez.");
+      } else {
+        setError(userFacingError(err, "Connexion impossible. Vérifiez le code."));
+      }
     } finally {
       setLoading(false);
     }
@@ -88,8 +102,29 @@ export default function LoginPage() {
                 required
               />
             </div>
+            {needPseudo && (
+              <div className="form-group">
+                <label htmlFor="pseudo">Pseudo</label>
+                <input
+                  id="pseudo"
+                  type="text"
+                  value={pseudo}
+                  onChange={(e) => setPseudo(e.target.value)}
+                  placeholder="Ex. AdminSafeAlert"
+                  autoComplete="nickname"
+                  maxLength={50}
+                  required
+                />
+                <p className="form-hint">Première connexion : un pseudo est requis pour créer le compte.</p>
+              </div>
+            )}
             {devHint && <p className="form-hint">{devHint}</p>}
-            <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={loading}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: "100%" }}
+              disabled={loading || (needPseudo && !pseudo.trim())}
+            >
               {loading ? "Vérification…" : "Se connecter"}
             </button>
             <button
@@ -99,6 +134,8 @@ export default function LoginPage() {
               onClick={() => {
                 setStep("phone");
                 setCode("");
+                setPseudo("");
+                setNeedPseudo(false);
                 setDevHint("");
               }}
             >

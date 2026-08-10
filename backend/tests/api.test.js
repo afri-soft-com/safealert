@@ -89,14 +89,31 @@ describe("Auth", () => {
     mockQuery.mockReset();
     mockQuery
       .mockResolvedValueOnce({ rows: [{ id: "otp1", code_hash: validOtpHash }] })
+      // SELECT user (not found)
       .mockResolvedValueOnce({ rows: [] })
+      // UPDATE otp used
       .mockResolvedValueOnce({ rows: [] })
+      // INSERT user
       .mockResolvedValueOnce({ rows: [{ id: "u1", phone: "+243811234567", pseudo: "Test", role: "citizen" }] });
     const res = await request(app)
       .post("/api/auth/verify-code")
       .send({ phone: "+243811234567", code: "123456", pseudo: "Test" });
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("token");
+  });
+
+  it("POST /api/auth/verify-code rejects missing pseudo without consuming OTP", async () => {
+    mockQuery.mockReset();
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "otp1", code_hash: validOtpHash }] })
+      .mockResolvedValueOnce({ rows: [] }); // SELECT user
+    const res = await request(app)
+      .post("/api/auth/verify-code")
+      .send({ phone: "+243811234567", code: "123456" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/pseudo requis/i);
+    // No UPDATE otp_codes when pseudo missing
+    expect(mockQuery).toHaveBeenCalledTimes(2);
   });
 
   it("POST /api/auth/verify-code rejects invalid OTP", async () => {

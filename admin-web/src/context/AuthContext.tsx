@@ -20,7 +20,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
   ready: boolean;
-  login: (phone: string, code: string) => Promise<void>;
+  login: (phone: string, code: string, pseudo?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -69,8 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(async (phone: string, code: string) => {
-    const { token, user: authUser } = await api.verifyCode(phone, code);
+  const login = useCallback(async (phone: string, code: string, pseudo?: string) => {
+    const { token, user: authUser } = await api.verifyCode(phone, code, pseudo);
     if (authUser.role !== "platform_admin") {
       clearSession();
       throw new Error("Accès réservé aux administrateurs plateforme");

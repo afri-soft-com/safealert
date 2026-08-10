@@ -133,19 +133,30 @@ const verifyCode = async (req, res) => {
       return res.status(401).json({ error: "Code invalide ou expiré" });
     }
 
-    await pool.query("UPDATE otp_codes SET used_at = NOW() WHERE id = $1", [otpRow.id]);
-
+    // Resolve user before consuming OTP so a missing pseudo can be retried
+    // with the same code (admin-web and mobile first-login flows).
     let user = await pool.query("SELECT * FROM users WHERE phone = $1", [phone]);
 
     if (user.rows.length === 0) {
-      if (!pseudo) return res.status(400).json({ error: "Pseudo requis pour créer un compte" });
+      if (!pseudo || !String(pseudo).trim()) {
+        return res.status(400).json({ error: "Pseudo requis pour créer un compte" });
+      }
+
+      const adminPhone = (process.env.PLATFORM_ADMIN_PHONE || "").trim();
+      const role =
+        adminPhone && phone === normalizePhone(adminPhone)
+          ? "platform_admin"
+          : "citizen";
+
+      await pool.query("UPDATE otp_codes SET used_at = NOW() WHERE id = $1", [otpRow.id]);
 
       const result = await pool.query(
-        "INSERT INTO users (phone, pseudo) VALUES ($1, $2) RETURNING *",
-        [phone, pseudo]
+        "INSERT INTO users (phone, pseudo, role) VALUES ($1, $2, $3) RETURNING *",
+        [phone, String(pseudo).trim(), role]
       );
       user = result.rows[0];
     } else {
+      await pool.query("UPDATE otp_codes SET used_at = NOW() WHERE id = $1", [otpRow.id]);
       user = user.rows[0];
     }
 
