@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Delete account — SafeAlert</title>
+  <style>
+    :root { --bg:#0b6e6e; --ink:#14201f; --muted:#4a5c5a; --card:#fff; --line:#d7e5e3; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #f3faf9, #eef6f5);
+      line-height: 1.6;
+    }
+    header {
+      background: linear-gradient(135deg, #0b6e6e, #063d3d);
+      color: #fff;
+      padding: 40px 20px;
+    }
+    .wrap, main { max-width: 720px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: 1.8rem; }
+    main {
+      background: var(--card);
+      margin: -20px auto 40px;
+      padding: 28px 22px 40px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      box-shadow: 0 16px 36px rgba(6,61,61,.08);
+    }
+    h2 { color: var(--bg); font-size: 1.15rem; margin-top: 1.6rem; }
+    p, li { color: var(--muted); }
+    a { color: var(--bg); }
+    .box {
+      background: #f4fbfa;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Delete your SafeAlert account</h1>
+      <p style="margin:0;opacity:.9">Request permanent deletion of your account and associated data</p>
+    </div>
+  </header>
+  <main>
+    <p>
+      You can delete your SafeAlert account and related personal data at any time.
+      Deletion removes your profile and associated account data from our production systems,
+      subject to short technical retention needed for security and legal compliance.
+    </p>
+
+    <h2>Option 1 — In the app (recommended)</h2>
+    <ol>
+      <li>Open <strong>SafeAlert</strong> and sign in.</li>
+      <li>Go to <strong>Settings</strong>.</li>
+      <li>Choose <strong>Delete account</strong> (or equivalent) and confirm.</li>
+    </ol>
+
+    <h2>Option 2 — Web request</h2>
+    <p>If you cannot access the app, email us from the phone number linked to your account:</p>
+    <div class="box">
+      <p style="margin:0"><strong>To:</strong> <a href="mailto:celestinkas@gmail.com?subject=SafeAlert%20account%20deletion%20request">celestinkas@gmail.com</a></p>
+      <p style="margin:.6rem 0 0"><strong>Subject:</strong> SafeAlert account deletion request</p>
+      <p style="margin:.6rem 0 0"><strong>Include:</strong> your SafeAlert phone number (E.164, e.g. +243…) and a short confirmation that you want the account deleted.</p>
+    </div>
+    <p>We aim to process web deletion requests within <strong>30 days</strong>.</p>
+
+    <h2>What is deleted</h2>
+    <ul>
+      <li>Account profile (phone, pseudo, role settings)</li>
+      <li>Authentication / session data tied to your account</li>
+      <li>Personal settings (e.g. FCM token, presence preferences)</li>
+    </ul>
+    <p>
+      Some safety records may be anonymized or retained in limited form where required
+      for security, abuse prevention, or legal obligations.
+    </p>
+
+    <p><a href="/privacy.html">Privacy policy</a></p>
+  </main>
+</body>
+</html>
