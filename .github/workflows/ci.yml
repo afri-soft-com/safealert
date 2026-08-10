@@ -482,4 +482,4 @@ jobs:
           packageName: com.safealert.safealert
           releaseFiles: frontend/build/app/outputs/bundle/release/app-release.aab
           tracks: internal
-          status: draft
+          status: completed

@@ -81,4 +81,4 @@ Sur push `main` si `frontend/**` change :
 1. Build AAB
 2. Artifact Actions
 3. Release prerelease `aab-main`
-4. Upload Play **internal** si `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` est défini
+4. Upload Play **internal** (`status: completed`) si `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` est défini — la version est immédiatement disponible pour les testeurs internes (pas de draft)
