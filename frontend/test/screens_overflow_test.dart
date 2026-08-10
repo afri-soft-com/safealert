@@ -110,15 +110,14 @@ void main() {
         ],
       });
 
-      await fakeApi.setToken('admin-token');
-      fakeApi.onGet('/auth/profile', () => {
+      // Seed admin session without checkAuth() (avoids socket/location timers in tests).
+      final auth = AuthProvider(apiService: fakeApi);
+      auth.setSessionForTest({
         'id': 'admin1',
         'phone': '+243800000000',
         'role': 'platform_admin',
         'pseudo': 'Admin',
       });
-      final auth = AuthProvider(apiService: fakeApi);
-      await auth.checkAuth();
 
       await _pumpNarrow(tester, size, MultiProvider(
         providers: [
@@ -133,6 +132,11 @@ void main() {
       ));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.takeException(), isNull);
+
+      // Partners tab also has long names — switch and re-check.
+      await tester.tap(find.text('Partenaires API'));
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });
   }

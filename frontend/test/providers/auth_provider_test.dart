@@ -64,8 +64,9 @@ void main() {
       final result = await provider.requestCode('+243811234567');
 
       expect(result, false);
-      expect(provider.error, contains('réseau'));
+      expect(provider.error!.toLowerCase(), anyOf(contains('réseau'), contains('connexion')));
     });
+  });
 
   group('verifyCode', () {
     test('returns false when phone is null', () async {

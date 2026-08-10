@@ -204,4 +204,14 @@ class AuthProvider extends ChangeNotifier {
     SocketService().disconnect();
     LocationService().stopPeriodicUpdates();
   }
+
+  /// Test helper: authenticated session without socket/location side effects.
+  @visibleForTesting
+  void setSessionForTest(Map<String, dynamic> user) {
+    _user = Map<String, dynamic>.from(user);
+    _isAuthenticated = true;
+    _isGuest = false;
+    _error = null;
+    notifyListeners();
+  }
 }

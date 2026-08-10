@@ -113,6 +113,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             labelColor: AppColors.bleuFonce,
             unselectedLabelColor: AppColors.gris,
             indicatorColor: AppColors.bleuFonce,
+            labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            unselectedLabelStyle: const TextStyle(fontSize: 12),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 8),
             tabs: const [
               Tab(text: 'Utilisateurs'),
               Tab(text: 'Partenaires API'),
@@ -183,36 +186,58 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             children: [
               const Text('Rôle : ', style: TextStyle(fontSize: 11, color: AppColors.gris)),
               Expanded(
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  value: AdminProvider.roleLabels.containsKey(role) ? role : 'citizen',
-                  items: AdminProvider.roleLabels.entries
-                      .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 11))))
-                      .toList(),
-                  onChanged: (v) {
-                    if (v != null && v != role) {
-                      showDialog<bool>(
-                        context: context,
-                        builder: (dlg) => AlertDialog(
-                          title: const Text('Changer le rôle ?',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                          content: Text(
-                            'Nouveau rôle : ${AdminProvider.roleLabels[v] ?? v}',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(dlg, false), child: const Text('Annuler')),
-                            ElevatedButton(
-                              onPressed: () => Navigator.pop(dlg, true),
-                              child: const Text('Confirmer'),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    isDense: true,
+                    value: AdminProvider.roleLabels.containsKey(role) ? role : 'citizen',
+                    items: AdminProvider.roleLabels.entries
+                        .map((e) => DropdownMenuItem(
+                              value: e.key,
+                              child: Text(
+                                e.value,
+                                style: const TextStyle(fontSize: 11),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ))
+                        .toList(),
+                    selectedItemBuilder: (ctx) => AdminProvider.roleLabels.entries
+                        .map((e) => Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                e.value,
+                                style: const TextStyle(fontSize: 11),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null && v != role) {
+                        showDialog<bool>(
+                          context: context,
+                          builder: (dlg) => AlertDialog(
+                            title: const Text('Changer le rôle ?',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                            content: Text(
+                              'Nouveau rôle : ${AdminProvider.roleLabels[v] ?? v}',
+                              style: const TextStyle(fontSize: 12),
                             ),
-                          ],
-                        ),
-                      ).then((ok) {
-                        if (ok == true) p.updateUserRole(id, v);
-                      });
-                    }
-                  },
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(dlg, false), child: const Text('Annuler')),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(dlg, true),
+                                child: const Text('Confirmer'),
+                              ),
+                            ],
+                          ),
+                        ).then((ok) {
+                          if (ok == true) p.updateUserRole(id, v);
+                        });
+                      }
+                    },
+                  ),
                 ),
               ),
             ],
@@ -235,6 +260,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                 ),
               ),
               IconButton(
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                padding: EdgeInsets.zero,
                 icon: const Icon(Icons.save, size: 18, color: AppColors.bleuFonce),
                 onPressed: () {
                   final v = sectorCtrl.text.trim();
@@ -275,10 +303,16 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             child: ElevatedButton.icon(
               onPressed: _showNewPartnerDialog,
               icon: const Icon(Icons.add, size: 16),
-              label: const Text('Créer une clé partenaire', style: TextStyle(fontSize: 12)),
+              label: const Text(
+                'Créer une clé partenaire',
+                style: TextStyle(fontSize: 12),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.bleuFonce,
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
@@ -319,17 +353,19 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w600,
                                                 color: active ? AppColors.bleuFonce : AppColors.gris),
+                                            maxLines: 2,
                                             overflow: TextOverflow.ellipsis),
                                         const SizedBox(height: 2),
                                         Text(
                                           active && key.length >= 8 ? 'Clé : ${key.substring(0, 8)}…' : (active ? 'Clé active' : 'Révoquée'),
                                           style: const TextStyle(fontSize: 10, color: AppColors.gris),
+                                          maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 4),
                                   if (active)
                                     TextButton(
                                       onPressed: () async {
@@ -361,7 +397,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                                         }
                                       },
                                       style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        padding: const EdgeInsets.symmetric(horizontal: 6),
                                         minimumSize: Size.zero,
                                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                       ),
