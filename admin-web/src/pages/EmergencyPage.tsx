@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, type EmergencyInput, type EmergencyRow } from "../api/client";
+import { userFacingError } from "../utils/userFacingError";
 
 const EMPTY_FORM: EmergencyInput = {
   country_code: "CD",
@@ -16,12 +17,17 @@ export default function EmergencyPage() {
   const [form, setForm] = useState<EmergencyInput>(EMPTY_FORM);
   const [editId, setEditId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
+    setError("");
     try {
       const res = await api.getEmergencyNumbers();
       setItems(res.data);
+    } catch (err) {
+      setError(userFacingError(err, "Impossible de charger l'annuaire."));
     } finally {
       setLoading(false);
     }
@@ -52,6 +58,9 @@ export default function EmergencyPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setError("");
     try {
       if (editId) {
         await api.updateEmergencyNumber(editId, form);
@@ -60,18 +69,21 @@ export default function EmergencyPage() {
       }
       setShowForm(false);
       await load();
-    } catch {
-      alert("Erreur lors de l'enregistrement");
+    } catch (err) {
+      setError(userFacingError(err, "Impossible d'enregistrer le numéro."));
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Supprimer « ${name} » ?`)) return;
+    setError("");
     try {
       await api.deleteEmergencyNumber(id);
       await load();
-    } catch {
-      alert("Erreur lors de la suppression");
+    } catch (err) {
+      setError(userFacingError(err, "Impossible de supprimer le numéro."));
     }
   };
 
@@ -81,6 +93,8 @@ export default function EmergencyPage() {
         <h2>Annuaire d'urgence</h2>
         <p>Numéros d'urgence affichés dans l'application mobile</p>
       </header>
+
+      {error && <div className="form-error">{error}</div>}
 
       <div className="card">
         <div className="card-toolbar">

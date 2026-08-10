@@ -1,15 +1,16 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
+/** Navigation console — réservée aux platform_admin (garde ProtectedRoute). */
 const NAV = [
-  { to: "/", label: "Tableau de bord", icon: "📊" },
-  { to: "/ops", label: "Ops temps réel", icon: "📡" },
-  { to: "/utilisateurs", label: "Utilisateurs", icon: "👥" },
-  { to: "/partenaires", label: "Partenaires API", icon: "🔑" },
-  { to: "/portail-partenaire", label: "Portail partenaire", icon: "🔗" },
-  { to: "/annuaire", label: "Annuaire d'urgence", icon: "📞" },
-  { to: "/incidents", label: "Incidents", icon: "🚨" },
-  { to: "/groupes", label: "Groupes", icon: "🏘️" },
+  { to: "/", label: "Tableau de bord", end: true },
+  { to: "/ops", label: "Ops temps réel" },
+  { to: "/utilisateurs", label: "Utilisateurs" },
+  { to: "/partenaires", label: "Partenaires API" },
+  { to: "/annuaire", label: "Annuaire d'urgence" },
+  { to: "/incidents", label: "Incidents" },
+  { to: "/groupes", label: "Groupes" },
+  { to: "/aide", label: "Aide" },
 ];
 
 export default function Layout() {
@@ -27,10 +28,9 @@ export default function Layout() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === "/"}
+              end={item.end}
               className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
             >
-              <span>{item.icon}</span>
               {item.label}
             </NavLink>
           ))}
@@ -38,6 +38,14 @@ export default function Layout() {
         <div className="sidebar-footer">
           <div>{user?.pseudo}</div>
           <div>{user?.phone}</div>
+          <a
+            href="/portail-partenaire"
+            target="_blank"
+            rel="noreferrer"
+            style={{ fontSize: 12, display: "block", marginBottom: 8 }}
+          >
+            Portail partenaire ↗
+          </a>
           <button type="button" onClick={logout}>
             Déconnexion
           </button>

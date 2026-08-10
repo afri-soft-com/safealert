@@ -11,13 +11,28 @@ const listUsers = async (req, res) => {
   const page = Math.max(parseInt(req.query.page) || 1, 1);
   const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 100);
   const offset = (page - 1) * limit;
+  const q = (req.query.q || req.query.search || "").toString().trim();
 
   try {
-    const countRes = await pool.query("SELECT COUNT(*)::int AS total FROM users");
+    const params = [];
+    let where = "";
+    if (q) {
+      params.push(`%${q}%`);
+      where = `WHERE phone ILIKE $1 OR pseudo ILIKE $1 OR COALESCE(sector_name, '') ILIKE $1`;
+    }
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM users ${where}`,
+      params
+    );
+    params.push(limit, offset);
+    const limitIdx = params.length - 1;
+    const offsetIdx = params.length;
     const result = await pool.query(
       `SELECT id, phone, pseudo, role, sector_name, created_at, last_seen_at
-       FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       FROM users ${where}
+       ORDER BY created_at DESC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params
     );
     return res.json({
       data: result.rows,

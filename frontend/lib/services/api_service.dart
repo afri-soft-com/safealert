@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/network_error.dart';
 
 class ApiService {
   /// Production Render. Override at build time for local dev:
@@ -100,16 +101,16 @@ class ApiService {
       if (body is Map) return body as Map<String, dynamic>;
     }
     if (body is Map && body.containsKey('error')) {
-      throw ApiException(body['error'] as String? ?? 'Erreur inconnue', res.statusCode);
+      final raw = body['error'] as String? ?? '';
+      final mapped = mapKnownApiMessage(raw);
+      final message = mapped ??
+          (!looksTechnical(raw) && raw.isNotEmpty
+              ? raw
+              : messageForStatusCode(res.statusCode));
+      throw ApiException(message, res.statusCode);
     }
-    throw ApiException('Erreur ${res.statusCode}', res.statusCode);
+    throw ApiException(messageForStatusCode(res.statusCode), res.statusCode);
   }
 }
 
-class ApiException implements Exception {
-  final String message;
-  final int statusCode;
-  ApiException(this.message, this.statusCode);
-  @override
-  String toString() => message;
-}
+export '../utils/network_error.dart' show ApiException;

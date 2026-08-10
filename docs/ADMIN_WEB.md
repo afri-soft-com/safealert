@@ -53,11 +53,17 @@ L'utilisateur doit **se reconnecter** pour obtenir un JWT avec le nouveau rôle.
 | Page | Description |
 |------|-------------|
 | **Tableau de bord** | Utilisateurs, incidents, partenaires actifs, groupes |
-| **Utilisateurs** | Liste, recherche, changement de rôle et secteur |
+| **Ops temps réel** | File SOS, délais de prise en charge, zones actives, export CSV/PDF (JWT) |
+| **Utilisateurs** | Liste, recherche serveur (téléphone / pseudo / secteur), rôles et secteurs |
 | **Partenaires API** | Création de clés (affichées une seule fois), révocation |
 | **Annuaire d'urgence** | CRUD des numéros d'urgence |
-| **Incidents** | Liste paginée avec filtres statut, zone, dates |
+| **Incidents** | Liste paginée, filtres, panneau de détail (description, GPS, signaleur) |
 | **Groupes** | Vue des groupes de voisins |
+| **Aide** | Rappel des rôles et liens vers la documentation |
+
+### Portail partenaire (hors console admin)
+
+URL publique : **`/portail-partenaire`**. Les partenaires s'authentifient avec leur **clé API** (pas d'OTP admin). Lien également depuis la page de connexion et le pied de menu admin.
 
 ## Production
 

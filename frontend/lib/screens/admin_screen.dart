@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/admin_provider.dart';
+import '../providers/auth_provider.dart';
+import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/nav_bar.dart';
@@ -66,7 +68,8 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     );
     if (name == null || name.isEmpty || !mounted) return;
 
-    final apiKey = await context.read<AdminProvider>().createPartner(name);
+    final admin = context.read<AdminProvider>();
+    final apiKey = await admin.createPartner(name);
     if (!mounted) return;
     if (apiKey != null) {
       showDialog(
@@ -78,15 +81,26 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Erreur lors de la création', style: TextStyle(fontSize: 11)),
-        backgroundColor: AppColors.rouge,
-      ));
+      showAppSnackBar(
+        context,
+        admin.error ?? 'Impossible de créer le partenaire.',
+        isError: true,
+        fallback: 'Impossible de créer le partenaire.',
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    if (!auth.canAccessAdmin) {
+      return AccessDeniedView(
+        title: 'Accès réservé',
+        message: 'Cette zone est réservée aux administrateurs plateforme.',
+        onBack: widget.onBack,
+      );
+    }
+
     final p = context.watch<AdminProvider>();
 
     return Scaffold(
@@ -228,7 +242,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             ),
             child: const Text(
               'Les partenaires (ONG, autorités) ne sont pas des utilisateurs mobiles. '
-              'Ils intègrent l\'API SafeAlert via une clé X-API-Key — pas d\'écran dédié dans l\'app.',
+              'Ils accèdent à SafeAlert via une clé API fournie ici — conservez-la hors de l\'application.',
               style: TextStyle(fontSize: 10, color: AppColors.gris, height: 1.4),
             ),
           ),
@@ -297,7 +311,34 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                                   const SizedBox(width: 8),
                                   if (active)
                                     TextButton(
-                                      onPressed: () => p.revokePartner(partner['id'] as String),
+                                      onPressed: () async {
+                                        final name = partner['partner_name'] as String? ?? 'ce partenaire';
+                                        final ok = await showDialog<bool>(
+                                          context: context,
+                                          builder: (dlg) => AlertDialog(
+                                            title: const Text('Révoquer la clé ?',
+                                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                                            content: Text(
+                                              'L\'accès de « $name » sera coupé immédiatement.',
+                                              style: const TextStyle(fontSize: 12),
+                                            ),
+                                            actions: [
+                                              TextButton(onPressed: () => Navigator.pop(dlg, false), child: const Text('Annuler')),
+                                              ElevatedButton(
+                                                onPressed: () => Navigator.pop(dlg, true),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: AppColors.rouge,
+                                                  foregroundColor: Colors.white,
+                                                ),
+                                                child: const Text('Révoquer'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (ok == true && mounted) {
+                                          await p.revokePartner(partner['id'] as String);
+                                        }
+                                      },
                                       style: TextButton.styleFrom(
                                         padding: const EdgeInsets.symmetric(horizontal: 8),
                                         minimumSize: Size.zero,

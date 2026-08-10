@@ -3,6 +3,7 @@ import '../theme.dart';
 import '../l10n/app_localizations.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
+import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 
@@ -38,9 +39,39 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
+  String _zoneTypeLabel(String? type) {
+    switch (type) {
+      case 'home':
+        return 'Domicile';
+      case 'work':
+        return 'Travail';
+      case 'school':
+        return 'École';
+      case 'custom':
+        return 'Autre';
+      default:
+        return type ?? 'Zone';
+    }
+  }
+
   Future<void> _add() async {
     final pos = await LocationService().getCurrentPosition();
-    if (pos == null || _labelCtrl.text.trim().isEmpty) return;
+    if (pos == null) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Localisation indisponible. Activez le GPS et réessayez.',
+          isError: true,
+        );
+      }
+      return;
+    }
+    if (_labelCtrl.text.trim().isEmpty) {
+      if (mounted) {
+        showAppSnackBar(context, 'Indiquez un libellé pour cette zone.', isError: true);
+      }
+      return;
+    }
     try {
       await _api.post('/trust-zones', {
         'label': _labelCtrl.text.trim(),
@@ -53,7 +84,12 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
       await _load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        showAppSnackBar(
+          context,
+          e,
+          isError: true,
+          fallback: 'Impossible d\'ajouter cette zone. Activez la localisation et réessayez.',
+        );
       }
     }
   }
@@ -106,17 +142,40 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
                         child: const Text('Ajouter ici (GPS actuel)', style: TextStyle(color: Colors.white)),
                       ),
                       const SizedBox(height: 16),
-                      ..._zones.map((z) => ListTile(
-                            title: Text(z['label'] as String? ?? ''),
-                            subtitle: Text('${z['zone_type']} · ${z['radius_m']} m'),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline, color: AppColors.rouge),
-                              onPressed: () async {
-                                await _api.delete('/trust-zones/${z['id']}');
-                                await _load();
-                              },
-                            ),
-                          )),
+                      if (_zones.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Text(
+                            'Aucune zone de confiance. Ajoutez votre domicile ou votre travail.',
+                            style: TextStyle(fontSize: 12, color: AppColors.gris),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      else
+                        ..._zones.map((z) => ListTile(
+                              title: Text(z['label'] as String? ?? ''),
+                              subtitle: Text(
+                                '${_zoneTypeLabel(z['zone_type'] as String?)} · Rayon : ${z['radius_m']} m',
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline, color: AppColors.rouge),
+                                onPressed: () async {
+                                  try {
+                                    await _api.delete('/trust-zones/${z['id']}');
+                                    await _load();
+                                  } catch (e) {
+                                    if (mounted) {
+                                      showAppSnackBar(
+                                        context,
+                                        e,
+                                        isError: true,
+                                        fallback: 'Impossible de supprimer la zone.',
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                            )),
                     ],
                   ),
           ),

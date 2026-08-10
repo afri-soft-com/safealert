@@ -1,10 +1,13 @@
 import { FormEvent, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { api, ApiError } from "../api/client";
+import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { userFacingError } from "../utils/userFacingError";
+
+const isDev = import.meta.env.DEV;
 
 export default function LoginPage() {
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated, ready, login } = useAuth();
   const [phone, setPhone] = useState("+243");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"phone" | "code">("phone");
@@ -12,6 +15,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [devHint, setDevHint] = useState("");
 
+  if (!ready) return <div className="loading">Chargement…</div>;
   if (isAuthenticated) return <Navigate to="/" replace />;
 
   const handleRequestCode = async (e: FormEvent) => {
@@ -21,13 +25,13 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await api.requestCode(phone.trim());
-      if (res.devCode) {
-        setDevHint(`Mode dev — code OTP : ${res.devCode}`);
+      if (isDev && res.devCode) {
+        setDevHint(`Mode développement — code : ${res.devCode}`);
         setCode(res.devCode);
       }
       setStep("code");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Impossible d'envoyer le code");
+      setError(userFacingError(err, "Impossible d'envoyer le code. Réessayez."));
     } finally {
       setLoading(false);
     }
@@ -40,7 +44,7 @@ export default function LoginPage() {
     try {
       await login(phone.trim(), code.trim());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Connexion impossible");
+      setError(userFacingError(err, "Connexion impossible. Vérifiez le code."));
     } finally {
       setLoading(false);
     }
@@ -68,7 +72,7 @@ export default function LoginPage() {
               />
             </div>
             <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={loading}>
-              {loading ? "Envoi…" : "Recevoir le code OTP"}
+              {loading ? "Envoi…" : "Recevoir le code"}
             </button>
           </form>
         ) : (
@@ -105,8 +109,8 @@ export default function LoginPage() {
         )}
 
         <p className="form-hint" style={{ marginTop: "1.5rem" }}>
-          En développement sans SMS, le code OTP s'affiche dans le terminal backend{" "}
-          <code>[DEV OTP]</code>.
+          Partenaire API ?{" "}
+          <a href="/portail-partenaire">Accéder au portail partenaire</a>
         </p>
       </div>
     </div>

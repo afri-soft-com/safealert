@@ -1,13 +1,26 @@
 import 'package:flutter/material.dart';
+import '../providers/auth_provider.dart';
 import '../theme.dart';
 import '../widgets/status_bar.dart';
 
+/// Manuel d'utilisation filtré selon le rôle plateforme.
 class HelpManualScreen extends StatelessWidget {
   final VoidCallback onBack;
-  const HelpManualScreen({super.key, required this.onBack});
+  final String role;
+  const HelpManualScreen({
+    super.key,
+    required this.onBack,
+    this.role = UserRoles.citizen,
+  });
+
+  bool get _isOps =>
+      role == UserRoles.leader || role == UserRoles.agent || role == UserRoles.platformAdmin;
+  bool get _isAdmin => role == UserRoles.platformAdmin;
 
   @override
   Widget build(BuildContext context) {
+    final roleLabel = UserRoles.labels[role] ?? 'Citoyen';
+
     return Scaffold(
       body: Column(
         children: [
@@ -29,7 +42,6 @@ class HelpManualScreen extends StatelessWidget {
                     style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                 ),
-                const Text('📖', style: TextStyle(fontSize: 20)),
               ],
             ),
           ),
@@ -37,124 +49,121 @@ class HelpManualScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(14),
               children: [
-                _introCard(),
+                _introCard(roleLabel),
                 const SizedBox(height: 12),
                 _section(
-                  icon: '🔐',
-                  title: 'Connexion OTP',
+                  icon: Icons.phone_android,
+                  title: 'Connexion',
                   children: const [
                     _P('SafeAlert utilise votre numéro de téléphone et un code à 6 chiffres envoyé par SMS.'),
-                    _P('1. Saisissez votre numéro au format +243812345678 (ou 0812… — le +243 est ajouté automatiquement).'),
-                    _P('2. Appuyez sur « Envoyer le code » et consultez le SMS reçu.'),
+                    _P('1. Saisissez votre numéro (ex. 0812… — l\'indicatif +243 est ajouté si besoin).'),
+                    _P('2. Appuyez sur « Envoyer le code » et consultez le SMS.'),
                     _P('3. Saisissez les 6 chiffres. Première utilisation : cochez « Nouveau compte » et choisissez un pseudo.'),
-                    _P('En développement, le code peut s\'afficher dans l\'app (bandeau orange) si SMS non configuré.'),
                   ],
                 ),
                 _section(
-                  icon: '🆘',
-                  title: 'Bouton SOS',
+                  icon: Icons.sos,
+                  title: 'Créer une alerte SOS',
                   children: const [
-                    _P('Depuis l\'accueil, appuyez sur le bouton rouge SOS, puis confirmez sur l\'écran dédié.'),
+                    _P('Depuis l\'accueil, appuyez sur le bouton rouge SOS, puis confirmez.'),
                     _P('Votre position est envoyée et vos contacts de confiance sont alertés.'),
                     _P('Annulation : utilisez « Annuler l\'alerte » dans les 2 minutes suivant l\'envoi.'),
                     _P('SOS discret (Android) : 3× Volume bas avec l\'app ouverte pour déclencher sans afficher l\'écran SOS.'),
                   ],
                 ),
                 _section(
-                  icon: '👥',
+                  icon: Icons.people_outline,
                   title: 'Contacts de confiance',
                   children: const [
-                    _P('Onglet Confiance → « + Ajouter un contact » : nom et numéro du proche à alerter en cas de SOS.'),
-                    _P('Ces personnes reçoivent une notification lorsque vous déclenchez une alerte.'),
+                    _P('Onglet Confiance → « + Ajouter un contact » : nom et numéro du proche à alerter.'),
+                    _P('Ces personnes reçoivent une notification lorsque vous déclenchez un SOS.'),
                   ],
                 ),
                 _section(
-                  icon: '🗺',
-                  title: 'Carte des incidents',
+                  icon: Icons.map_outlined,
+                  title: 'Carte et signalements',
                   children: const [
                     _P('Consultez les signalements autour de vous (marqueurs colorés).'),
-                    _P('Filtrez par type et période (24h ou 7j). Touchez un marqueur pour les détails.'),
+                    _P('Filtrez par type et période. Touchez un marqueur pour les détails.'),
                     _P('Signalez un incident (bouton rouge) ou confirmez un signalement existant.'),
                   ],
                 ),
                 _section(
-                  icon: '🏘',
+                  icon: Icons.groups_outlined,
                   title: 'Groupes voisins',
                   children: const [
                     _P('Créez un groupe ou rejoignez-en un avec un code d\'invitation.'),
-                    _P('Rejoindre un groupe envoie une demande à l\'administrateur — vous n\'êtes pas ajouté immédiatement.'),
-                    _P('Les créateurs et admins du groupe voient les demandes en attente et peuvent approuver ou refuser.'),
+                    _P('Rejoindre un groupe envoie une demande à l\'administrateur du groupe.'),
+                    _P('Les admins du groupe voient les demandes en attente et peuvent les traiter.'),
                   ],
                 ),
                 _section(
-                  icon: '🕵️',
+                  icon: Icons.route,
+                  title: 'Trajet sécurisé',
+                  children: const [
+                    _P('Indiquez une destination et une durée estimée. Des proches peuvent suivre le trajet.'),
+                    _P('Si vous ne confirmez pas votre arrivée à temps, une alerte peut être déclenchée.'),
+                  ],
+                ),
+                _section(
+                  icon: Icons.visibility_off_outlined,
                   title: 'Mode discret',
                   children: const [
                     _P('Paramètres → « Camouflage calculatrice » : l\'app affiche une calculatrice.'),
                     _P('Saisissez le code de déverrouillage configuré pour retrouver SafeAlert.'),
-                    _P('Sur iOS, la détection volume en arrière-plan est limitée.'),
                   ],
                 ),
+                if (_isOps)
+                  _section(
+                    icon: Icons.shield_outlined,
+                    title: 'Mode responsable — traiter une alerte',
+                    children: const [
+                      _P('Accueil ou Paramètres → « Mode responsable ».'),
+                      _P('Consultez la liste des incidents du secteur, puis prenez en charge (accusé de réception).'),
+                      _P('Assignez un agent si besoin, échangez via le fil de discussion, puis marquez résolu.'),
+                      _P('Exportez un rapport PDF pour le suivi hebdomadaire.'),
+                    ],
+                  ),
+                if (_isAdmin)
+                  _section(
+                    icon: Icons.admin_panel_settings_outlined,
+                    title: 'Administration plateforme',
+                    children: const [
+                      _P('Accueil ou Paramètres → Administration.'),
+                      _P('Utilisateurs : changer le rôle (citoyen, responsable, agent, admin) et attribuer un secteur.'),
+                      _P('Partenaires API : créer une clé pour une organisation externe, puis la révoquer si besoin.'),
+                      _P('Conservez les clés API hors de l\'application mobile ; ne les partagez pas publiquement.'),
+                      _P('Console web : tableau de bord, ops temps réel, annuaire d\'urgence, incidents et groupes.'),
+                    ],
+                  ),
                 _section(
-                  icon: '👑',
+                  icon: Icons.info_outline,
                   title: 'Rôles dans l\'application',
-                  children: const [
-                    _P('Citoyen : SOS, contacts, carte, groupes, signalements.'),
-                    _P('Responsable (leader) : en plus, Mode responsable pour gérer les incidents de son secteur.'),
-                    _P('Agent : même accès responsable, filtré par secteur géographique assigné.'),
-                    _P('Administrateur plateforme : gestion des utilisateurs, rôles et clés partenaires API.'),
+                  children: [
+                    const _P('Citoyen : SOS, contacts, carte, groupes, trajets, signalements.'),
+                    const _P('Responsable : en plus, Mode responsable pour gérer les incidents du secteur.'),
+                    const _P('Agent : même accès responsable, filtré par secteur assigné.'),
+                    const _P('Administrateur plateforme : gestion des utilisateurs, rôles et partenaires.'),
+                    _P('Votre profil actuel : $roleLabel.'),
                   ],
                 ),
                 _section(
-                  icon: '🤝',
-                  title: 'Partenaires ONG / autorités',
-                  children: const [
-                    _P('Les partenaires (ONG, autorités, intégrateurs) ne sont pas des utilisateurs mobiles.'),
-                    _P('Ils accèdent à l\'API SafeAlert via une clé X-API-Key créée par un administrateur plateforme.'),
-                    _P('Pas d\'écran mobile dédié : intégration serveur-à-serveur (incidents, statistiques, etc.).'),
-                    _P('Un administrateur crée et révoque les clés dans Administration → Partenaires API.'),
-                  ],
-                ),
-                _section(
-                  icon: '⚙️',
-                  title: 'Administration plateforme',
-                  children: const [
-                    _P('Réservé au rôle Administrateur plateforme (accueil ou Paramètres).'),
-                    _P('Utilisateurs : changer le rôle, attribuer un secteur géographique.'),
-                    _P('Partenaires API : créer une clé pour un organisme externe, révoquer une clé inactive.'),
-                  ],
-                ),
-                _section(
-                  icon: '🚦',
+                  icon: Icons.traffic_outlined,
                   title: 'Zones Danger / Vigilance / Sûr',
                   children: const [
-                    _P('Gravité (couleur du marqueur) ≠ statut (actif, vérifié, résolu…). La carte n\'affiche que les incidents encore ouverts.'),
-                    _P('Alerte (rouge) : SOS déclenché — gravité initiale automatique.'),
-                    _P('Vigilance (orange) : signalement carte (vol, agression…) — gravité initiale automatique.'),
-                    _P('Danger (rouge) : 3 confirmations citoyennes ou plus sur un signalement ou un SOS.'),
-                    _P('Sûr (vert) : un responsable résout l\'incident et il ne reste aucun autre incident actif dans le quartier (24 h).'),
-                    _P('Qui change quoi : citoyen → SOS, signalement, confirmation ; responsable → prise en charge et résolution ; annulation SOS (2 min) → fausse alerte.'),
-                    _P('Carte de chaleur : intensité = nombre total d\'incidents par quartier (30 j), pas la couleur d\'un marqueur.'),
-                    _P('Le nom de quartier est déterminé automatiquement via GPS (OpenStreetMap).'),
+                    _P('Alerte (rouge) : SOS déclenché.'),
+                    _P('Vigilance (orange) : signalement carte (vol, agression…).'),
+                    _P('Danger (rouge foncé) : plusieurs confirmations citoyennes sur un signalement.'),
+                    _P('Sûr (vert) : un responsable a résolu l\'incident et le quartier est calme.'),
+                    _P('Qui fait quoi : citoyen → SOS, signalement, confirmation ; responsable → prise en charge et résolution.'),
                   ],
                 ),
                 _section(
-                  icon: '🔔',
-                  title: 'Notifications push (Firebase)',
+                  icon: Icons.help_outline,
+                  title: 'Questions fréquentes',
                   children: const [
-                    _P('Android : notifications configurées via Firebase (projet safealert-prod). Test possible depuis un PC Windows.'),
-                    _P('iOS : nécessite d\'ajouter l\'app dans Firebase avec l\'identifiant com.safealert.safealert, puis le fichier GoogleService-Info.plist.'),
-                    _P('Sous Windows, vous ne pouvez pas compiler ni tester sur iPhone — seul un Mac avec Xcode le permet. Préparez Firebase maintenant ; testez iOS plus tard.'),
-                    _P('Push sur iPhone réel : une clé APNs (.p8) doit aussi être téléversée dans Firebase (Cloud Messaging).'),
-                    _P('Guide détaillé : docs/FIREBASE_SETUP.md dans le dépôt du projet.'),
-                  ],
-                ),
-                _section(
-                  icon: '❓',
-                  title: 'FAQ',
-                  children: const [
-                    _P('Code OTP non reçu ? Vérifiez le format +243…, attendez 1–2 min. Compte Twilio d\'essai : numéro vérifié requis.'),
-                    _P('Serveur inaccessible ? En dev, utilisez l\'IP Wi-Fi du PC (pas localhost) sur le même réseau.'),
+                    _P('Code non reçu ? Vérifiez le format du numéro, attendez 1–2 minutes, puis redemandez un code.'),
+                    _P('Serveur inaccessible ? Vérifiez votre connexion Internet et réessayez.'),
                     _P('Mode invité : carte et annuaire sans compte. Connexion requise pour SOS, contacts et signalements.'),
                     _P('Suppression de compte : Paramètres → Supprimer le compte (irréversible).'),
                   ],
@@ -162,7 +171,7 @@ class HelpManualScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 Center(
                   child: Text(
-                    'SafeAlert — juin 2026',
+                    'SafeAlert — manuel utilisateur',
                     style: TextStyle(fontSize: 10, color: AppColors.gris.withValues(alpha: 0.8)),
                   ),
                 ),
@@ -174,7 +183,7 @@ class HelpManualScreen extends StatelessWidget {
     );
   }
 
-  Widget _introCard() {
+  Widget _introCard(String roleLabel) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -185,22 +194,28 @@ class HelpManualScreen extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Manuel d\'utilisation',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
-          SizedBox(height: 6),
+          const Text(
+            'Manuel d\'utilisation',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
+          ),
+          const SizedBox(height: 6),
           Text(
-            'Guide rapide pour utiliser SafeAlert au quotidien. Touchez une section pour l\'ouvrir.',
-            style: TextStyle(fontSize: 11, color: Colors.white70, height: 1.4),
+            'Guide pratique selon votre profil ($roleLabel). Touchez une section pour l\'ouvrir.',
+            style: const TextStyle(fontSize: 11, color: Colors.white70, height: 1.4),
           ),
         ],
       ),
     );
   }
 
-  Widget _section({required String icon, required String title, required List<Widget> children}) {
+  Widget _section({
+    required IconData icon,
+    required String title,
+    required List<Widget> children,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -213,11 +228,13 @@ class HelpManualScreen extends StatelessWidget {
         child: ExpansionTile(
           tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
           childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-          leading: Text(icon, style: const TextStyle(fontSize: 20)),
-          title: Text(title,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.bleuFonce),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis),
+          leading: Icon(icon, color: AppColors.bleuFonce, size: 22),
+          title: Text(
+            title,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.bleuFonce),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
           children: children,
         ),
       ),

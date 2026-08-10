@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../l10n/app_localizations.dart';
 import '../services/api_service.dart';
+import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 
@@ -46,7 +47,9 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
       _ctrl.clear();
       await _load();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      if (mounted) {
+        showAppSnackBar(context, e, isError: true, fallback: 'Impossible d\'enregistrer l\'abonnement.');
+      }
     }
   }
 
@@ -71,7 +74,7 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       const Text(
-                        'Recevez un digest push quotidien des incidents dans votre quartier.',
+                        'Recevez chaque jour un résumé des alertes de votre quartier.',
                         style: TextStyle(fontSize: 12, color: AppColors.gris),
                       ),
                       const SizedBox(height: 12),
@@ -89,17 +92,38 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
                         child: const Text("S'abonner", style: TextStyle(color: Colors.white)),
                       ),
                       const SizedBox(height: 16),
-                      ..._subs.map((s) => ListTile(
-                            title: Text(s['quartier'] as String? ?? ''),
-                            subtitle: Text('Digest à ${s['digest_hour']}h'),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.close),
-                              onPressed: () async {
-                                await _api.delete('/neighborhood/${s['id']}');
-                                await _load();
-                              },
-                            ),
-                          )),
+                      if (_subs.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Text(
+                            'Aucun quartier suivi. Ajoutez votre quartier pour recevoir le résumé quotidien.',
+                            style: TextStyle(fontSize: 12, color: AppColors.gris),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      else
+                        ..._subs.map((s) => ListTile(
+                              title: Text(s['quartier'] as String? ?? ''),
+                              subtitle: Text('Résumé quotidien à ${s['digest_hour']}h'),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () async {
+                                  try {
+                                    await _api.delete('/neighborhood/${s['id']}');
+                                    await _load();
+                                  } catch (e) {
+                                    if (mounted) {
+                                      showAppSnackBar(
+                                        context,
+                                        e,
+                                        isError: true,
+                                        fallback: 'Impossible de se désabonner.',
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                            )),
                     ],
                   ),
           ),

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../services/api_service.dart';
+import '../utils/network_error.dart';
+import 'auth_provider.dart';
 
 class AdminProvider extends ChangeNotifier {
   final ApiService _api;
@@ -22,12 +24,7 @@ class AdminProvider extends ChangeNotifier {
   int get usersTotal => _usersTotal;
   int get usersPage => _usersPage;
 
-  static const roleLabels = {
-    'citizen': 'Citoyen',
-    'leader': 'Responsable',
-    'agent': 'Agent',
-    'platform_admin': 'Administrateur',
-  };
+  static const roleLabels = UserRoles.labels;
 
   Future<void> fetchUsers({int page = 1}) async {
     _loadingUsers = true;
@@ -38,11 +35,9 @@ class AdminProvider extends ChangeNotifier {
       _users = (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       _usersTotal = res['total'] as int? ?? _users.length;
       _usersPage = res['page'] as int? ?? page;
-    } on ApiException catch (e) {
-      _error = e.message;
+    } catch (e) {
+      _error = userFacingError(e, fallback: 'Impossible de charger les utilisateurs.');
       _users = [];
-    } catch (_) {
-      _error = 'Erreur réseau';
     }
     _loadingUsers = false;
     notifyListeners();
@@ -55,11 +50,9 @@ class AdminProvider extends ChangeNotifier {
     try {
       final res = await _api.get('/admin/partners');
       _partners = (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    } on ApiException catch (e) {
-      _error = e.message;
+    } catch (e) {
+      _error = userFacingError(e, fallback: 'Impossible de charger les partenaires.');
       _partners = [];
-    } catch (_) {
-      _error = 'Erreur réseau';
     }
     _loadingPartners = false;
     notifyListeners();

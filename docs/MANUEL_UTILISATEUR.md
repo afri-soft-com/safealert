@@ -212,9 +212,9 @@ SafeAlert fonctionne avec une **connexion limitée** :
 ### Je ne reçois pas le code OTP
 
 - Vérifiez le format du numéro (`+243…`).
-- Attendez 1 à 2 minutes (réseau mobile lent).
-- **Compte Twilio d'essai** : seuls les numéros **vérifiés** dans la console Twilio peuvent recevoir des SMS. Ajoutez votre numéro dans [console.twilio.com](https://console.twilio.com) → Verified Caller IDs.
-- En développement local, le code peut s'afficher dans l'application (bandeau orange « Mode dev ») ou dans le terminal du serveur.
+- Attendez 1 à 2 minutes, puis redemandez un code.
+- Vérifiez que le SMS n'est pas bloqué par votre opérateur.
+- Si le problème continue, contactez le support de votre organisation.
 
 ### « Numéro de téléphone invalide »
 
@@ -222,16 +222,13 @@ Utilisez un numéro congolais valide : `+243` + 9 chiffres (ex. `+243812345678`)
 
 ### L'application ne se connecte pas au serveur
 
-| Contexte | URL API |
-|----------|---------|
-| **Production** | Serveur déployé (ex. `https://api.votredomaine.com`) |
-| **Développement local** | Adresse IP de votre PC sur le réseau Wi-Fi (ex. `http://192.168.1.10:3000/api`) — pas `localhost` sur un téléphone physique |
+- Vérifiez votre connexion Internet (Wi‑Fi ou données mobiles).
+- Fermez puis rouvrez l'application.
+- Si le message persiste, contactez le support de votre organisation.
 
-Vérifiez que le téléphone et le PC sont sur le **même réseau Wi-Fi** et que le pare-feu autorise le port 3000.
+### Comment devenir administrateur ou responsable ?
 
-### Comment devenir administrateur ?
-
-Le premier administrateur est promu manuellement en base de données ou via la variable `PLATFORM_ADMIN_PHONE` lors de `npm run migrate` (après création du compte). Contactez l'équipe technique de votre instance.
+Les rôles (**responsable**, **agent**, **administrateur**) sont attribués par l'**administrateur plateforme** de votre organisation (console admin → Utilisateurs). Contactez-le si vous avez besoin d'un accès étendu.
 
 ### Puis-je utiliser SafeAlert sans compte ?
 
@@ -247,10 +244,21 @@ La détection des touches volume en arrière-plan est **limitée sur iOS**. Le S
 
 ---
 
-## 6. Support
+## 6. Console d'administration (web)
 
-Pour toute question technique liée à votre déploiement, contactez l'administrateur de votre instance SafeAlert ou consultez la [documentation vivante](DOCUMENTATION_VIVANTE.md) (équipe technique).
+Réservée aux **administrateurs plateforme**. Connexion par téléphone + code SMS.
+
+- Tableau de bord, ops temps réel, utilisateurs, partenaires, annuaire, incidents, groupes.
+- **Portail partenaire** : page séparée (`/portail-partenaire`) pour les organisations avec clé API.
+- Aide intégrée : menu **Aide** dans la console.
+- Détails techniques : [ADMIN_WEB.md](ADMIN_WEB.md).
+
+## 7. Support
+
+Pour toute question, contactez l'administrateur de votre instance SafeAlert.
+
+Dans l'application : **Accueil → Aide / Manuel** ou **Paramètres → Aide**.
 
 ---
 
-*Dernière mise à jour : juin 2026*
+*Dernière mise à jour : août 2026*

@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { API_BASE } from "../api/client";
+import { userFacingError } from "../utils/userFacingError";
 
 type PartnerMe = {
   id: string;
@@ -28,7 +30,10 @@ async function partnerRequest<T>(path: string, apiKey: string, options: RequestI
     },
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || "Erreur");
+  if (!res.ok) {
+    const msg = typeof body.error === "string" ? body.error : "Erreur";
+    throw new Error(msg);
+  }
   return body as T;
 }
 
@@ -43,111 +48,136 @@ export default function PartnerPortalPage() {
   const connect = async () => {
     setError("");
     setMsg("");
+    if (!apiKey.trim()) {
+      setError("Saisissez votre clé API partenaire.");
+      return;
+    }
     try {
-      localStorage.setItem("safealert_partner_key", apiKey);
-      const profile = await partnerRequest<PartnerMe>("/partner/me", apiKey);
+      localStorage.setItem("safealert_partner_key", apiKey.trim());
+      const profile = await partnerRequest<PartnerMe>("/partner/me", apiKey.trim());
       setMe(profile);
       setWebhookUrl(profile.webhook_url || "");
-      const d = await partnerRequest<Delivery[]>("/partner/webhook/deliveries", apiKey);
-      setDeliveries(Array.isArray(d) ? d : (d as { data?: Delivery[] }).data || []);
+      const d = await partnerRequest<Delivery[] | { data?: Delivery[] }>(
+        "/partner/webhook/deliveries",
+        apiKey.trim()
+      );
+      setDeliveries(Array.isArray(d) ? d : d.data || []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Connexion impossible");
+      setError(userFacingError(e, "Clé API invalide ou expirée."));
       setMe(null);
     }
   };
 
   const saveWebhook = async () => {
-    if (!apiKey) return;
+    if (!apiKey.trim()) return;
     try {
-      await partnerRequest("/partner/webhook", apiKey, {
+      await partnerRequest("/partner/webhook", apiKey.trim(), {
         method: "PUT",
         body: JSON.stringify({ webhook_url: webhookUrl, webhook_events: "sos,incident,cancel" }),
       });
-      setMsg("Webhook enregistré");
+      setMsg("Adresse de notification enregistrée.");
       await connect();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur");
+      setError(userFacingError(e, "Enregistrement impossible. Réessayez."));
     }
   };
 
   return (
-    <>
-      <header className="page-header">
-        <h2>Portail partenaire</h2>
-        <p>Configurez vos webhooks SOS / incidents avec votre clé API</p>
-      </header>
+    <div className="login-page" style={{ alignItems: "flex-start", paddingTop: 48 }}>
+      <div style={{ width: "100%", maxWidth: 720, margin: "0 auto", padding: 16 }}>
+        <header className="page-header">
+          <h2>Portail partenaire SafeAlert</h2>
+          <p>Configurez vos notifications d&apos;alertes avec votre clé API</p>
+        </header>
 
-      <div className="form-card" style={{ maxWidth: 520 }}>
-        <label>Clé API (X-API-Key)</label>
-        <input
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          placeholder="Clé partenaire"
-        />
-        <button type="button" onClick={connect} style={{ marginTop: 12 }}>
-          Se connecter
-        </button>
-      </div>
-
-      {error && <div className="form-error">{error}</div>}
-      {msg && <div className="form-success">{msg}</div>}
-
-      {me && (
-        <>
-          <div className="stats-grid" style={{ marginTop: 20 }}>
-            <div className="stat-card">
-              <div className="label">Partenaire</div>
-              <div className="value" style={{ fontSize: 18 }}>{me.partner_name}</div>
-            </div>
-            <div className="stat-card">
-              <div className="label">Statut</div>
-              <div className="value" style={{ fontSize: 18 }}>{me.is_active ? "Actif" : "Inactif"}</div>
-            </div>
-          </div>
-
-          <h3 style={{ marginTop: 24 }}>Webhook</h3>
-          <p style={{ fontSize: 13 }}>
-            Événements : <code>sos</code>, <code>incident</code>, <code>cancel</code>.
-            Signature HMAC-SHA256 dans <code>X-SafeAlert-Signature</code>.
-          </p>
+        <div className="form-card" style={{ maxWidth: 520 }}>
+          <label htmlFor="partner-key">Clé API</label>
           <input
-            type="url"
-            value={webhookUrl}
-            onChange={(e) => setWebhookUrl(e.target.value)}
-            placeholder="https://votre-serveur/webhooks/safealert"
-            style={{ width: "100%", maxWidth: 520 }}
+            id="partner-key"
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="Clé fournie par l'administrateur"
           />
-          <button type="button" onClick={saveWebhook} style={{ marginTop: 8 }}>
-            Enregistrer le webhook
+          <button type="button" className="btn btn-primary" onClick={connect} style={{ marginTop: 12 }}>
+            Se connecter
           </button>
+        </div>
 
-          <h3 style={{ marginTop: 24 }}>Dernières livraisons</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Événement</th>
-                <th>Statut</th>
-                <th>HTTP</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {deliveries.map((d) => (
-                <tr key={d.id}>
-                  <td>{d.event_type}</td>
-                  <td>{d.status}</td>
-                  <td>{d.response_code ?? "—"}</td>
-                  <td>{new Date(d.created_at).toLocaleString("fr-FR")}</td>
-                </tr>
-              ))}
-              {deliveries.length === 0 && (
-                <tr><td colSpan={4}>Aucune livraison</td></tr>
-              )}
-            </tbody>
-          </table>
-        </>
-      )}
-    </>
+        {error && <div className="form-error">{error}</div>}
+        {msg && <div className="form-success">{msg}</div>}
+
+        {me && (
+          <>
+            <div className="stats-grid" style={{ marginTop: 20 }}>
+              <div className="stat-card">
+                <div className="label">Partenaire</div>
+                <div className="value" style={{ fontSize: 18 }}>
+                  {me.partner_name}
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="label">Statut</div>
+                <div className="value" style={{ fontSize: 18 }}>
+                  {me.is_active ? "Actif" : "Inactif"}
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="label">Limite de requêtes</div>
+                <div className="value" style={{ fontSize: 18 }}>
+                  {me.rate_limit}/min
+                </div>
+              </div>
+            </div>
+
+            <div className="form-card" style={{ marginTop: 20, maxWidth: 520 }}>
+              <label htmlFor="webhook">Adresse de notification (URL)</label>
+              <input
+                id="webhook"
+                type="url"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://votre-serveur.exemple/webhook"
+              />
+              <button type="button" className="btn btn-primary" onClick={saveWebhook} style={{ marginTop: 12 }}>
+                Enregistrer
+              </button>
+            </div>
+
+            <h3 style={{ marginTop: 24 }}>Dernières livraisons</h3>
+            {deliveries.length === 0 ? (
+              <p className="empty">Aucune livraison pour le moment.</p>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Événement</th>
+                      <th>Statut</th>
+                      <th>Code</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deliveries.map((d) => (
+                      <tr key={d.id}>
+                        <td>{d.event_type}</td>
+                        <td>{d.status}</td>
+                        <td>{d.response_code ?? "—"}</td>
+                        <td>{new Date(d.created_at).toLocaleString("fr-FR")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+
+        <p className="form-hint" style={{ marginTop: 24 }}>
+          Administrateur plateforme ? <Link to="/connexion">Connexion console admin</Link>
+        </p>
+      </div>
+    </div>
   );
 }
