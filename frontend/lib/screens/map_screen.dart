@@ -1,12 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:record/record.dart';
 import '../theme.dart';
 import '../providers/incident_provider.dart';
 import '../services/location_service.dart';
@@ -110,7 +109,6 @@ class _MapScreenState extends State<MapScreen> {
     final lat = pos?.latitude ?? _center.latitude;
     final lng = pos?.longitude ?? _center.longitude;
     final picker = ImagePicker();
-    final recorder = AudioRecorder();
 
     if (!mounted) return;
     showModalBottomSheet(
@@ -125,7 +123,7 @@ class _MapScreenState extends State<MapScreen> {
         bool consentEvidence = false;
         String? photoPath;
         String? audioPath;
-        bool recording = false;
+        String? audioMime;
         return StatefulBuilder(
           builder: (ctx, setSheetState) => Padding(
             padding: EdgeInsets.only(
@@ -225,33 +223,29 @@ class _MapScreenState extends State<MapScreen> {
                   const SizedBox(height: 6),
                   OutlinedButton.icon(
                     onPressed: () async {
-                      if (recording) {
-                        final path = await recorder.stop();
+                      final result = await FilePicker.platform.pickFiles(
+                        type: FileType.custom,
+                        allowedExtensions: const ['m4a', 'aac', 'mp3', 'wav', 'ogg', '3gp'],
+                      );
+                      final path = result?.files.single.path;
+                      if (path != null) {
+                        final ext = path.split('.').last.toLowerCase();
+                        final mime = switch (ext) {
+                          'mp3' => 'audio/mpeg',
+                          'wav' => 'audio/wav',
+                          'ogg' => 'audio/ogg',
+                          '3gp' => 'audio/3gpp',
+                          _ => 'audio/mp4',
+                        };
                         setSheetState(() {
-                          recording = false;
-                          audioPath = path ?? audioPath;
+                          audioPath = path;
+                          audioMime = mime;
                         });
-                        return;
                       }
-                      if (!await recorder.hasPermission()) {
-                        if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            const SnackBar(content: Text('Permission micro refusée')),
-                          );
-                        }
-                        return;
-                      }
-                      final dir = await getTemporaryDirectory();
-                      final path = '${dir.path}/evidence_${DateTime.now().millisecondsSinceEpoch}.m4a';
-                      await recorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
-                      setSheetState(() {
-                        recording = true;
-                        audioPath = path;
-                      });
                     },
-                    icon: Icon(recording ? Icons.stop : Icons.mic, size: 16),
+                    icon: const Icon(Icons.audiotrack, size: 16),
                     label: Text(
-                      recording ? 'Arrêter l\'audio' : (audioPath == null ? 'Enregistrer audio' : 'Audio OK — réenregistrer'),
+                      audioPath == null ? 'Choisir un audio' : 'Audio OK',
                       style: const TextStyle(fontSize: 11),
                     ),
                   ),
@@ -296,7 +290,7 @@ class _MapScreenState extends State<MapScreen> {
                           }
                         }
                         if (consentEvidence && audioPath != null && File(audioPath!).existsSync()) {
-                          final url = await _fileToDataUrl(File(audioPath!), 'audio/mp4');
+                          final url = await _fileToDataUrl(File(audioPath!), audioMime ?? 'audio/mp4');
                           if (url != null) {
                             evidence.add({'media_type': 'audio', 'data_url': url});
                           }
@@ -308,7 +302,6 @@ class _MapScreenState extends State<MapScreen> {
                           evidence: evidence.isEmpty ? null : evidence,
                           consentEvidence: consentEvidence && evidence.isNotEmpty,
                         );
-                        await recorder.dispose();
                         await _loadIncidents();
                       },
                       style: ElevatedButton.styleFrom(
@@ -327,12 +320,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
         );
       },
-    ).whenComplete(() async {
-      try {
-        if (await recorder.isRecording()) await recorder.stop();
-      } catch (_) {}
-      await recorder.dispose();
-    });
+    );
   }
 
   void _showVerifySheet(dynamic id) {

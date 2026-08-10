@@ -50,7 +50,7 @@ class ContactBackupService {
   }
 
   Uint8List _deriveKey(String passphrase, List<int> salt) {
-    var data = utf8.encode(passphrase);
+    List<int> data = utf8.encode(passphrase);
     for (var i = 0; i < 10000; i++) {
       data = sha256.convert([...data, ...salt]).bytes;
     }

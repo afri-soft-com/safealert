@@ -9,6 +9,7 @@ import '../providers/locale_provider.dart';
 import '../providers/contacts_provider.dart';
 import '../services/api_service.dart';
 import '../services/contact_backup_service.dart';
+import 'calculator_screen.dart' show kDiscreetUnlockCode;
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onBack;
