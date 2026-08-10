@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+// Bootstraps HTTP + Socket.IO; CI deploy waits on /health/ready after Render goes live.
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");

@@ -10,6 +10,8 @@ class _CacheEntry {
 
 class FakeLocalDatabase implements LocalDatabase {
   final Map<String, _CacheEntry> _store = {};
+  final List<Map<String, dynamic>> _pending = [];
+  int _pendingSeq = 0;
 
   @override
   Future<Database> get database async => throw UnimplementedError('use in-memory fake');
@@ -41,6 +43,61 @@ class FakeLocalDatabase implements LocalDatabase {
   @override
   Future<void> clear() async {
     _store.clear();
+  }
+
+  @override
+  Future<int> enqueuePendingSos(Map<String, dynamic> payload) async {
+    return enqueue('sos', payload);
+  }
+
+  @override
+  Future<int> enqueue(String kind, Map<String, dynamic> payload) async {
+    final id = ++_pendingSeq;
+    _pending.add({
+      'id': id,
+      'kind': kind,
+      'payload': Map<String, dynamic>.from(payload),
+      'attempts': 0,
+    });
+    return id;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listPendingSos() async {
+    return listPending(kind: 'sos');
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listPending({String? kind}) async {
+    final rows = kind == null
+        ? _pending
+        : _pending.where((r) => r['kind'] == kind);
+    return rows.map((r) => Map<String, dynamic>.from(r)).toList();
+  }
+
+  @override
+  Future<void> removePendingSos(int id) async {
+    await removePending(id);
+  }
+
+  @override
+  Future<void> removePending(int id) async {
+    _pending.removeWhere((r) => r['id'] == id);
+  }
+
+  @override
+  Future<void> bumpPendingSosAttempt(int id) async {
+    await bumpPendingAttempt(id);
+  }
+
+  @override
+  Future<void> bumpPendingAttempt(int id) async {
+    for (final row in _pending) {
+      if (row['id'] == id) {
+        row['attempts'] = (row['attempts'] as int) + 1;
+        return;
+      }
+    }
   }
 }
 

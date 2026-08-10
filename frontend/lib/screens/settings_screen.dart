@@ -129,17 +129,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<List<Map<String, dynamic>>> _contactsAsMaps() async {
     try {
       final list = context.read<ContactsProvider>().contacts;
-      return list.map((c) {
-        if (c is Map) return Map<String, dynamic>.from(c);
-        try {
-          return {
-            'name': (c as dynamic).name,
-            'phone': (c as dynamic).phone,
-          };
-        } catch (_) {
-          return <String, dynamic>{};
-        }
-      }).where((m) => m.isNotEmpty).toList();
+      return list
+          .map((c) => Map<String, dynamic>.from(c))
+          .where((m) => m.isNotEmpty)
+          .toList();
     } catch (_) {
       return [];
     }
