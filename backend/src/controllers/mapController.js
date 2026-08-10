@@ -142,7 +142,10 @@ const reportIncident = async (req, res) => {
 const verifyIncident = async (req, res) => {
   const { id } = req.params;
   try {
-    const inc = await pool.query("SELECT verified_by, status FROM incidents WHERE id = $1", [id]);
+    const inc = await pool.query(
+      "SELECT verified_by, status, severity, reliability_score, user_id FROM incidents WHERE id = $1",
+      [id]
+    );
     if (inc.rows.length === 0) return res.status(404).json({ error: "Incident non trouvé" });
 
     const existing = await pool.query(
@@ -160,7 +163,7 @@ const verifyIncident = async (req, res) => {
 
     let newStatus = "active";
     let newSeverity = inc.rows[0].severity || "vigilance";
-    const newCount = inc.rows[0].verified_by + 1;
+    const newCount = (inc.rows[0].verified_by || 0) + 1;
     if (newCount >= 3) {
       newStatus = "verified";
       newSeverity = "danger";
@@ -169,16 +172,14 @@ const verifyIncident = async (req, res) => {
     // Reliability score: +8 per confirmation, cap 100; bump reporter score
     let relScore = null;
     if (reliabilityScore()) {
-      const cur = await pool.query(
-        `SELECT reliability_score, user_id FROM incidents WHERE id = $1`,
-        [id]
-      );
-      relScore = Math.min(100, (cur.rows[0].reliability_score || 50) + 8);
-      await pool.query(
-        `UPDATE users SET reliability_score = LEAST(100, COALESCE(reliability_score, 50) + 2)
-         WHERE id = $1`,
-        [cur.rows[0].user_id]
-      );
+      relScore = Math.min(100, (inc.rows[0].reliability_score || 50) + 8);
+      if (inc.rows[0].user_id) {
+        await pool.query(
+          `UPDATE users SET reliability_score = LEAST(100, COALESCE(reliability_score, 50) + 2)
+           WHERE id = $1`,
+          [inc.rows[0].user_id]
+        );
+      }
     }
 
     const result = await pool.query(

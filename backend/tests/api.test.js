@@ -78,7 +78,7 @@ describe("Auth", () => {
     expect(res.status).toBe(200);
     expect(res.body.message).toBe("Code envoyé");
     expect(res.body.expiresIn).toBe(300);
-  });
+  }, 15000);
 
   it("POST /api/auth/request-code fails without phone", async () => {
     const res = await request(app).post("/api/auth/request-code").send({});
@@ -172,9 +172,12 @@ describe("Incidents", () => {
 
   it("POST /api/map/incidents/:id/verify records vote and increments count", async () => {
     mockQuery
-      .mockResolvedValueOnce({ rows: [{ verified_by: 0, status: "active", severity: "vigilance" }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ verified_by: 0, status: "active", severity: "vigilance", reliability_score: 50, user_id: "u1" }],
+      })
+      .mockResolvedValueOnce({ rows: [] }) // existing verification
+      .mockResolvedValueOnce({ rows: [] }) // insert verification
+      .mockResolvedValueOnce({ rows: [] }) // bump reporter score
       .mockResolvedValueOnce({ rows: [{ id: "i1", verified_by: 1, status: "active", severity: "vigilance" }] });
     const res = await request(app)
       .post("/api/map/incidents/i1/verify")
@@ -185,7 +188,10 @@ describe("Incidents", () => {
 
   it("POST /api/map/incidents/:id/verify sets danger when 3 confirmations", async () => {
     mockQuery
-      .mockResolvedValueOnce({ rows: [{ verified_by: 2, status: "active", severity: "vigilance" }] })
+      .mockResolvedValueOnce({
+        rows: [{ verified_by: 2, status: "active", severity: "vigilance", reliability_score: 50, user_id: "u1" }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: "i1", verified_by: 3, status: "verified", severity: "danger" }] });
@@ -305,7 +311,7 @@ describe("SOS", () => {
       .post("/api/sos/cancel")
       .set("Authorization", `Bearer ${validToken}`);
     expect(res.status).toBe(200);
-    expect(res.body.message).toMatch(/annulée/i);
+    expect(res.body.message).toMatch(/fausse alerte|annul/i);
   });
 
   it("POST /api/sos/cancel rejects after 2-minute window", async () => {

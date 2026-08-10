@@ -8,9 +8,12 @@ Compte Play Console disponible. App Store iOS : plus tard.
 
 | Fichier | Usage |
 |---------|--------|
-| `frontend/assets/images/logo.png` | Icône launcher Android/iOS |
+| `frontend/assets/branding/app-icon.png` | Source launcher (`flutter_launcher_icons`) |
+| `frontend/assets/branding/playstore/icon-512.png` | Icône fiche Play (512×512, fond plein) |
 | `frontend/assets/branding/splash.png` | Écran d’accueil Flutter |
 | Splash natif | `flutter_native_splash` (fond `#0B6E6E` + logo) |
+
+Après chaque rebuild AAB : uploader aussi `icon-512.png` dans Play Console → Présence sur le Play Store → Icône de l’application (la fiche peut rester « non examinée » ; l’icône installée suit le nouveau AAB).
 
 Régénérer icônes / splash natif après changement de logo :
 
