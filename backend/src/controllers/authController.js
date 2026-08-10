@@ -10,6 +10,22 @@ const { otpPhoneLimit } = require("../config/features");
 const OTP_TTL_SECONDS = 300;
 const OTP_PHONE_MAX = Number(process.env.OTP_PHONE_MAX_PER_WINDOW || 5);
 
+/**
+ * Temporary OTP bypass for admin testing without working SMS.
+ * SECURITY: never enable by default. Only when ALLOW_DEV_OTP=true
+ * (or OTP_BYPASS_ENABLED=true). Prefer also leaving SMS keys empty so
+ * codes are not dual-path; either way, DISABLE this flag as soon as
+ * Twilio/SerdiPay delivery works — otherwise OTP leaks in API + logs.
+ */
+const isDevOtpBypassEnabled = () =>
+  process.env.ALLOW_DEV_OTP === "true" ||
+  process.env.OTP_BYPASS_ENABLED === "true";
+
+/** Expose OTP in API/logs: local/dev without SMS, or explicit flag (incl. prod). */
+const shouldExposeDevOtp = () =>
+  isDevOtpBypassEnabled() ||
+  (process.env.NODE_ENV !== "production" && !isSMSConfigured());
+
 const requestCode = async (req, res) => {
   const phone = normalizePhone(req.body.phone);
   if (!phone) return res.status(400).json({ error: "Numéro de téléphone invalide" });
@@ -47,7 +63,15 @@ const requestCode = async (req, res) => {
       "DELETE FROM otp_codes WHERE expires_at < NOW() - INTERVAL '1 hour'"
     );
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    // Prefer random OTP; optional OTP_BYPASS_CODE only when bypass flag is on
+    const bypassFixed =
+      isDevOtpBypassEnabled() && process.env.OTP_BYPASS_CODE
+        ? String(process.env.OTP_BYPASS_CODE).replace(/\D/g, "").slice(0, 6)
+        : "";
+    const code =
+      bypassFixed.length === 6
+        ? bypassFixed
+        : String(Math.floor(100000 + Math.random() * 900000));
     const codeHash = await bcrypt.hash(code, 10);
     const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
 
@@ -58,16 +82,18 @@ const requestCode = async (req, res) => {
 
     await sendSMS(phone, `Votre code SafeAlert: ${code}. Valide 5 minutes.`);
 
-    const exposeDevOtp =
-      process.env.NODE_ENV !== "production" && !isSMSConfigured();
+    const exposeDevOtp = shouldExposeDevOtp();
 
     if (exposeDevOtp) {
-      log("");
-      log("══════════════════════════════════════════════");
-      log(`  [DEV OTP] ${phone} → ${code}  (valide 5 min)`);
-      log("  Twilio non configuré — SMS simulé, voir terminal.");
-      log("══════════════════════════════════════════════");
-      log("");
+      // console.warn so Render (and other hosts) always surface this in logs
+      console.warn("");
+      console.warn("══════════════════════════════════════════════");
+      console.warn(`  [DEV OTP] ${phone} → ${code}  (valide 5 min)`);
+      console.warn("  SMS non configuré — bypass temporaire (ALLOW_DEV_OTP).");
+      console.warn("  DÉSACTIVER dès que Twilio/SerdiPay est en place.");
+      console.warn("══════════════════════════════════════════════");
+      console.warn("");
+      log(`[DEV OTP] ${phone} → ${code}`);
     }
 
     const payload = { message: "Code envoyé", expiresIn: OTP_TTL_SECONDS };

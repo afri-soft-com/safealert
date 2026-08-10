@@ -33,13 +33,25 @@ VITE_API_BASE_URL=http://localhost:3000/api
 ## Connexion
 
 1. Saisir le numéro de téléphone au format international (`+243971163574`)
-2. Recevoir le code OTP par SMS (ou en dev : terminal backend `[DEV OTP]` / champ `devCode`)
+2. Recevoir le code OTP par SMS (ou, sans SMS : terminal / logs Render `[DEV OTP]` / champ `devCode` — voir bypass ci-dessous)
 3. Seuls les comptes `platform_admin` accèdent à la console
+
+**Production :** [https://safealert-admin.onrender.com](https://safealert-admin.onrender.com)
+
+### Bypass OTP temporaire (sans Twilio)
+
+Sur l’API Render (`safealert-api`) :
+
+```env
+ALLOW_DEV_OTP=true
+```
+
+Puis demander un code avec `+243971163574` : le code apparaît dans la réponse API, l’UI admin (« Code de test : … ») et les logs Render. **Supprimer `ALLOW_DEV_OTP` dès que le SMS est configuré.**
 
 ### Promouvoir un administrateur
 
 ```bash
-# Compte déjà créé via l'app mobile
+# Compte déjà créé via l'app mobile (ou après un OTP réussi)
 PLATFORM_ADMIN_PHONE=+243971163574 npm run migrate
 
 # Ou SQL direct

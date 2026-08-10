@@ -56,10 +56,21 @@ DATABASE_URL_DIRECT=postgresql://USER:PASS@ep-xxx.region.aws.neon.tech/safealert
 2. Sur Render (ou `.env` local) : `SERDIPAY_API_KEY`, `SERDIPAY_SMS_URL`, éventuellement `SERDIPAY_SENDER_ID=SafeAlert`.
 3. Si l’auth n’est pas Bearer : `SERDIPAY_API_KEY_HEADER=apiKey`.
 4. Fallback recommandé : configurer aussi Twilio (`TWILIO_*`) pour secours.
-5. Vérifier : `POST /api/auth/request-code` → SMS reçu (en prod `devCode` n’est **jamais** renvoyé).
-6. Sans aucun fournisseur : simulation console uniquement (OK en dev).
+5. Vérifier : `POST /api/auth/request-code` → SMS reçu (avec SMS configuré, `devCode` n’est **pas** renvoyé).
+6. Sans aucun fournisseur : simulation console (dev) ou bypass explicite ci-dessous.
 
 Priorité automatique (`SMS_PROVIDER=auto`) : **SerdiPay → Twilio → Africa’s Talking → simulation**.
+
+### Bypass temporaire sans clés SMS (tests admin prod)
+
+| Variable | Rôle |
+|----------|------|
+| `ALLOW_DEV_OTP=true` | Active le bypass (alias : `OTP_BYPASS_ENABLED=true`) — OTP dans `devCode` + logs, même en `NODE_ENV=production` |
+| `OTP_BYPASS_CODE` | Optionnel — code fixe à 6 chiffres ; sinon OTP aléatoire + `devCode` dans la réponse |
+
+- Logs : `[DEV OTP]` via `console.warn` (visible sur Render).
+- **Désactiver** (`ALLOW_DEV_OTP` / `OTP_BYPASS_CODE`) dès que Twilio ou SerdiPay livre réellement les SMS.
+- Voir [TESTING_WEB.md](./TESTING_WEB.md) et [ADMIN_WEB.md](./ADMIN_WEB.md).
 
 ## 3. Twilio (SMS — OTP et alertes, secours)
 
@@ -72,7 +83,9 @@ Priorité automatique (`SMS_PROVIDER=auto`) : **SerdiPay → Twilio → Africa�
 | **Statut** | À configurer (sinon simulation console en dev) |
 | **Valeur (placeholder)** | SID / Token depuis [console.twilio.com](https://console.twilio.com) |
 
-**Dev sans Twilio :** avec `NODE_ENV=development` et variables Twilio/Africa's Talking vides, le code OTP s'affiche dans le terminal backend (`[DEV OTP]`) et est renvoyé dans la réponse `POST /api/auth/request-code` via le champ `devCode` (jamais en production).
+**Sans Twilio :**
+- **Dev** (`NODE_ENV=development`, SMS vide) : code dans le terminal (`[DEV OTP]`) + champ `devCode` dans `POST /api/auth/request-code`.
+- **Prod temporaire** : uniquement si `ALLOW_DEV_OTP=true` et SMS toujours non configuré — même comportement (`devCode` + logs). À retirer dès que Twilio/SerdiPay arrive.
 
 ---
 

@@ -4,8 +4,6 @@ import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { userFacingError } from "../utils/userFacingError";
 
-const isDev = import.meta.env.DEV;
-
 export default function LoginPage() {
   const { isAuthenticated, ready, login } = useAuth();
   const [phone, setPhone] = useState("+243");
@@ -25,8 +23,9 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await api.requestCode(phone.trim());
-      if (isDev && res.devCode) {
-        setDevHint(`Mode développement — code : ${res.devCode}`);
+      // Show whenever API returns devCode (local DEV or temporary prod ALLOW_DEV_OTP)
+      if (res.devCode) {
+        setDevHint(`Code de test : ${res.devCode}`);
         setCode(res.devCode);
       }
       setStep("code");
