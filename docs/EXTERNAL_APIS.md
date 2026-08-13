@@ -107,12 +107,12 @@ Priorité automatique (`SMS_PROVIDER=auto`) : **SerdiPay → Twilio → Africa�
 | Champ | Valeur |
 |-------|--------|
 | **Objectif** | Notifications push SOS, alertes de proximité (500 m), annulations |
-| **Variables backend** | `FCM_PROJECT_ID`, `FCM_PRIVATE_KEY`, `FCM_CLIENT_EMAIL` |
+| **Variables backend (Render)** | `FCM_PROJECT_ID`, `FCM_PRIVATE_KEY`, `FCM_CLIENT_EMAIL` (compte de service HTTP v1 — **pas** de legacy server key) |
 | **Variables frontend** | `google-services.json` (Android), `GoogleService-Info.plist` (iOS), `lib/firebase_options.dart` |
-| **URL** | Firebase Admin SDK (pas d'URL fixe) |
+| **URL** | Firebase Admin SDK → FCM HTTP v1 (pas d'URL fixe, pas de clé serveur legacy) |
 | **Fichiers** | `backend/src/config/firebase.js`, `frontend/lib/services/fcm_service.dart` |
-| **Statut** | À configurer pour les push en production |
-| **Valeur (placeholder)** | Compte de service Firebase (JSON) — voir README section FCM |
+| **Statut** | Client Android/iOS déjà câblé (`safealert-prod`) ; renseigner `FCM_*` sur Render pour l'envoi serveur |
+| **Guide** | [FIREBASE_SETUP.md](FIREBASE_SETUP.md) |
 
 ---
 

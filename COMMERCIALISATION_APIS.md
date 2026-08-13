@@ -297,9 +297,9 @@ FCM_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----
 
 | Élément | Emplacement | Statut actuel |
 |---------|-------------|---------------|
-| `google-services.json` | `frontend/android/app/google-services.json` | Placeholder à remplacer |
-| `GoogleService-Info.plist` | `frontend/ios/Runner/GoogleService-Info.plist` | À créer (iOS) |
-| `firebase_options.dart` | `frontend/lib/firebase_options.dart` | Généré par FlutterFire CLI |
+| `google-services.json` | `frontend/android/app/google-services.json` | Présent (`safealert-prod`) |
+| `GoogleService-Info.plist` | `frontend/ios/Runner/GoogleService-Info.plist` | Présent (`safealert-prod`) |
+| `firebase_options.dart` | `frontend/lib/firebase_options.dart` | Présent — régénérer via FlutterFire si besoin |
 | Package Android | `com.safealert.safealert` | Déjà configuré |
 
 **Console :** [Firebase Console](https://console.firebase.google.com/)  

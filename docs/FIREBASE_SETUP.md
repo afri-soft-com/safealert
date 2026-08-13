@@ -4,6 +4,22 @@ Guide pas à pas pour activer les notifications push (FCM) sur Android et le bac
 
 ---
 
+## État actuel (août 2026)
+
+| Élément | Statut |
+|---------|--------|
+| Projet Firebase | `safealert-prod` (déjà créé) |
+| Package Android | `com.safealert.safealert` |
+| `google-services.json` | Présent dans le dépôt : `frontend/android/app/google-services.json` |
+| `firebase_options.dart` | Présent (`frontend/lib/firebase_options.dart`) |
+| Plugin Gradle `google-services` | Configuré (`settings.gradle.kts` + `app/build.gradle.kts`) |
+| Backend Admin SDK | `backend/src/config/firebase.js` — **HTTP v1 via compte de service** |
+| Vars Render `FCM_*` | À renseigner manuellement (sync: false dans `render.yaml`) |
+
+Sans `FCM_*` sur Render, l’API démarre mais les push sont ignorées (`FCM not configured`).
+
+---
+
 ## Prérequis
 
 - Compte [Firebase Console](https://console.firebase.google.com/)
@@ -12,7 +28,9 @@ Guide pas à pas pour activer les notifications push (FCM) sur Android et le bac
 
 ---
 
-## 1. Créer un projet Firebase
+## 1. Créer un projet Firebase (si besoin)
+
+> Si le projet `safealert-prod` existe déjà avec l’app Android `com.safealert.safealert`, passez à la section **5** (compte de service / Render).
 
 1. Ouvrez [console.firebase.google.com](https://console.firebase.google.com/)
 2. **Ajouter un projet** → nommez-le (ex. `safealert-prod`)
@@ -33,7 +51,8 @@ Guide pas à pas pour activer les notifications push (FCM) sur Android et le bac
 frontend/android/app/google-services.json
 ```
 
-> Ce fichier contient des identifiants publics — ne pas le confondre avec la clé de compte de service backend.
+> Ce fichier contient des identifiants **client** (API key liée au package) — ce n’est **pas** le secret serveur.  
+> Ne le confondez jamais avec le JSON du **compte de service** (`*firebase-adminsdk*.json`).
 
 Le plugin Gradle `com.google.gms.google-services` est déjà configuré dans `frontend/android/app/build.gradle.kts`.
 
@@ -46,24 +65,15 @@ Le plugin Gradle `com.google.gms.google-services` est déjà configuré dans `fr
 ```bash
 dart pub global activate flutterfire_cli
 cd frontend
-flutterfire configure
+flutterfire configure --project=safealert-prod --platforms=android,ios --android-package-name=com.safealert.safealert --ios-bundle-id=com.safealert.safealert --yes
 ```
 
-Sélectionnez votre projet Firebase et les plateformes (Android, iOS).
-
-Cela génère `frontend/lib/firebase_options.dart`. Mettez à jour `fcm_service.dart` :
-
-```dart
-import '../firebase_options.dart';
-// ...
-await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-```
+Cela régénère `frontend/lib/firebase_options.dart`. L’init dans `fcm_service.dart` utilise déjà `DefaultFirebaseOptions.currentPlatform`.
 
 ### Option B — Manuel
 
 1. Copiez `frontend/lib/firebase_options.dart.example` vers `frontend/lib/firebase_options.dart`
 2. Remplissez les valeurs depuis la console Firebase → Paramètres du projet → Vos applications
-3. Appliquez la même modification dans `fcm_service.dart` que ci-dessus
 
 ---
 
@@ -83,16 +93,6 @@ L'app iOS est enregistrée dans Firebase (`safealert-prod`, app **SafeAlert iOS*
 
 > **Attention :** un `GoogleService-Info.plist` trouvé dans `Downloads` peut appartenir à un **autre projet** (ex. AutoDiag). Vérifiez `PROJECT_ID` = `safealert-prod` et `BUNDLE_ID` = `com.safealert.safealert`.
 
-### Régénérer la config iOS
-
-```bash
-cd frontend
-dart pub global activate flutterfire_cli
-flutterfire configure --project=safealert-prod --platforms=ios,android --ios-bundle-id=com.safealert.safealert --yes
-```
-
-Sur Mac : `cd ios && pod install`
-
 ### Étapes manuelles restantes (Apple + push prod)
 
 1. **Compte Apple Developer** — certificat / provisioning pour `com.safealert.safealert`
@@ -101,77 +101,103 @@ Sur Mac : `cd ios && pod install`
 4. **Xcode** (Mac) → target Runner → **Signing & Capabilities** → Push Notifications + Background Modes (*Remote notifications*)
 5. **Release / TestFlight** : passer `aps-environment` à `production` dans `Runner.entitlements`
 
-### Tester iOS
-
-| Environnement | Firebase | Token FCM | Push |
-|---------------|----------|-----------|------|
-| **Simulateur** (Mac) | Oui | Souvent non | Non |
-| **iPhone physique** | Oui | Oui (APNs requis) | Oui |
-
-```bash
-cd frontend && flutter pub get
-cd ios && pod install && cd ..
-flutter run -d "iPhone 16"          # simulateur
-flutter run -d <device-id>          # iPhone branché
-```
-
-Logs attendus : `FCM initialized` (iPhone) ou `FCM: no token` (simulateur, normal).
-
-> **Windows :** préparation des fichiers possible ici ; `flutter run` / `flutter build ios` nécessitent un Mac avec Xcode.
-
 ---
 
-## 5. Compte de service pour le backend
+## 5. Compte de service pour le backend (HTTP v1 — requis)
 
-Les push serveur → app utilisent l'**Admin SDK** avec un compte de service :
+Le backend utilise **firebase-admin** avec un **compte de service** (FCM HTTP v1).  
+**Ne pas** utiliser la « Server key » legacy Cloud Messaging (obsolète / refusée).
 
-1. Firebase Console → **Paramètres du projet** → **Comptes de service**
-2. **Générer une nouvelle clé privée** → téléchargez le JSON
-3. **Ne commitez jamais ce fichier** dans Git
+1. Firebase Console → ⚙ **Paramètres du projet** → onglet **Comptes de service**
+2. **Générer une nouvelle clé privée** → téléchargez le JSON (ex. `safealert-prod-firebase-adminsdk-xxxxx.json`)
+3. **Ne commitez jamais ce fichier** — déjà ignoré par Git (`*firebase-adminsdk*.json`, `**/serviceAccount*.json`)
 
-Extrayez ces champs du JSON et ajoutez-les au `.env` backend :
+Extrayez ces champs du JSON :
+
+| Champ JSON | Variable d’environnement |
+|------------|--------------------------|
+| `project_id` | `FCM_PROJECT_ID` |
+| `client_email` | `FCM_CLIENT_EMAIL` |
+| `private_key` | `FCM_PRIVATE_KEY` |
+
+Alias acceptés : `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`.
 
 ```env
-# Alias acceptés : FCM_* ou FIREBASE_*
-FCM_PROJECT_ID=votre-project-id
-FCM_CLIENT_EMAIL=firebase-adminsdk-xxxxx@votre-project-id.iam.gserviceaccount.com
+FCM_PROJECT_ID=safealert-prod
+FCM_CLIENT_EMAIL=firebase-adminsdk-xxxxx@safealert-prod.iam.gserviceaccount.com
 FCM_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"
 ```
 
-**Important :** la clé privée doit conserver les `\n` littéraux (ou retours à la ligne échappés) — le backend les convertit automatiquement.
+**Important :** la clé privée doit conserver les `\n` littéraux — le backend les convertit (`privateKey.replace(/\\n/g, "\n")`).
 
-Redémarrez l'API. Au démarrage vous devez voir : `Firebase FCM initialized`.
-
-Sans ces variables, l'API fonctionne mais les push sont désactivés.
+Sur Google Cloud (lié au projet Firebase), activez **Firebase Cloud Messaging API** si une erreur d’API désactivée apparaît.
 
 ---
 
-## 6. Vérification / readiness production
+## 6. Variables exactes sur Render (`safealert-api`)
+
+Dashboard Render → service **safealert-api** → **Environment** → ajoutez / mettez à jour :
+
+| Variable | Valeur |
+|----------|--------|
+| `FCM_PROJECT_ID` | `project_id` du JSON compte de service (ex. `safealert-prod`) |
+| `FCM_CLIENT_EMAIL` | `client_email` du JSON |
+| `FCM_PRIVATE_KEY` | `private_key` du JSON — **une ligne** avec `\n` échappés, entre guillemets |
+
+Puis **Manual Deploy** / redémarrage. Logs attendus : `Firebase FCM initialized`.
+
+Sans ces trois variables : `FCM not configured — push notifications disabled`.
+
+Référence Blueprint : `render.yaml` (clés présentes, `sync: false` → valeurs uniquement dans le dashboard).
+
+---
+
+## 7. Git, secrets et CI
+
+| Fichier | Dans Git ? | Secret GitHub ? |
+|---------|------------|-----------------|
+| `frontend/android/app/google-services.json` | Oui (config client, déjà dans le dépôt) | **Non** — le job AAB CI le lit depuis le repo |
+| `frontend/lib/firebase_options.dart` | Oui (mêmes IDs client) | Non |
+| JSON compte de service (`*firebase-adminsdk*.json`) | **Non** (gitignore) | **Non** — uniquement variables `FCM_*` sur Render |
+| `FCM_PRIVATE_KEY` etc. | **Non** | Non côté GitHub ; secrets **Render** uniquement |
+
+- **Ne jamais committer** de clé privée / JSON Admin SDK.
+- Si un jour vous retirez `google-services.json` du dépôt, il faudrait alors un secret CI (ex. `GOOGLE_SERVICES_JSON`) + une étape qui écrit le fichier avant `flutter build appbundle`. **Ce n’est pas le cas aujourd’hui.**
+
+---
+
+## 8. Vérification / test push
 
 | Étape | Vérification |
 |-------|----------------|
-| Android | `flutter run` — pas d'erreur Firebase au démarrage |
-| iOS | `flutter run` sur Mac — pas d'erreur Firebase ; plist présent dans `ios/Runner/` |
-| Token FCM | Logs : `FCM initialized` puis `FCM token registered with API` après login |
-| Refresh | Rotation token → `onTokenRefresh` re-uploade automatiquement |
-| Backend | Log serveur : `Firebase FCM initialized` |
-| Upload token | Après connexion, `PUT /api/auth/fcm-token` enregistre le token |
-| DB | `SELECT fcm_token FROM users WHERE phone = '…'` non null après login |
-| Push test | Déclencher SOS → contact avec FCM reçoit la notif |
+| Android | `flutter run` sur appareil physique — accepter la permission notifications |
+| Token FCM | Logs app : `FCM initialized` puis après login `FCM token registered with API` |
+| Backend | Logs Render : `Firebase FCM initialized` |
+| Upload token | `PUT /api/auth/fcm-token` (authentifié) enregistre `users.fcm_token` |
+| DB | `SELECT id, phone, left(fcm_token, 20) FROM users WHERE fcm_token IS NOT NULL;` |
+| Push console | Firebase Console → **Messaging** → campagne test / « Send test message » avec le token appareil |
+| Push métier | Déclencher un SOS avec un contact de confiance qui a un compte + `fcm_token` |
+
+Il n’y a **pas** d’endpoint HTTP dédié « test push » : l’envoi passe par `sendPush` (SOS, proximité, groupes, etc.).
+
+### Flux minimal de test
+
+1. Deux comptes (A = SOS, B = contact de confiance de A), tous deux connectés sur appareils physiques.
+2. B doit avoir un `fcm_token` en base après login.
+3. A déclenche un SOS → B reçoit la notification FCM.
 
 ---
 
-## 7. Dépannage
+## 9. Dépannage
 
 | Problème | Solution |
 |----------|----------|
-| `google-services.json` manquant | Télécharger depuis Firebase, placer dans `android/app/` |
-| `GoogleService-Info.plist` manquant (iOS) | Console Firebase → app iOS → télécharger, placer dans `ios/Runner/` |
-| Build iOS sous Windows | Impossible sans Mac ; préparer Firebase + plist, tester plus tard |
+| `google-services.json` manquant | Télécharger depuis Firebase → `frontend/android/app/` |
+| Push Android 13+ refusées | Accepter la permission ; `POST_NOTIFICATIONS` + `requestPermission` dans l’app |
+| `Firebase FCM initialized` absent | Vérifier les 3 `FCM_*` sur Render (surtout `\n` dans `FCM_PRIVATE_KEY`) |
+| Erreur « legacy server key » | Ne pas utiliser la Server key ; utiliser le compte de service Admin |
+| Token null (émulateur) | Utiliser un appareil physique avec Play Services |
 | Push iOS non reçues | Clé APNs (.p8) téléversée dans Firebase → Cloud Messaging |
-| `firebase_options.dart` absent | `flutterfire configure` ou copier l'exemple |
-| Push non reçues (Android) | Vérifier FCM_* dans `.env`, token enregistré en base (`users.fcm_token`) |
-| Erreur clé privée | Entourer `FCM_PRIVATE_KEY` de guillemets, `\n` entre les lignes |
 
 ---
 
@@ -181,15 +207,14 @@ Sans ces variables, l'API fonctionne mais les push sont désactivés.
 |---------|------|
 | `frontend/android/app/google-services.json` | Config Android Firebase |
 | `frontend/ios/Runner/GoogleService-Info.plist` | Config iOS Firebase |
-| `frontend/ios/Podfile` | Dépendances CocoaPods iOS |
-| `frontend/ios/Runner/Runner.entitlements` | Capability push APNs |
-| `frontend/lib/firebase_options.dart` | Options Flutter (généré) |
-| `frontend/lib/services/fcm_service.dart` | Init FCM côté app |
-| `backend/src/config/firebase.js` | Admin SDK + envoi push |
-| `backend/.env.example` | Variables d'environnement |
+| `frontend/lib/firebase_options.dart` | Options Flutter |
+| `frontend/lib/services/fcm_service.dart` | Init FCM + upload token |
+| `backend/src/config/firebase.js` | Admin SDK + `sendPush` |
+| `backend/.env.example` / `.env.production.example` | Variables |
+| `render.yaml` | Déclare `FCM_*` (valeurs dans le dashboard) |
 
 Voir aussi [EXTERNAL_APIS.md](EXTERNAL_APIS.md) section Firebase Cloud Messaging.
 
 ---
 
-*Dernière mise à jour : juin 2026*
+*Dernière mise à jour : août 2026*

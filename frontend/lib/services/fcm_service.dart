@@ -29,11 +29,10 @@ class FCMService extends ChangeNotifier {
       );
       final messaging = FirebaseMessaging.instance;
 
-      if (defaultTargetPlatform == TargetPlatform.iOS) {
-        await messaging.requestPermission(
-          alert: true, badge: true, sound: true,
-        );
-      }
+      // iOS + Android 13+ (POST_NOTIFICATIONS)
+      await messaging.requestPermission(
+        alert: true, badge: true, sound: true,
+      );
 
       _token = await messaging.getToken();
       if (_token == null) {

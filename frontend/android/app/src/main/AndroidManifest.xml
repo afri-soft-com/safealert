@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Android 13+ : affichage des notifications push FCM -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- CAMERA: prise de photo optionnelle (preuves témoin). Pas de READ_MEDIA_* :
          image_picker / file_picker utilisent le sélecteur système (politique Play Photo & Video). -->
     <uses-permission android:name="android.permission.CAMERA" />
