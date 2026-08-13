@@ -8,13 +8,13 @@ Guide pas à pas pour activer les notifications push (FCM) sur Android et le bac
 
 | Élément | Statut |
 |---------|--------|
-| Projet Firebase | `safealert-prod` (déjà créé) |
+| Projet Firebase | `safealert-be940` (remplace l’ancien `safealert-prod`) |
 | Package Android | `com.safealert.safealert` |
 | `google-services.json` | Présent dans le dépôt : `frontend/android/app/google-services.json` |
-| `firebase_options.dart` | Présent (`frontend/lib/firebase_options.dart`) |
+| `firebase_options.dart` | Présent (`frontend/lib/firebase_options.dart`) — Android/web = `safealert-be940` ; iOS à migrer |
 | Plugin Gradle `google-services` | Configuré (`settings.gradle.kts` + `app/build.gradle.kts`) |
 | Backend Admin SDK | `backend/src/config/firebase.js` — **HTTP v1 via compte de service** |
-| Vars Render `FCM_*` | À renseigner manuellement (sync: false dans `render.yaml`) |
+| Vars Render `FCM_*` | `FCM_PROJECT_ID` / `FCM_CLIENT_EMAIL` / `FCM_PRIVATE_KEY` sur `safealert-api` |
 
 Sans `FCM_*` sur Render, l’API démarre mais les push sont ignorées (`FCM not configured`).
 
@@ -30,10 +30,10 @@ Sans `FCM_*` sur Render, l’API démarre mais les push sont ignorées (`FCM not
 
 ## 1. Créer un projet Firebase (si besoin)
 
-> Si le projet `safealert-prod` existe déjà avec l’app Android `com.safealert.safealert`, passez à la section **5** (compte de service / Render).
+> Si le projet `safealert-be940` existe déjà avec l’app Android `com.safealert.safealert`, passez à la section **5** (compte de service / Render).
 
 1. Ouvrez [console.firebase.google.com](https://console.firebase.google.com/)
-2. **Ajouter un projet** → nommez-le (ex. `safealert-prod`)
+2. **Ajouter un projet** → nommez-le (ex. `safealert-be940`)
 3. Désactivez Google Analytics si non nécessaire
 4. Créez le projet
 
@@ -65,7 +65,7 @@ Le plugin Gradle `com.google.gms.google-services` est déjà configuré dans `fr
 ```bash
 dart pub global activate flutterfire_cli
 cd frontend
-flutterfire configure --project=safealert-prod --platforms=android,ios --android-package-name=com.safealert.safealert --ios-bundle-id=com.safealert.safealert --yes
+flutterfire configure --project=safealert-be940 --platforms=android,ios --android-package-name=com.safealert.safealert --ios-bundle-id=com.safealert.safealert --yes
 ```
 
 Cela régénère `frontend/lib/firebase_options.dart`. L’init dans `fcm_service.dart` utilise déjà `DefaultFirebaseOptions.currentPlatform`.

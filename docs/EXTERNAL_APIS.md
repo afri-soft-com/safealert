@@ -111,7 +111,7 @@ Priorité automatique (`SMS_PROVIDER=auto`) : **SerdiPay → Twilio → Africa�
 | **Variables frontend** | `google-services.json` (Android), `GoogleService-Info.plist` (iOS), `lib/firebase_options.dart` |
 | **URL** | Firebase Admin SDK → FCM HTTP v1 (pas d'URL fixe, pas de clé serveur legacy) |
 | **Fichiers** | `backend/src/config/firebase.js`, `frontend/lib/services/fcm_service.dart` |
-| **Statut** | Client Android/iOS déjà câblé (`safealert-prod`) ; renseigner `FCM_*` sur Render pour l'envoi serveur |
+| **Statut** | Client Android câblé (`safealert-be940`, anciennement `safealert-prod`) ; iOS à migrer ; `FCM_*` sur Render pour l'envoi serveur |
 | **Guide** | [FIREBASE_SETUP.md](FIREBASE_SETUP.md) |
 
 ---

@@ -15,23 +15,25 @@ class DefaultFirebaseOptions {
     }
   }
 
+  // Aligné sur google-services.json (projet safealert-be940).
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAUGfLqvMoiA7D5nxYLjmqAwLU_Kzhsu0g',
-    appId: '1:844603867770:android:5ce7ecb4ccb0b2414ff1c3',
-    messagingSenderId: '844603867770',
-    projectId: 'safealert-prod',
-    authDomain: 'safealert-prod.firebaseapp.com',
-    storageBucket: 'safealert-prod.firebasestorage.app',
+    apiKey: 'AIzaSyAcyB7nckbY2w-4zS97cd5xEYF8D2-NxSc',
+    appId: '1:552870535150:android:887347eb7ddad7a05938ff',
+    messagingSenderId: '552870535150',
+    projectId: 'safealert-be940',
+    authDomain: 'safealert-be940.firebaseapp.com',
+    storageBucket: 'safealert-be940.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAUGfLqvMoiA7D5nxYLjmqAwLU_Kzhsu0g',
-    appId: '1:844603867770:android:5ce7ecb4ccb0b2414ff1c3',
-    messagingSenderId: '844603867770',
-    projectId: 'safealert-prod',
-    storageBucket: 'safealert-prod.firebasestorage.app',
+    apiKey: 'AIzaSyAcyB7nckbY2w-4zS97cd5xEYF8D2-NxSc',
+    appId: '1:552870535150:android:887347eb7ddad7a05938ff',
+    messagingSenderId: '552870535150',
+    projectId: 'safealert-be940',
+    storageBucket: 'safealert-be940.firebasestorage.app',
   );
 
+  // iOS : encore l’ancien projet jusqu’à dépôt d’un GoogleService-Info.plist safealert-be940.
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyC8eWVdUmyxjdfwcLt5G-fxG4u8wcPWaMQ',
     appId: '1:844603867770:ios:d22d977de1ee3f604ff1c3',

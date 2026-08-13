@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "844603867770",
-    "project_id": "safealert-prod",
-    "storage_bucket": "safealert-prod.firebasestorage.app"
+    "project_number": "552870535150",
+    "project_id": "safealert-be940",
+    "storage_bucket": "safealert-be940.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:844603867770:android:5ce7ecb4ccb0b2414ff1c3",
+        "mobilesdk_app_id": "1:552870535150:android:887347eb7ddad7a05938ff",
         "android_client_info": {
           "package_name": "com.safealert.safealert"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAUGfLqvMoiA7D5nxYLjmqAwLU_Kzhsu0g"
+          "current_key": "AIzaSyAcyB7nckbY2w-4zS97cd5xEYF8D2-NxSc"
         }
       ],
       "services": {
