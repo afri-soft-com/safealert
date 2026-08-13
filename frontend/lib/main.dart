@@ -1,3 +1,4 @@
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -17,7 +18,10 @@ import 'providers/admin_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/trip_provider.dart';
 import 'providers/checkin_provider.dart';
+import 'providers/safety_ping_provider.dart';
 import 'screens/splash_screen.dart';
+import 'screens/offline_queue_screen.dart';
+import 'screens/safety_ping_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/sos_screen.dart';
@@ -70,6 +74,7 @@ class SafeAlertApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AdminProvider()),
         ChangeNotifierProvider(create: (_) => TripProvider()),
         ChangeNotifierProvider(create: (_) => CheckInProvider()),
+        ChangeNotifierProvider(create: (_) => SafetyPingProvider()),
       ],
       child: Consumer<LocaleProvider>(
         builder: (context, localeProv, _) {
@@ -105,6 +110,7 @@ class _AppShellState extends State<AppShell> {
   bool _discreetLocked = false;
   bool _discreetChecked = false;
   final QuickActions _quickActions = const QuickActions();
+  final AppLinks _appLinks = AppLinks();
 
   String get _currentScreen => _navStack.last;
 
@@ -118,6 +124,60 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  Future<void> _handleDeepLink(Uri uri) async {
+    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+    // safealert://invite/CODE or https://.../invite/CODE
+    // safealert://group/CODE
+    final segments = uri.pathSegments;
+    final host = uri.host;
+    String? kind;
+    String? code;
+    if (uri.scheme == 'safealert') {
+      kind = host.isNotEmpty ? host : (segments.isNotEmpty ? segments.first : null);
+      code = segments.isNotEmpty ? segments.last : uri.path.replaceAll('/', '');
+      if (kind == code && segments.length >= 2) {
+        kind = segments[0];
+        code = segments[1];
+      }
+    } else if (segments.isNotEmpty) {
+      kind = segments[0];
+      code = segments.length > 1 ? segments[1] : null;
+    }
+    if (code == null || code.isEmpty) return;
+    code = code.toUpperCase();
+
+    if (!auth.isAuthenticated) {
+      _navigate('login');
+      return;
+    }
+
+    if (kind == 'invite') {
+      final ok = await context.read<ContactsProvider>().acceptInvite(code);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? 'Cercle rejoint !' : 'Invitation invalide ou expirée')),
+      );
+      if (ok) _navigate('contacts');
+    } else if (kind == 'group') {
+      final ok = await context.read<GroupsProvider>().joinGroup(code);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? 'Groupe rejoint !' : 'Code de groupe invalide')),
+      );
+      if (ok) _navigate('groups');
+    }
+  }
+
+  void _initDeepLinks() {
+    _appLinks.getInitialLink().then((uri) {
+      if (uri != null) _handleDeepLink(uri);
+    });
+    _appLinks.uriLinkStream.listen((uri) {
+      _handleDeepLink(uri);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -127,6 +187,7 @@ class _AppShellState extends State<AppShell> {
 
       VolumeSOSService.init(_triggerSilentSos);
       ShakeSOSService.init(_triggerSilentSos);
+      _initDeepLinks();
 
       _quickActions.initialize((shortcutType) {
         if (shortcutType == 'sos') _triggerSilentSos();
@@ -298,6 +359,10 @@ class _AppShellState extends State<AppShell> {
         screen = TrustZonesScreen(onBack: _goBack);
       case 'neighborhood':
         screen = NeighborhoodScreen(onBack: _goBack);
+      case 'offline_queue':
+        screen = OfflineQueueScreen(onBack: _goBack);
+      case 'safety_ping':
+        screen = SafetyPingScreen(onBack: _goBack);
       case 'help':
         screen = HelpManualScreen(onBack: _goBack, role: auth.role);
       case 'settings':

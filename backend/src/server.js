@@ -43,11 +43,16 @@ const neighborhoodRoutes = require("./routes/neighborhood");
 const backupRoutes = require("./routes/backup");
 const premiumRoutes = require("./routes/premium");
 const opsRoutes = require("./routes/ops");
+const invitesRoutes = require("./routes/invites");
+const safetyPingsRoutes = require("./routes/safetyPings");
+const corridorsRoutes = require("./routes/corridors");
+const publicRoutes = require("./routes/public");
 
 const app = express();
 const server = http.createServer(app);
 
 const path = require("path");
+const fs = require("fs");
 
 const defaultDevOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
 const corsOrigin = process.env.CORS_ORIGIN;
@@ -156,6 +161,32 @@ app.use("/api/neighborhood", neighborhoodRoutes);
 app.use("/api/backup", backupRoutes);
 app.use("/api/premium", premiumRoutes);
 app.use("/api/ops", opsRoutes);
+app.use("/api/invites", invitesRoutes);
+app.use("/api/safety-pings", safetyPingsRoutes);
+app.use("/api/corridors", corridorsRoutes);
+app.use("/api/public", publicRoutes);
+
+// Ephemeral public trip follow page (short token, read-only map)
+const followTripHtml = path.join(__dirname, "public", "follow-trip.html");
+app.get("/t/:token", (req, res) => {
+  if (!fs.existsSync(followTripHtml)) {
+    return res.status(404).send("Page indisponible");
+  }
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.sendFile(followTripHtml);
+});
+
+// Deep-link landing for circle invites (opens app or shows code)
+app.get("/invite/:code", (req, res) => {
+  const code = String(req.params.code || "").toUpperCase();
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Invitation SafeAlert</title><style>body{font-family:system-ui;padding:24px;background:#f4f7f7;color:#123}a{color:#0B6E6E}</style></head>
+<body><h1>SafeAlert</h1><p>Code d'invitation au cercle de confiance :</p>
+<p style="font-size:1.6rem;font-weight:700;letter-spacing:0.1em">${code}</p>
+<p>Ouvrez l'application SafeAlert → Confiance → « Rejoindre avec un code ».</p>
+<p><a href="safealert://invite/${code}">Ouvrir dans l'app</a></p></body></html>`);
+});
 
 const adminWebDist = process.env.ADMIN_WEB_DIST;
 if (adminWebDist) {
@@ -203,10 +234,16 @@ function startBackgroundJobs() {
   const { processOverdueTrips } = require("./controllers/tripController");
   const { purgeExpired } = require("./controllers/liveStatusController");
   const { sendDigests } = require("./controllers/neighborhoodController");
+  const { processSafetyPings } = require("./controllers/safetyPingController");
 
   // Overdue safe trips — every 60s
   setInterval(() => {
     processOverdueTrips().catch((err) => warn("trip overdue job:", err.message));
+  }, 60_000);
+
+  // Safety pings « Tu es OK ? » — every 60s
+  setInterval(() => {
+    processSafetyPings().catch((err) => warn("safety ping job:", err.message));
   }, 60_000);
 
   // Purge expired live status — every 2 min

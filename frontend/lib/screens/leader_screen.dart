@@ -328,6 +328,59 @@ class _LeaderScreenState extends State<LeaderScreen> {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: () async {
+                    final etaCtrl = TextEditingController(text: '15');
+                    final eta = await showDialog<int>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('M\'assigner / en route', style: TextStyle(fontSize: 15)),
+                        content: TextField(
+                          controller: etaCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Temps estimé (minutes)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(ctx, int.tryParse(etaCtrl.text) ?? 15),
+                            child: const Text('Confirmer'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (eta == null || !mounted) return;
+                    final auth = context.read<AuthProvider>();
+                    final agentId = auth.user?['id']?.toString();
+                    if (agentId == null) return;
+                    await p.assignAgent(id, agentId, etaMinutes: eta);
+                    await p.markEnRoute(id, etaMinutes: eta);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Citoyen informé : vous êtes en route')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.directions_run, size: 16),
+                  label: const Text('Je pars (ETA visible citoyen)',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.vert,
+                    side: const BorderSide(color: AppColors.vert),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+            ),
+          if (status == 'active' || status == 'verified' || status == 'acknowledged' || status == 'in_progress')
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
                     final ctrl = TextEditingController();
                     final reason = await showDialog<String>(
                       context: context,

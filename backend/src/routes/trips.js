@@ -21,5 +21,6 @@ router.get("/:id", authenticate, ctrl.getTrip);
 router.post("/:id/ping", authenticate, ctrl.pingTrip);
 router.post("/:id/arrive", authenticate, ctrl.arriveTrip);
 router.post("/:id/cancel", authenticate, ctrl.cancelTrip);
+router.post("/:id/share", authenticate, ctrl.createShareLink);
 
 module.exports = router;

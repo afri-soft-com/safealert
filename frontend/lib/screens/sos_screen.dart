@@ -7,6 +7,9 @@ import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../providers/incident_provider.dart';
 import '../providers/checkin_provider.dart';
+import '../providers/auth_provider.dart';
+import '../services/share_helper.dart';
+import '../services/location_service.dart';
 
 class SOSScreen extends StatefulWidget {
   final VoidCallback onBack;
@@ -23,10 +26,13 @@ class _SOSScreenState extends State<SOSScreen> {
   bool _sending = false;
   bool _cancelling = false;
   bool _checkingIn = false;
+  bool _queued = false;
   String? _incidentId;
   String? _statusMsg;
+  Map<String, dynamic>? _dispatch;
   Timer? _progressTimer;
   Timer? _liveTimer;
+  Timer? _dispatchTimer;
   static const _steps = [
     _StepData('📍', 'GPS localisé', AppColors.vert),
     _StepData('📲', 'Contacts alertés', AppColors.vert),
@@ -38,6 +44,7 @@ class _SOSScreenState extends State<SOSScreen> {
   void dispose() {
     _progressTimer?.cancel();
     _liveTimer?.cancel();
+    _dispatchTimer?.cancel();
     super.dispose();
   }
 
@@ -59,8 +66,10 @@ class _SOSScreenState extends State<SOSScreen> {
       _failed = false;
       _completed = false;
       _sending = true;
+      _queued = false;
       _statusMsg = null;
       _incidentId = null;
+      _dispatch = null;
     });
 
     final result = await context.read<IncidentProvider>().triggerSOS(
@@ -72,6 +81,18 @@ class _SOSScreenState extends State<SOSScreen> {
       setState(() {
         _failed = true;
         _sending = false;
+      });
+      return;
+    }
+
+    if (result['queued'] == true) {
+      setState(() {
+        _queued = true;
+        _failed = false;
+        _sending = false;
+        _completed = true;
+        _step = 4;
+        _statusMsg = result['message']?.toString();
       });
       return;
     }
@@ -91,9 +112,31 @@ class _SOSScreenState extends State<SOSScreen> {
             _sending = false;
           });
           _startLiveStatus();
+          _pollDispatch();
         }
       }
     });
+  }
+
+  void _pollDispatch() {
+    _dispatchTimer?.cancel();
+    if (_incidentId == null) return;
+    Future<void> tick() async {
+      if (!mounted || _incidentId == null) return;
+      final d = await context.read<IncidentProvider>().fetchCitizenDispatch(_incidentId!);
+      if (mounted && d != null) setState(() => _dispatch = d);
+    }
+    tick();
+    _dispatchTimer = Timer.periodic(const Duration(seconds: 20), (_) => tick());
+  }
+
+  Future<void> _shareSos() async {
+    final pos = await LocationService().getCurrentPosition();
+    final pseudo = context.read<AuthProvider>().user?['pseudo']?.toString();
+    final lat = pos?.latitude ?? 0.0;
+    final lng = pos?.longitude ?? 0.0;
+    final text = ShareHelper.sosMessage(lat: lat, lng: lng, pseudo: pseudo);
+    await ShareHelper.shareText(text);
   }
 
   @override
@@ -133,7 +176,7 @@ class _SOSScreenState extends State<SOSScreen> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                 children: [
-                  if (_failed)
+                  if (_failed || (_queued == true))
                     Container(
                       width: double.infinity,
                       margin: const EdgeInsets.only(bottom: 12),
@@ -143,9 +186,11 @@ class _SOSScreenState extends State<SOSScreen> {
                         border: Border.all(color: AppColors.orange),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Text(
-                        '📶 Pas de connexion — L\'alerte n\'a pas pu être envoyée. Réessayez dès que le réseau est disponible.',
-                        style: TextStyle(fontSize: 11, color: Color(0xFF7A4F00)),
+                      child: Text(
+                        _queued == true
+                            ? '📶 Alerte enregistrée hors ligne — elle sera envoyée dès que le réseau revient. Voir « Envois en attente » dans Paramètres.'
+                            : '📶 Pas de connexion — L\'alerte n\'a pas pu être envoyée. Réessayez dès que le réseau est disponible.',
+                        style: const TextStyle(fontSize: 11, color: Color(0xFF7A4F00)),
                       ),
                     ),
                   const SizedBox(height: 24),
@@ -220,6 +265,69 @@ class _SOSScreenState extends State<SOSScreen> {
                     ),
                   ],
                   if (_completed && !_cancelling) ...[
+                    if (_dispatch != null && _dispatch!['agent_pseudo'] != null) ...[
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.bleuFonce.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.bleuFonce),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _dispatch!['message']?.toString() ?? 'Aide en route',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.bleuFonce,
+                              ),
+                            ),
+                            if (_dispatch!['assignment_eta'] != null)
+                              Text(
+                                'Arrivée estimée : ${_dispatch!['assignment_eta']}',
+                                style: const TextStyle(fontSize: 11, color: AppColors.gris),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _shareSos,
+                            icon: const Icon(Icons.share, size: 16),
+                            label: const Text('Partager', style: TextStyle(fontSize: 11)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              final pos = await LocationService().getCurrentPosition();
+                              final pseudo = context.read<AuthProvider>().user?['pseudo']?.toString();
+                              final text = ShareHelper.sosMessage(
+                                lat: pos?.latitude ?? 0,
+                                lng: pos?.longitude ?? 0,
+                                pseudo: pseudo,
+                              );
+                              await ShareHelper.shareWhatsApp(text);
+                            },
+                            icon: const Icon(Icons.chat, size: 16),
+                            label: const Text('WhatsApp', style: TextStyle(fontSize: 11)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.vert,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(

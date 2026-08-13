@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../theme.dart';
 import '../providers/groups_provider.dart';
+import '../services/share_helper.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/nav_bar.dart';
@@ -417,13 +419,52 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   ),
                 ),
               Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.grisClair,
-                    borderRadius: BorderRadius.circular(6),
+                child: GestureDetector(
+                  onTap: () {
+                    final text = ShareHelper.groupInviteMessage(code, groupName: name);
+                    showModalBottomSheet(
+                      context: context,
+                      builder: (ctx) => Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Invitation — $name',
+                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 8),
+                            Text(code, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 2)),
+                            QrImageView(data: 'safealert://group/$code', size: 140),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => ShareHelper.shareText(text),
+                                    child: const Text('Partager'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () => ShareHelper.shareWhatsApp(text),
+                                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.vert, foregroundColor: Colors.white),
+                                    child: const Text('WhatsApp'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.grisClair,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text('📋 $code', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.bleuFonce), overflow: TextOverflow.ellipsis),
                   ),
-                  child: Text('📋 $code', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.bleuFonce), overflow: TextOverflow.ellipsis),
                 ),
               ),
             ],

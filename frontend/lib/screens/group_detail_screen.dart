@@ -113,6 +113,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                     DropdownMenuItem(value: 'help_needed', child: Text('🆘 Aide demandée', style: TextStyle(fontSize: 12))),
                     DropdownMenuItem(value: 'offer_help', child: Text('🤝 Proposer de l\'aide', style: TextStyle(fontSize: 12))),
                     DropdownMenuItem(value: 'danger', child: Text('⚠️ Danger', style: TextStyle(fontSize: 12))),
+                    DropdownMenuItem(value: 'power_outage', child: Text('⚡ Coupure d\'électricité', style: TextStyle(fontSize: 12))),
+                    DropdownMenuItem(value: 'water_outage', child: Text('💧 Coupure d\'eau', style: TextStyle(fontSize: 12))),
+                    DropdownMenuItem(value: 'flood', child: Text('🌊 Inondation', style: TextStyle(fontSize: 12))),
+                    DropdownMenuItem(value: 'blocked_street', child: Text('🚧 Rue bloquée', style: TextStyle(fontSize: 12))),
                   ],
                   onChanged: (v) => setDialogState(() => alertType = v ?? 'info'),
                 ),
@@ -478,6 +482,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
         return (emoji: '🤝', color: AppColors.vert);
       case 'danger':
         return (emoji: '⚠️', color: AppColors.rouge);
+      case 'power_outage':
+        return (emoji: '⚡', color: AppColors.orange);
+      case 'water_outage':
+        return (emoji: '💧', color: AppColors.bleuFonce);
+      case 'flood':
+        return (emoji: '🌊', color: AppColors.bleu);
+      case 'blocked_street':
+        return (emoji: '🚧', color: AppColors.orange);
       default:
         return (emoji: 'ℹ️', color: AppColors.bleuFonce);
     }

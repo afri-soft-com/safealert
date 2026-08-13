@@ -3,6 +3,7 @@ const { cacheGet, cacheSet, invalidateActiveAlerts } = require("../config/redis"
 const { resolveZoneName } = require("../utils/incidentZone");
 const { deliverEvent } = require("../services/partnerWebhooks");
 const { witnessEvidence, reliabilityScore } = require("../config/features");
+const { withReliabilityBadge } = require("../utils/reliability");
 
 const buildIncidentsCacheKey = (hours, status) =>
   `map:incidents:h${hours}:s${status || "all"}`;
@@ -62,13 +63,16 @@ const getIncidents = async (req, res) => {
     params.push(limitVal);
 
     const result = await pool.query(query, params);
+    const rows = reliabilityScore()
+      ? result.rows.map(withReliabilityBadge)
+      : result.rows;
 
     if (!hasGeoFilter) {
       const cacheKey = buildIncidentsCacheKey(hoursVal, status);
-      await cacheSet(cacheKey, JSON.stringify(result.rows), 60);
+      await cacheSet(cacheKey, JSON.stringify(rows), 60);
     }
 
-    return res.json(result.rows);
+    return res.json(rows);
   } catch (err) {
     console.error("getIncidents error:", err);
     return res.status(500).json({ error: "Erreur serveur" });
@@ -81,22 +85,28 @@ const reportIncident = async (req, res) => {
     return res.status(400).json({ error: "Position et type d'incident requis" });
   }
   try {
-    // Anti-spam: max 5 reports / hour
+    const userScore = await pool.query(
+      `SELECT COALESCE(reliability_score, 50) AS score FROM users WHERE id = $1`,
+      [req.userId]
+    );
+    const baseScore = reliabilityScore() ? userScore.rows[0].score : 50;
+
+    // Soft anti-spam: lower score → stricter hourly cap (5 → 2)
+    const hourlyCap = baseScore < 40 ? 2 : baseScore < 70 ? 3 : 5;
     const recent = await pool.query(
       `SELECT COUNT(*)::int AS c FROM incidents
        WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'
          AND severity = 'vigilance'`,
       [req.userId]
     );
-    if (recent.rows[0].c >= 5) {
-      return res.status(429).json({ error: "Trop de signalements — réessayez plus tard" });
+    if (recent.rows[0].c >= hourlyCap) {
+      return res.status(429).json({
+        error: "Trop de signalements — réessayez plus tard",
+        reliability_badge: reliabilityScore()
+          ? require("../utils/reliability").badgeFromScore(baseScore)
+          : undefined,
+      });
     }
-
-    const userScore = await pool.query(
-      `SELECT COALESCE(reliability_score, 50) AS score FROM users WHERE id = $1`,
-      [req.userId]
-    );
-    const baseScore = reliabilityScore() ? userScore.rows[0].score : 50;
 
     const zoneName = await resolveZoneName(lat, lng);
     const result = await pool.query(
@@ -132,7 +142,9 @@ const reportIncident = async (req, res) => {
       reliability_score: incident.reliability_score,
     }).catch(() => {});
 
-    return res.status(201).json(incident);
+    return res.status(201).json(
+      reliabilityScore() ? withReliabilityBadge(incident) : incident
+    );
   } catch (err) {
     console.error("reportIncident error:", err);
     return res.status(500).json({ error: "Erreur serveur" });
@@ -263,10 +275,23 @@ const getStats = async (req, res) => {
   }
 };
 
+const SLOT_FILTERS = {
+  morning: "EXTRACT(HOUR FROM created_at) >= 6 AND EXTRACT(HOUR FROM created_at) < 12",
+  afternoon: "EXTRACT(HOUR FROM created_at) >= 12 AND EXTRACT(HOUR FROM created_at) < 18",
+  evening: "EXTRACT(HOUR FROM created_at) >= 18 AND EXTRACT(HOUR FROM created_at) < 22",
+  night: "EXTRACT(HOUR FROM created_at) >= 22 OR EXTRACT(HOUR FROM created_at) < 6",
+  weekday: "EXTRACT(DOW FROM created_at) BETWEEN 1 AND 5",
+  weekend: "EXTRACT(DOW FROM created_at) IN (0, 6)",
+};
+
 const getHeatmap = async (req, res) => {
-  const { days } = req.query;
-  const period = parseInt(days) || 30;
+  const { days, slot } = req.query;
+  const period = Math.min(Math.max(parseInt(days) || 30, 1), 90);
+  const slotKey = String(slot || "").toLowerCase();
+  const slotSql = SLOT_FILTERS[slotKey] || null;
+
   try {
+    const slotClause = slotSql ? `AND (${slotSql})` : "";
     const zones = await pool.query(`
       SELECT
         zone_name,
@@ -277,23 +302,27 @@ const getHeatmap = async (req, res) => {
         ROUND(AVG(lat)::numeric, 4) as avg_lat,
         ROUND(AVG(lng)::numeric, 4) as avg_lng
       FROM incidents
-      WHERE created_at > NOW() - INTERVAL '${period} days'
+      WHERE created_at > NOW() - make_interval(days => $1)
         AND zone_name IS NOT NULL
+        ${slotClause}
       GROUP BY zone_name
       ORDER BY total DESC
-    `);
+    `, [period]);
     const unzoned = await pool.query(`
       SELECT
         COUNT(*)::int as total,
         COUNT(*) FILTER (WHERE severity = 'alert') as alerts
       FROM incidents
-      WHERE created_at > NOW() - INTERVAL '${period} days'
+      WHERE created_at > NOW() - make_interval(days => $1)
         AND (zone_name IS NULL OR zone_name = '')
-    `);
+        ${slotClause}
+    `, [period]);
     return res.json({
       zones: zones.rows,
       unzoned: unzoned.rows[0],
       period,
+      slot: slotKey || null,
+      available_slots: Object.keys(SLOT_FILTERS),
     });
   } catch (err) {
     console.error("getHeatmap error:", err);

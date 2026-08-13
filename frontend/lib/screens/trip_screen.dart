@@ -6,6 +6,8 @@ import '../theme.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/trip_provider.dart';
 import '../providers/contacts_provider.dart';
+import '../services/share_helper.dart';
+import '../services/location_service.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
@@ -68,7 +70,17 @@ class _TripScreenState extends State<TripScreen> {
       );
       return;
     }
-    final trip = await context.read<TripProvider>().startTrip(
+    final pos = await LocationService().getCurrentPosition();
+    final tripProv = context.read<TripProvider>();
+    if (pos != null) {
+      await tripProv.fetchRouteSuggestion(
+        originLat: pos.latitude,
+        originLng: pos.longitude,
+        destLat: lat,
+        destLng: lng,
+      );
+    }
+    final trip = await tripProv.startTrip(
       destLat: lat,
       destLng: lng,
       destLabel: _destLabelCtrl.text.trim().isEmpty ? null : _destLabelCtrl.text.trim(),
@@ -77,7 +89,7 @@ class _TripScreenState extends State<TripScreen> {
     );
     if (!mounted) return;
     if (trip == null) {
-      final err = context.read<TripProvider>().error;
+      final err = tripProv.error;
       showAppSnackBar(
         context,
         err ?? 'Une erreur est survenue. Réessayez.',
@@ -87,6 +99,18 @@ class _TripScreenState extends State<TripScreen> {
       return;
     }
     _maybeStartPing();
+    final share = tripProv.shareText;
+    if (share != null && share.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Trajet démarré — partagez le lien de suivi'),
+          action: SnackBarAction(
+            label: 'Partager',
+            onPressed: () => ShareHelper.shareText(share),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _openEscortMap([String? tripId]) async {
@@ -186,6 +210,46 @@ class _TripScreenState extends State<TripScreen> {
                           icon: const Icon(Icons.map_outlined, size: 18),
                           label: const Text('Carte escorte live'),
                         ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () async {
+                                  final tp = context.read<TripProvider>();
+                                  var text = tp.shareText;
+                                  if (text == null || text.isEmpty) {
+                                    await tp.createShareLink();
+                                    text = tp.shareText;
+                                  }
+                                  if (text != null) await ShareHelper.shareText(text);
+                                },
+                                icon: const Icon(Icons.share, size: 16),
+                                label: const Text('Partager', style: TextStyle(fontSize: 11)),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final tp = context.read<TripProvider>();
+                                  var text = tp.shareText;
+                                  if (text == null || text.isEmpty) {
+                                    await tp.createShareLink();
+                                    text = tp.shareText;
+                                  }
+                                  if (text != null) await ShareHelper.shareWhatsApp(text);
+                                },
+                                icon: const Icon(Icons.chat, size: 16),
+                                label: const Text('WhatsApp', style: TextStyle(fontSize: 11)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.vert,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -249,6 +313,20 @@ class _TripScreenState extends State<TripScreen> {
                         },
                       );
                     }),
+                  if (context.watch<TripProvider>().routeSuggestion != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.grisClair,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        context.watch<TripProvider>().routeSuggestion!['suggestion']?.toString() ?? '',
+                        style: const TextStyle(fontSize: 11, color: AppColors.bleuFonce),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,

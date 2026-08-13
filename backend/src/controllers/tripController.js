@@ -1,11 +1,16 @@
+const crypto = require("crypto");
 const { pool } = require("../config/database");
 const { sendPush } = require("../config/firebase");
 const { sendSMS } = require("../services/sms");
 const { sendAlert } = require("../services/alert");
-const { safeTrip, escortMode, premium } = require("../config/features");
+const { safeTrip, escortMode, premium, publicShare } = require("../config/features");
 const { notifyTrustCircle } = require("./checkInController");
 
 const FREE_TRIP_LIMIT = 3;
+const PUBLIC_BASE =
+  process.env.PUBLIC_APP_URL ||
+  process.env.API_PUBLIC_URL ||
+  "https://safealert-api.onrender.com";
 
 const assertTripEnabled = (res) => {
   if (!safeTrip()) {
@@ -60,18 +65,28 @@ const startTrip = async (req, res) => {
       ? escort_contact_ids.filter(Boolean)
       : [];
 
+    const shareToken = publicShare() ? crypto.randomBytes(12).toString("hex") : null;
+    // Token lives until ETA + 2h (or max 24h)
+    const shareHours = Math.min(Math.max(Math.ceil(minutes / 60) + 2, 2), 24);
+
     const result = await pool.query(
       `INSERT INTO safe_trips
          (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
-          eta_at, last_lat, last_lng, last_ping_at, escort_contact_ids, notify_on_delay)
-       VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 * INTERVAL '1 minute'), $2,$3, NOW(), $8, $9)
+          eta_at, last_lat, last_lng, last_ping_at, escort_contact_ids, notify_on_delay,
+          share_token, share_expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 * INTERVAL '1 minute'), $2,$3, NOW(), $8, $9,
+               $10, CASE WHEN $10::text IS NOT NULL THEN NOW() + ($11 * INTERVAL '1 hour') ELSE NULL END)
        RETURNING *`,
       [
         req.userId, origin_lat, origin_lng, dest_lat, dest_lng,
         dest_label || null, minutes, escorts, notify_on_delay !== false,
+        shareToken, shareHours,
       ]
     );
     const trip = result.rows[0];
+    const shareUrl = shareToken
+      ? `${PUBLIC_BASE.replace(/\/$/, "")}/t/${shareToken}`
+      : null;
 
     await notifyTrustCircle(
       req.userId,
@@ -89,7 +104,13 @@ const startTrip = async (req, res) => {
       }
     }
 
-    return res.status(201).json({ trip });
+    return res.status(201).json({
+      trip,
+      share_url: shareUrl,
+      share_text: shareUrl
+        ? `Suivez mon trajet SafeAlert (lecture seule) : ${shareUrl}`
+        : null,
+    });
   } catch (err) {
     console.error("startTrip error:", err);
     return res.status(500).json({ error: "Erreur serveur" });
@@ -322,6 +343,38 @@ const processOverdueTrips = async () => {
   return { alerted };
 };
 
+/** Create / refresh a public share link for an active trip */
+const createShareLink = async (req, res) => {
+  if (!assertTripEnabled(res)) return;
+  if (!publicShare()) {
+    return res.status(503).json({ error: "Partage public désactivé" });
+  }
+  try {
+    const token = crypto.randomBytes(12).toString("hex");
+    const hours = Math.min(Math.max(parseInt(req.body?.ttl_hours) || 4, 1), 24);
+    const result = await pool.query(
+      `UPDATE safe_trips SET
+         share_token = $3,
+         share_expires_at = NOW() + ($4 * INTERVAL '1 hour')
+       WHERE id = $1 AND user_id = $2 AND status = 'active'
+       RETURNING id, share_token, share_expires_at, dest_label, status`,
+      [req.params.id, req.userId, token, hours]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Trajet actif non trouvé" });
+    }
+    const shareUrl = `${PUBLIC_BASE.replace(/\/$/, "")}/t/${token}`;
+    return res.json({
+      trip: result.rows[0],
+      share_url: shareUrl,
+      share_text: `Suivez mon trajet SafeAlert (lecture seule) : ${shareUrl}`,
+    });
+  } catch (err) {
+    console.error("createShareLink error:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
+};
+
 module.exports = {
   startTrip,
   pingTrip,
@@ -330,4 +383,5 @@ module.exports = {
   getActiveTrip,
   getTrip,
   processOverdueTrips,
+  createShareLink,
 };

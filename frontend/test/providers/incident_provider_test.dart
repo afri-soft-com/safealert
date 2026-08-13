@@ -108,6 +108,14 @@ void main() {
       expect(fakeApi.lastPath, '/map/heatmap?days=7');
     });
 
+    test('passes time slot parameter', () async {
+      fakeApi.onGet('/map/heatmap?days=30&slot=evening', () => {'zones': []});
+
+      await provider.fetchHeatmap(slot: 'evening');
+
+      expect(fakeApi.lastPath, '/map/heatmap?days=30&slot=evening');
+    });
+
     test('falls back to cache on error', () async {
       await fakeDb.put('heatmap', [
         {'lat': -4.3, 'density': 0.5},

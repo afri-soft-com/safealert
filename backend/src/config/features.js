@@ -42,6 +42,16 @@ module.exports = {
   contactBackup: () => isEnabled("FEATURE_CONTACT_BACKUP", true),
   /** File hors-ligne étendue (rapports + messages groupe) */
   offlineQueue: () => isEnabled("FEATURE_OFFLINE_QUEUE", true),
+  /** Invitation cercle par code / QR / deep link */
+  circleInvite: () => isEnabled("FEATURE_CIRCLE_INVITE", true),
+  /** Partage public SOS/trajet (liens à durée limitée) */
+  publicShare: () => isEnabled("FEATURE_PUBLIC_SHARE", true),
+  /** Ping sécurité planifié « Tu es OK ? » */
+  safetyPing: () => isEnabled("FEATURE_SAFETY_PING", true),
+  /** Alertes groupe structurées (coupure, inondation…) */
+  structuredGroupAlerts: () => isEnabled("FEATURE_STRUCTURED_GROUP_ALERTS", true),
+  /** Corridors / repères locaux + suggestion d'itinéraire */
+  corridors: () => isEnabled("FEATURE_CORRIDORS", true),
 
   isEnabled,
 };

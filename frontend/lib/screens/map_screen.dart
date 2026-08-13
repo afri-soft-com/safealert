@@ -576,6 +576,14 @@ class _MapScreenState extends State<MapScreen> {
                                           style: const TextStyle(fontSize: 11, color: AppColors.gris)),
                                     Text('✅ ${selected['verified_by'] ?? selected['verifications'] ?? 0} confirmations',
                                         style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                                    if (selected['reliability_badge'] != null)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          '🏅 ${selected['reliability_badge']['label'] ?? 'Signalement'}',
+                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),

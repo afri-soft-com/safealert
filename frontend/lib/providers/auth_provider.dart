@@ -10,6 +10,7 @@ import '../services/socket_service.dart';
 const kAuthRequiredScreens = {
   'home', 'sos', 'contacts', 'dashboard', 'settings', 'leader', 'groups',
   'history', 'privacy', 'admin', 'help', 'trip', 'escort_map', 'trust_zones', 'neighborhood',
+  'offline_queue', 'safety_ping',
 };
 
 /// Écrans réservés aux responsables / agents (secteur).

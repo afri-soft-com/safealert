@@ -412,6 +412,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const Text('SÉCURITÉ AVANCÉE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.gris, letterSpacing: 1)),
                       const SizedBox(height: 8),
                       _navTile(AppLocalizations.of(context).safeTrip, 'trip', Icons.route),
+                      _navTile('Contrôle « Tu es OK ? »', 'safety_ping', Icons.timer_outlined),
+                      _navTile('Envois en attente', 'offline_queue', Icons.cloud_upload_outlined),
                       _navTile(AppLocalizations.of(context).trustZones, 'trust_zones', Icons.home_work_outlined),
                       _navTile(AppLocalizations.of(context).neighborhood, 'neighborhood', Icons.apartment),
                       const SizedBox(height: 8),

@@ -342,6 +342,100 @@ const migrate = async () => {
         ON partner_webhook_deliveries(partner_id, created_at DESC);
     `);
 
+    // ── Wave 2: invites, public trip share, safety pings, corridors, alert types ──
+    await client.query(`
+      ALTER TABLE safe_trips ADD COLUMN IF NOT EXISTS share_token VARCHAR(32);
+      ALTER TABLE safe_trips ADD COLUMN IF NOT EXISTS share_expires_at TIMESTAMP WITH TIME ZONE;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_safe_trips_share_token
+        ON safe_trips(share_token) WHERE share_token IS NOT NULL;
+
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS agent_en_route_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS agent_last_lat DOUBLE PRECISION;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS agent_last_lng DOUBLE PRECISION;
+
+      CREATE TABLE IF NOT EXISTS circle_invites (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        inviter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        code VARCHAR(12) UNIQUE NOT NULL,
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        max_uses INTEGER DEFAULT 5,
+        use_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_circle_invites_code ON circle_invites(code);
+
+      CREATE TABLE IF NOT EXISTS safety_pings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        due_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        window_minutes INTEGER NOT NULL DEFAULT 15,
+        status VARCHAR(20) DEFAULT 'pending'
+          CHECK (status IN ('pending','ok','missed','cancelled')),
+        responded_at TIMESTAMP WITH TIME ZONE,
+        message TEXT,
+        notify_groups BOOLEAN DEFAULT false,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_safety_pings_due
+        ON safety_pings(due_at) WHERE status = 'pending';
+      CREATE INDEX IF NOT EXISTS idx_safety_pings_user ON safety_pings(user_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS landmarks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(120) NOT NULL,
+        kind VARCHAR(40) NOT NULL DEFAULT 'landmark'
+          CHECK (kind IN ('landmark','corridor','market','school','hospital','bus_stop','other')),
+        lat DOUBLE PRECISION NOT NULL,
+        lng DOUBLE PRECISION NOT NULL,
+        location GEOGRAPHY(Point, 4326),
+        zone_name VARCHAR(100),
+        description TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_landmarks_location ON landmarks USING GIST (location);
+      CREATE INDEX IF NOT EXISTS idx_landmarks_zone ON landmarks(zone_name);
+
+      CREATE TABLE IF NOT EXISTS route_corridors (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(120) NOT NULL,
+        zone_name VARCHAR(100),
+        path GEOGRAPHY(LineString, 4326),
+        midpoint_lat DOUBLE PRECISION,
+        midpoint_lng DOUBLE PRECISION,
+        incident_weight INTEGER DEFAULT 0,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_route_corridors_path ON route_corridors USING GIST (path);
+    `);
+
+    // Widen group_alerts type CHECK for utility outage types
+    await client.query(`
+      ALTER TABLE group_alerts DROP CONSTRAINT IF EXISTS group_alerts_type_check;
+      ALTER TABLE group_alerts ADD CONSTRAINT group_alerts_type_check
+        CHECK (type IN (
+          'info','help_needed','offer_help','danger',
+          'power_outage','water_outage','flood','blocked_street'
+        ));
+    `);
+
+    // Seed a few Kinshasa-area landmarks if empty (MVP corridors)
+    const lmCount = await client.query(`SELECT COUNT(*)::int AS c FROM landmarks`);
+    if (lmCount.rows[0].c === 0) {
+      await client.query(`
+        INSERT INTO landmarks (name, kind, lat, lng, location, zone_name, description) VALUES
+          ('Gombe — Boulevard du 30 Juin', 'corridor', -4.305, 15.310,
+            ST_SetSRID(ST_MakePoint(15.310, -4.305), 4326)::geography, 'Gombe', 'Axe principal'),
+          ('Marché Central', 'market', -4.325, 15.313,
+            ST_SetSRID(ST_MakePoint(15.313, -4.325), 4326)::geography, 'Kinshasa', 'Point de repère'),
+          ('Université de Kinshasa', 'school', -4.420, 15.310,
+            ST_SetSRID(ST_MakePoint(15.310, -4.420), 4326)::geography, 'Lemba', 'Campus'),
+          ('Hôpital Général', 'hospital', -4.327, 15.307,
+            ST_SetSRID(ST_MakePoint(15.307, -4.327), 4326)::geography, 'Kinshasa', 'Urgences'),
+          ('Limete — Boulevard Lumumba', 'corridor', -4.380, 15.340,
+            ST_SetSRID(ST_MakePoint(15.340, -4.380), 4326)::geography, 'Limete', 'Axe fréquenté')
+      `);
+    }
+
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;
     if (adminPhone) {
       const normalized = adminPhone.trim();

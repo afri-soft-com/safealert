@@ -16,12 +16,25 @@ class HeatmapScreen extends StatefulWidget {
 }
 
 class _HeatmapScreenState extends State<HeatmapScreen> {
+  int _days = 30;
+  String? _slot;
+
+  static const _slots = [
+    (null, 'Tout'),
+    ('morning', 'Matin'),
+    ('evening', 'Soir'),
+    ('weekend', 'Week-end'),
+    ('weekday', 'Semaine'),
+  ];
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<IncidentProvider>().fetchHeatmap();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reload());
+  }
+
+  void _reload() {
+    context.read<IncidentProvider>().fetchHeatmap(days: _days, slot: _slot);
   }
 
   @override
@@ -53,6 +66,38 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
                         _dot(AppColors.vert, 'Faible'),
                         _dot(AppColors.orange, 'Moyen'),
                         _dot(AppColors.rouge, 'Élevé'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final d in [7, 30])
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ChoiceChip(
+                              label: Text('${d}j', style: const TextStyle(fontSize: 11)),
+                              selected: _days == d,
+                              onSelected: (_) {
+                                setState(() => _days = d);
+                                _reload();
+                              },
+                            ),
+                          ),
+                        for (final s in _slots)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ChoiceChip(
+                              label: Text(s.$2, style: const TextStyle(fontSize: 11)),
+                              selected: _slot == s.$1,
+                              onSelected: (_) {
+                                setState(() => _slot = s.$1);
+                                _reload();
+                              },
+                            ),
+                          ),
                       ],
                     ),
                   ),

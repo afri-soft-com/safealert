@@ -35,6 +35,14 @@
                 <action android:name="com.safealert.safealert.ACTION_SILENT_SOS"/>
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
+            <!-- Deep links: safealert://invite/CODE et safealert://group/CODE -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="safealert" android:host="invite"/>
+                <data android:scheme="safealert" android:host="group"/>
+            </intent-filter>
         </activity>
         <receiver
             android:name=".SosHomeWidgetProvider"

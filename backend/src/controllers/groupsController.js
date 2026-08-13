@@ -2,7 +2,25 @@ const { pool } = require("../config/database");
 const crypto = require("crypto");
 const { notifyGroupMembers } = require("../services/groupNotify");
 
-const VALID_ALERT_TYPES = ["info", "help_needed", "offer_help", "danger"];
+const { structuredGroupAlerts } = require("../config/features");
+
+const BASE_ALERT_TYPES = ["info", "help_needed", "offer_help", "danger"];
+const UTILITY_ALERT_TYPES = ["power_outage", "water_outage", "flood", "blocked_street"];
+const VALID_ALERT_TYPES = () =>
+  structuredGroupAlerts()
+    ? [...BASE_ALERT_TYPES, ...UTILITY_ALERT_TYPES]
+    : BASE_ALERT_TYPES;
+
+const ALERT_TYPE_LABELS = {
+  info: "Info",
+  help_needed: "Besoin d'aide",
+  offer_help: "Propose de l'aide",
+  danger: "Danger",
+  power_outage: "Coupure d'électricité",
+  water_outage: "Coupure d'eau",
+  flood: "Inondation",
+  blocked_street: "Rue bloquée",
+};
 const DEFAULT_PAGE_LIMIT = 50;
 const MAX_PAGE_LIMIT = 100;
 
@@ -427,7 +445,7 @@ const postGroupAlert = async (req, res) => {
   const { id } = req.params;
   const { type, title, body, lat, lng } = req.body;
 
-  if (!type || !VALID_ALERT_TYPES.includes(type)) {
+  if (!type || !VALID_ALERT_TYPES().includes(type)) {
     return res.status(400).json({ error: "Type d'alerte invalide" });
   }
   if (!title || !String(title).trim()) {
@@ -469,13 +487,17 @@ const postGroupAlert = async (req, res) => {
       help_needed: "🆘 Aide demandée",
       offer_help: "🤝 Proposition d'aide",
       danger: "⚠️ Danger",
+      power_outage: "⚡ Coupure d'électricité",
+      water_outage: "💧 Coupure d'eau",
+      flood: "🌊 Inondation",
+      blocked_street: "🚧 Rue bloquée",
     };
 
     await notifyGroupMembers(
       id,
       req.userId,
       {
-        title: `${typeLabels[type] || "Alerte"} — ${groupName}`,
+        title: `${typeLabels[type] || ALERT_TYPE_LABELS[type] || "Alerte"} — ${groupName}`,
         body: `${pseudo}: ${String(title).trim()}`,
       },
       {

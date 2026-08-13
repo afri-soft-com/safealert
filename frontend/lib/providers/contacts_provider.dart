@@ -63,6 +63,24 @@ class ContactsProvider extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>?> createInvite({int ttlHours = 48}) async {
+    try {
+      return await _api.post('/invites/circle', {'ttl_hours': ttlHours, 'max_uses': 5});
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> acceptInvite(String code) async {
+    try {
+      await _api.post('/invites/circle/accept', {'code': code.trim().toUpperCase()});
+      await fetchContacts();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> clearCache() async {
     await _cache.remove('contacts');
     _contacts = [];

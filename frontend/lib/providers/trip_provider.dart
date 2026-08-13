@@ -9,6 +9,9 @@ class TripProvider extends ChangeNotifier {
   Map<String, dynamic>? _activeTrip;
   Map<String, dynamic>? _followedTrip;
   String? _followTripId;
+  String? _shareUrl;
+  String? _shareText;
+  Map<String, dynamic>? _routeSuggestion;
   bool _loading = false;
   String? _error;
   bool _socketBound = false;
@@ -16,6 +19,9 @@ class TripProvider extends ChangeNotifier {
   Map<String, dynamic>? get activeTrip => _activeTrip;
   Map<String, dynamic>? get followedTrip => _followedTrip;
   String? get followTripId => _followTripId;
+  String? get shareUrl => _shareUrl;
+  String? get shareText => _shareText;
+  Map<String, dynamic>? get routeSuggestion => _routeSuggestion;
   bool get loading => _loading;
   String? get error => _error;
 
@@ -128,6 +134,8 @@ class TripProvider extends ChangeNotifier {
           'escort_contact_ids': escortContactIds,
       });
       _activeTrip = res['trip'] as Map<String, dynamic>?;
+      _shareUrl = res['share_url'] as String?;
+      _shareText = res['share_text'] as String?;
       _loading = false;
       notifyListeners();
       return _activeTrip;
@@ -136,6 +144,39 @@ class TripProvider extends ChangeNotifier {
       _loading = false;
       notifyListeners();
       return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> createShareLink() async {
+    if (_activeTrip == null) return null;
+    try {
+      final res = await _api.post('/trips/${_activeTrip!['id']}/share', {});
+      _shareUrl = res['share_url'] as String?;
+      _shareText = res['share_text'] as String?;
+      notifyListeners();
+      return res;
+    } catch (e) {
+      _error = userFacingError(e, fallback: 'Impossible de créer le lien.');
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<void> fetchRouteSuggestion({
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
+  }) async {
+    try {
+      final res = await _api.get(
+        '/corridors/suggest?origin_lat=$originLat&origin_lng=$originLng'
+        '&dest_lat=$destLat&dest_lng=$destLng',
+      );
+      _routeSuggestion = res;
+      notifyListeners();
+    } catch (_) {
+      _routeSuggestion = null;
     }
   }
 

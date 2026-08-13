@@ -72,7 +72,8 @@ Vous arrivez sur l'**écran d'accueil**.
 1. Onglet **Confiance** (barre du bas).
 2. Appuyez sur **+ Ajouter un contact de confiance**.
 3. Saisissez le **nom** et le **numéro** du proche à alerter en cas de SOS.
-4. Ces personnes sont notifiées lors d'une alerte.
+4. Ou **Inviter (QR)** : générez un code / QR à partager (WhatsApp ou lien). La personne ouvre le lien ou saisit le code via **Code reçu**.
+5. Ces personnes sont notifiées lors d'une alerte.
 
 > [À capturer] Liste des contacts de confiance
 
@@ -112,12 +113,15 @@ Pour masquer l'application derrière une calculatrice :
 
 | Fonction | Description |
 |----------|-------------|
-| **Groupes voisins** | Créer un groupe ou demander à rejoindre via code d'invitation (validation admin) |
+| **Groupes voisins** | Créer un groupe ou rejoindre via code / QR ; alertes structurées (électricité, eau, inondation, rue bloquée) |
+| **Trajet sécurisé** | Partagez un lien « suivez mon trajet » (page web temporaire) + WhatsApp |
+| **Contrôle « Tu es OK ? »** | Rappel planifié ; silence → proches prévenus (Paramètres) |
+| **Envois en attente** | Voir et renvoyer SOS / signalements hors ligne (Paramètres) |
 | **Aide / Manuel** | Guide intégré (connexion, SOS, rôles, FAQ) depuis l'accueil ou Paramètres |
 | **Conseils sécurité** | Astuces disponibles hors ligne |
-| **Carte chaleur** | Densité des incidents par zone |
+| **Carte chaleur** | Densité des incidents par zone et créneau (matin / soir / week-end) |
 | **Mon historique** | Vos alertes passées |
-| **Mode responsable** | Réservé aux rôles leader/agent (filtré par secteur si assigné) |
+| **Mode responsable** | Réservé aux rôles leader/agent (filtré par secteur si assigné) ; ETA visible par le citoyen |
 | **Administration** | Réservé au rôle `platform_admin` (utilisateurs, rôles, partenaires API) |
 
 ### 3.10 Administration (administrateurs plateforme)
@@ -148,7 +152,7 @@ Ils ne remplacent **pas** le **cercle de confiance** : vos contacts de confiance
 - **Créer un groupe** : vous devenez administrateur et recevez un **code d'invitation** à partager (SMS, WhatsApp, etc.).
 - **Rejoindre un groupe** : saisissez le code **ou** demandez à rejoindre depuis **Groupes à découvrir** (groupes publics).
 - **Gérer les adhésions** : l'administrateur approuve ou refuse les demandes en attente.
-- **Une fois membre** : consultez la **liste des membres**, échangez par **messages** et publiez des **alertes locales** (info, aide demandée, proposition d'aide, danger).
+- **Une fois membre** : consultez la **liste des membres**, échangez par **messages** et publiez des **alertes locales** (info, aide, danger, coupure d'électricité/eau, inondation, rue bloquée).
 
 ### 3.14 Groupes voisins — étapes pratiques
 

@@ -131,9 +131,11 @@ class IncidentProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchHeatmap({int days = 30}) async {
+  Future<void> fetchHeatmap({int days = 30, String? slot}) async {
     try {
-      final res = await _api.get('/map/heatmap?days=$days');
+      var path = '/map/heatmap?days=$days';
+      if (slot != null && slot.isNotEmpty) path += '&slot=$slot';
+      final res = await _api.get(path);
       _heatmap = (res['zones'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       await _cache.put('heatmap', _heatmap);
       notifyListeners();
@@ -144,6 +146,14 @@ class IncidentProvider extends ChangeNotifier {
         _isOffline = true;
         notifyListeners();
       }
+    }
+  }
+
+  Future<Map<String, dynamic>?> fetchCitizenDispatch(String incidentId) async {
+    try {
+      return await _api.get('/leader/incidents/$incidentId/citizen-status');
+    } catch (_) {
+      return null;
     }
   }
 

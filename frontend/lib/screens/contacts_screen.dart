@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../theme.dart';
 import '../providers/contacts_provider.dart';
+import '../services/share_helper.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/nav_bar.dart';
@@ -22,6 +24,103 @@ class _ContactsScreenState extends State<ContactsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ContactsProvider>().fetchContacts();
     });
+  }
+
+  Future<void> _showInviteSheet() async {
+    final invite = await context.read<ContactsProvider>().createInvite();
+    if (!mounted) return;
+    if (invite == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible de créer l\'invitation')),
+      );
+      return;
+    }
+    final code = invite['invite']?['code']?.toString() ?? '';
+    final url = invite['share_url']?.toString() ?? '';
+    final text = invite['share_text']?.toString() ??
+        ShareHelper.inviteMessage(url, code);
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Inviter au cercle',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Text('Code : $code',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: 2)),
+            const SizedBox(height: 12),
+            if (url.isNotEmpty)
+              QrImageView(data: url, size: 160, backgroundColor: Colors.white),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => ShareHelper.shareText(text),
+                    icon: const Icon(Icons.share, size: 16),
+                    label: const Text('Partager', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => ShareHelper.shareWhatsApp(text),
+                    icon: const Icon(Icons.chat, size: 16),
+                    label: const Text('WhatsApp', style: TextStyle(fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.vert,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showJoinInviteDialog() {
+    final codeCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rejoindre avec un code', style: TextStyle(fontSize: 15)),
+        content: TextField(
+          controller: codeCtrl,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            labelText: 'Code d\'invitation',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () async {
+              final code = codeCtrl.text.trim();
+              if (code.isEmpty) return;
+              Navigator.pop(ctx);
+              final ok = await context.read<ContactsProvider>().acceptInvite(code);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(ok ? 'Contact ajouté au cercle' : 'Code invalide ou expiré')),
+              );
+            },
+            child: const Text('Rejoindre'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAddDialog() {
@@ -182,6 +281,26 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                 },
                               ),
                   ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _showInviteSheet,
+                          icon: const Icon(Icons.qr_code_2, size: 16),
+                          label: const Text('Inviter (QR)', style: TextStyle(fontSize: 11)),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _showJoinInviteDialog,
+                          icon: const Icon(Icons.vpn_key, size: 16),
+                          label: const Text('Code reçu', style: TextStyle(fontSize: 11)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(

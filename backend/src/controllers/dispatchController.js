@@ -37,6 +37,9 @@ const assignAgent = async (req, res) => {
       return res.status(404).json({ error: "Incident non trouvable / non assignable" });
     }
 
+    const incident = result.rows[0];
+    const agentPseudo = agent.rows[0].pseudo;
+
     if (agent.rows[0].fcm_token) {
       await sendPush(agent.rows[0].fcm_token, {
         notification: {
@@ -47,16 +50,49 @@ const assignAgent = async (req, res) => {
       });
     }
 
+    // Notify citizen that help is on the way
+    const citizen = await pool.query(
+      `SELECT fcm_token FROM users WHERE id = $1`,
+      [incident.user_id]
+    );
+    if (citizen.rows[0]?.fcm_token) {
+      await sendPush(citizen.rows[0].fcm_token, {
+        notification: {
+          title: "🛡️ Aide en route",
+          body: etaMins
+            ? `${agentPseudo} arrive dans environ ${etaMins} min`
+            : `${agentPseudo} a été assigné à votre alerte`,
+        },
+        data: {
+          type: "agent_en_route",
+          incidentId: String(id),
+          agentPseudo: String(agentPseudo),
+          etaMinutes: etaMins != null ? String(etaMins) : "",
+        },
+      });
+    }
+
     const io = req.app.get("io");
     if (io) {
       io.emit("incident_assigned", {
         id,
         agent_id,
-        eta_minutes: eta_minutes || null,
+        eta_minutes: etaMins || null,
+        agent_pseudo: agentPseudo,
+      });
+      io.to(`user:${incident.user_id}`).emit("agent_en_route", {
+        incident_id: id,
+        agent_id,
+        agent_pseudo: agentPseudo,
+        assignment_eta: incident.assignment_eta,
+        eta_minutes: etaMins || null,
       });
     }
 
-    return res.json({ incident: result.rows[0], agent: { id: agent.rows[0].id, pseudo: agent.rows[0].pseudo } });
+    return res.json({
+      incident,
+      agent: { id: agent.rows[0].id, pseudo: agentPseudo },
+    });
   } catch (err) {
     console.error("assignAgent error:", err);
     return res.status(500).json({ error: "Erreur serveur" });
@@ -188,6 +224,97 @@ const listMySectors = async (req, res) => {
   }
 };
 
+/** Agent marks en route + optional live position for citizen */
+const markEnRoute = async (req, res) => {
+  if (!fieldDispatch()) return res.status(503).json({ error: "Dispatch désactivé" });
+  const { id } = req.params;
+  const { lat, lng, eta_minutes } = req.body || {};
+
+  try {
+    const result = await pool.query(
+      `UPDATE incidents SET
+         agent_en_route_at = COALESCE(agent_en_route_at, NOW()),
+         agent_last_lat = COALESCE($3, agent_last_lat),
+         agent_last_lng = COALESCE($4, agent_last_lng),
+         assignment_eta = CASE WHEN $5::int IS NOT NULL
+           THEN NOW() + ($5 * INTERVAL '1 minute') ELSE assignment_eta END,
+         status = CASE WHEN status IN ('active','verified','acknowledged') THEN 'in_progress' ELSE status END
+       WHERE id = $1 AND assigned_to = $2
+         AND status IN ('active','verified','acknowledged','in_progress')
+       RETURNING *`,
+      [
+        id,
+        req.userId,
+        lat != null ? parseFloat(lat) : null,
+        lng != null ? parseFloat(lng) : null,
+        eta_minutes != null ? parseInt(eta_minutes) : null,
+      ]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Mission non trouvée" });
+    }
+    const incident = result.rows[0];
+    const agent = await pool.query(`SELECT pseudo FROM users WHERE id = $1`, [req.userId]);
+    const agentPseudo = agent.rows[0]?.pseudo || "Agent";
+
+    const citizen = await pool.query(`SELECT fcm_token FROM users WHERE id = $1`, [incident.user_id]);
+    if (citizen.rows[0]?.fcm_token) {
+      await sendPush(citizen.rows[0].fcm_token, {
+        notification: {
+          title: "🛡️ Agent en route",
+          body: `${agentPseudo} se dirige vers vous`,
+        },
+        data: { type: "agent_en_route", incidentId: String(id) },
+      });
+    }
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`user:${incident.user_id}`).emit("agent_en_route", {
+        incident_id: id,
+        agent_pseudo: agentPseudo,
+        assignment_eta: incident.assignment_eta,
+        agent_last_lat: incident.agent_last_lat,
+        agent_last_lng: incident.agent_last_lng,
+      });
+    }
+
+    return res.json({ incident, agent_pseudo: agentPseudo });
+  } catch (err) {
+    console.error("markEnRoute error:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
+};
+
+/** Citizen view of assignment / ETA for own incident */
+const getCitizenDispatch = async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT i.id, i.status, i.assigned_to, i.assignment_eta, i.assigned_at, i.agent_en_route_at,
+              i.agent_last_lat, i.agent_last_lng, i.created_at,
+              u.pseudo AS agent_pseudo
+       FROM incidents i
+       LEFT JOIN users u ON u.id = i.assigned_to
+       WHERE i.id = $1 AND i.user_id = $2`,
+      [req.params.id, req.userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Alerte introuvable" });
+    }
+    const row = result.rows[0];
+    return res.json({
+      ...row,
+      en_route: Boolean(row.agent_en_route_at || row.assigned_to),
+      message: row.agent_pseudo
+        ? `${row.agent_pseudo} ${row.agent_en_route_at ? "est en route" : "a été assigné"}`
+        : "En attente d'un agent",
+    });
+  } catch (err) {
+    console.error("getCitizenDispatch error:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
+};
+
 module.exports = {
   assignAgent,
   closeWithReason,
@@ -195,4 +322,6 @@ module.exports = {
   getChat,
   upsertSectorGeofence,
   listMySectors,
+  markEnRoute,
+  getCitizenDispatch,
 };

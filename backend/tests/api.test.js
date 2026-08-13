@@ -601,3 +601,95 @@ describe("History", () => {
     expect(res.body[0].incident_type).toBe("sos");
   });
 });
+
+describe("Structured group alerts", () => {
+  it("POST /api/groups/:id/alerts accepts power_outage", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] })
+      .mockResolvedValueOnce({ rows: [{ name: "Voisins" }] })
+      .mockResolvedValueOnce({ rows: [{ pseudo: "Jean" }] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "a2",
+          group_id: "g1",
+          author_id: "user-2",
+          type: "power_outage",
+          title: "Plus de courant",
+          body: null,
+          lat: null,
+          lng: null,
+          created_at: "2025-01-01T00:00:00Z",
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .post("/api/groups/g1/alerts")
+      .set("Authorization", `Bearer ${user2Token}`)
+      .send({ type: "power_outage", title: "Plus de courant" });
+    expect(res.status).toBe(201);
+    expect(res.body.type).toBe("power_outage");
+  });
+});
+
+describe("Circle invites", () => {
+  it("POST /api/invites/circle creates invite", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{
+        id: "inv1",
+        code: "ABCD1234",
+        expires_at: "2025-01-03T00:00:00Z",
+        max_uses: 5,
+        use_count: 0,
+        created_at: "2025-01-01T00:00:00Z",
+      }],
+    });
+    const res = await request(app)
+      .post("/api/invites/circle")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ ttl_hours: 48 });
+    expect(res.status).toBe(201);
+    expect(res.body.invite.code).toBe("ABCD1234");
+    expect(res.body.share_url).toMatch(/\/invite\//);
+  });
+});
+
+describe("Public trip follow", () => {
+  it("GET /api/public/trips/:token returns read-only trip", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{
+        id: "t1",
+        status: "active",
+        dest_label: "Maison",
+        eta_at: "2025-01-01T01:00:00Z",
+        origin_lat: -4.3,
+        origin_lng: 15.3,
+        dest_lat: -4.31,
+        dest_lng: 15.31,
+        last_lat: -4.305,
+        last_lng: 15.305,
+        last_ping_at: "2025-01-01T00:30:00Z",
+        abnormal_stop_at: null,
+        share_expires_at: "2025-01-02T00:00:00Z",
+        created_at: "2025-01-01T00:00:00Z",
+        arrived_at: null,
+        traveler_pseudo: "Marie",
+      }],
+    });
+    const res = await request(app).get("/api/public/trips/abc123token99");
+    expect(res.status).toBe(200);
+    expect(res.body.read_only).toBe(true);
+    expect(res.body.trip.traveler_pseudo).toBe("Marie");
+  });
+});
+
+describe("Heatmap slots", () => {
+  it("GET /api/map/heatmap accepts slot=evening", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ zone_name: "Gombe", total: 2, alerts: 1, vigilance: 1, danger: 0, avg_lat: -4.3, avg_lng: 15.3 }] })
+      .mockResolvedValueOnce({ rows: [{ total: 0, alerts: 0 }] });
+    const res = await request(app).get("/api/map/heatmap?days=7&slot=evening");
+    expect(res.status).toBe(200);
+    expect(res.body.slot).toBe("evening");
+    expect(res.body.available_slots).toContain("weekend");
+  });
+});

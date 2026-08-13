@@ -91,6 +91,18 @@ class LeaderProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> markEnRoute(String incidentId, {int? etaMinutes}) async {
+    try {
+      await _api.post('/leader/incidents/$incidentId/en-route', {
+        if (etaMinutes != null) 'eta_minutes': etaMinutes,
+      });
+      await fetchSectorIncidents();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> closeWithReason(String incidentId, String reason, {bool falseAlarm = false}) async {
     try {
       await _api.post('/leader/incidents/$incidentId/close', {

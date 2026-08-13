@@ -1,7 +1,7 @@
 name: safealert
 description: "SafeAlert - Application de Sécurité Citoyenne"
 publish_to: 'none'
-version: 1.0.1+8
+version: 1.0.1+9
 
 environment:
   sdk: ^3.8.1
@@ -38,6 +38,9 @@ dependencies:
   intl: ^0.20.2
   image_picker: ^1.1.2
   file_picker: ^8.1.7
+  share_plus: ^10.1.4
+  qr_flutter: ^4.1.0
+  app_links: ^6.3.3
 
 dev_dependencies:
   flutter_test:

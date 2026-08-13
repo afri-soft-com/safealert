@@ -24,6 +24,11 @@ Variables `FEATURE_*=true|1|yes` — voir `backend/src/config/features.js`.
 | `FEATURE_PREMIUM` | **off** | Stub abonnement (illimité trajets/contacts) |
 | `FEATURE_CONTACT_BACKUP` | on | Backup contacts chiffré côté client |
 | `FEATURE_OFFLINE_QUEUE` | on | File hors-ligne étendue |
+| `FEATURE_CIRCLE_INVITE` | on | Invitation cercle (code / QR / deep link) |
+| `FEATURE_PUBLIC_SHARE` | on | Lien public temporaire « suivre mon trajet » |
+| `FEATURE_SAFETY_PING` | on | Contrôle planifié « Tu es OK ? » |
+| `FEATURE_STRUCTURED_GROUP_ALERTS` | on | Alertes utilitaires (électricité, eau, inondation, rue) |
+| `FEATURE_CORRIDORS` | on | Repères / suggestion d'itinéraire (MVP) |
 
 Après déploiement : `npm run migrate` dans `backend/`.
 
@@ -93,6 +98,18 @@ cd admin-web && npm run dev
 | Ops admin (leader) | File + SLA |
 | Partenaire webhook URL | Livraisons listées |
 
+## Vague fonctionnalités (QR, partage, ping, heatmap créneaux)
+
+- Invitation cercle + deep link `safealert://invite/CODE` + page `/invite/:code`.
+- Partage SOS / trajet (système + WhatsApp) ; page éphémère `/t/:token`.
+- UI file hors-ligne (Paramètres → Envois en attente).
+- Alertes groupe structurées + push.
+- Safety ping planifié + job d'escalade.
+- ETA agent visible citoyen après assignation / « en route ».
+- Heatmap filtrable par créneau (matin / soir / week-end).
+- Badge fiabilité sur signalements + anti-spam assoupli selon score.
+- Corridors / landmarks + suggestion « plus calme » (MVP PostGIS).
+
 ## Partial / reste
 
 - **Widget home Android** — livré (`SosHomeWidgetProvider`, bouton SOS discret).
@@ -100,3 +117,4 @@ cd admin-web && npm run dev
 - **Suivi escorte carte live** — livré (`EscortMapScreen` + sockets `trip_ping` / `escort_trip`).
 - **Stripe** — volontairement non branché ; grant admin/dev uniquement.
 - **Digest push** — job 15 min serveur ; nécessite FCM configuré.
+- **Corridors** — seed Kinshasa + suggestion basique ; pas de routage turn-by-turn.
