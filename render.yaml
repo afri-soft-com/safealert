@@ -97,6 +97,8 @@ services:
     buildFilter:
       paths:
         - admin-web/**
+    # SPA fallback (obligatoire pour /annuaire, /ops, etc. en accès direct / refresh).
+    # Le fichier public/_redirects n'est PAS honoré par le CDN Render — routes Blueprint/API uniquement.
     routes:
       - type: rewrite
         source: /*

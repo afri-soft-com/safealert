@@ -317,6 +317,33 @@ jobs:
           echo "DEPLOY_ID=${deploy_id}" >> "$GITHUB_ENV"
           echo "Deploy API déclenché: ${deploy_id}"
 
+      - name: Ensure SPA rewrite on safealert-admin
+        if: needs.changes.outputs.admin == 'true'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_ADMIN_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RENDER_API_KEY:-}" ] || [ -z "${SERVICE_ID:-}" ]; then
+            echo "Secrets Render admin manquants"
+            exit 1
+          fi
+          echo "Routes actuelles:"
+          curl -fsS \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            "https://api.render.com/v1/services/${SERVICE_ID}/routes" \
+            | jq . || true
+          echo "Application rewrite SPA /* → /index.html…"
+          curl -fsS -X PUT \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d '[{"type":"rewrite","source":"/*","destination":"/index.html"}]' \
+            "https://api.render.com/v1/services/${SERVICE_ID}/routes" \
+            | jq .
+          echo "Routes SPA OK"
+
       - name: Deploy safealert-admin on Render
         if: needs.changes.outputs.admin == 'true'
         env:

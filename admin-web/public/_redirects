@@ -1,1 +1,4 @@
+# Note: Render Static Sites ignore this file (served as a static asset).
+# SPA fallback is configured via render.yaml routes + CI scripts/ensure-admin-spa-routes.sh
+# Kept for Netlify-compatible hosts only:
 /*    /index.html   200
