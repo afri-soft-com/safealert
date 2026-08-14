@@ -113,9 +113,9 @@ class HelpManualScreen extends StatelessWidget {
                   icon: Icons.route,
                   title: 'Trajet sécurisé',
                   children: const [
-                    _P('Carte en haut : appuyez pour fixer l\'enlèvement / départ, puis la destination / arrivée.'),
-                    _P('Vous pouvez aussi saisir une adresse ou utiliser « Ma position » (icône réticule).'),
-                    _P('Les coordonnées GPS restent optionnelles (section repliable). Indiquez une durée estimée ; des proches peuvent suivre le trajet.'),
+                    _P('Carte en haut : appuyez pour fixer le départ, puis l\'arrivée (bandeau « Appuyez sur la carte… »).'),
+                    _P('Saisissez l\'adresse ou utilisez le GPS (« Ma position », icône réticule) sur le champ actif.'),
+                    _P('Les coordonnées GPS (avancé) restent optionnelles. Indiquez une durée estimée ; des proches peuvent suivre le trajet.'),
                     _P('Si vous ne confirmez pas votre arrivée à temps, une alerte peut être déclenchée.'),
                   ],
                 ),

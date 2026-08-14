@@ -354,9 +354,9 @@ class _TripScreenState extends State<TripScreen> {
 
   String get _mapHint {
     if (_pickTarget == _MapPickTarget.origin) {
-      return 'Appuyez sur la carte pour définir le départ';
+      return 'Appuyez sur la carte pour le départ';
     }
-    return 'Appuyez sur la carte pour définir la destination';
+    return 'Appuyez sur la carte pour la destination';
   }
 
   Widget _buildPointField({
@@ -451,11 +451,11 @@ class _TripScreenState extends State<TripScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          'Indiquez le point de départ et la destination sur la carte, par adresse, ou via « Ma position ». Une alerte part si vous n\'arrivez pas à temps.',
+          'Choisissez le départ et l\'arrivée comme pour une course : carte, adresse, ou « Ma position ». Une alerte part si vous n\'arrivez pas à temps.',
           style: TextStyle(fontSize: 12, color: AppColors.gris),
         ),
         const SizedBox(height: 12),
-        // Map (style livraison / moto-taxi)
+        // Map (style moto-taxi / course)
         ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: SizedBox(
@@ -555,12 +555,12 @@ class _TripScreenState extends State<TripScreen> {
           children: [
             Expanded(
               child: ChoiceChip(
-                label: const Text('Enlèvement / Départ'),
+                label: const Text('Départ'),
                 selected: _pickTarget == _MapPickTarget.origin,
                 onSelected: (_) => setState(() => _pickTarget = _MapPickTarget.origin),
                 selectedColor: AppColors.bleu.withValues(alpha: 0.2),
                 labelStyle: TextStyle(
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: _pickTarget == _MapPickTarget.origin
                       ? AppColors.bleu
@@ -571,13 +571,13 @@ class _TripScreenState extends State<TripScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: ChoiceChip(
-                label: const Text('Destination / Arrivée'),
+                label: const Text('Arrivée'),
                 selected: _pickTarget == _MapPickTarget.destination,
                 onSelected: (_) =>
                     setState(() => _pickTarget = _MapPickTarget.destination),
                 selectedColor: AppColors.vert.withValues(alpha: 0.2),
                 labelStyle: TextStyle(
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: _pickTarget == _MapPickTarget.destination
                       ? AppColors.vert
@@ -587,9 +587,14 @@ class _TripScreenState extends State<TripScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        const Text(
+          'Saisissez l\'adresse ou utilisez le GPS',
+          style: TextStyle(fontSize: 12, color: AppColors.gris),
+        ),
+        const SizedBox(height: 10),
         _buildPointField(
-          label: 'Enlèvement / Départ',
+          label: 'Départ',
           hint: 'Adresse de départ, ou appuyez sur la carte',
           controller: _originAddrCtrl,
           target: _MapPickTarget.origin,
@@ -598,7 +603,7 @@ class _TripScreenState extends State<TripScreen> {
         ),
         const SizedBox(height: 12),
         _buildPointField(
-          label: 'Destination / Arrivée',
+          label: 'Arrivée',
           hint: 'Adresse d\'arrivée, ou appuyez sur la carte',
           controller: _destAddrCtrl,
           target: _MapPickTarget.destination,
@@ -623,7 +628,7 @@ class _TripScreenState extends State<TripScreen> {
             onExpansionChanged: (v) => setState(() => _showAdvancedCoords = v),
             tilePadding: EdgeInsets.zero,
             title: const Text(
-              'Coordonnées GPS (optionnel)',
+              'Coordonnées GPS (avancé)',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
             ),
             subtitle: const Text(

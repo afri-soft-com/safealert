@@ -143,7 +143,7 @@ Pour masquer l'application derrière une calculatrice :
 |----------|-------------|
 | **Groupes voisins** | Créer un groupe ou rejoindre via code / QR ; alertes structurées (électricité, eau, inondation, rue bloquée) |
 | **Veille quartier** | Résumé quotidien des alertes près de chez vous |
-| **Trajet sécurisé** | Carte en haut : appuyez pour **Enlèvement/Départ** et **Destination/Arrivée**, saisissez une adresse, ou « Ma position » (réticule). Coordonnées GPS optionnelles. Puis partagez le lien de suivi + WhatsApp |
+| **Trajet sécurisé** | Carte en haut : appuyez pour **Départ** puis **Arrivée**, saisissez l’adresse ou utilisez le GPS (« Ma position »). Coordonnées GPS avancées optionnelles. Puis partagez le lien de suivi + WhatsApp |
 | **Contrôle « Tu es OK ? »** | Rappel planifié ; silence → proches prévenus (Paramètres) |
 | **Envois en attente** | Voir et renvoyer SOS / signalements hors ligne (Paramètres) |
 | **Aide / Manuel** | Guide intégré (connexion, SOS, rôles, FAQ) depuis l'accueil ou Paramètres |
