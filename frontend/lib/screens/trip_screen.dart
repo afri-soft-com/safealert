@@ -354,9 +354,9 @@ class _TripScreenState extends State<TripScreen> {
 
   String get _mapHint {
     if (_pickTarget == _MapPickTarget.origin) {
-      return 'Touchez la carte pour le point de départ';
+      return 'Appuyez sur la carte pour définir le départ';
     }
-    return 'Touchez la carte pour la destination';
+    return 'Appuyez sur la carte pour définir la destination';
   }
 
   Widget _buildPointField({
@@ -555,12 +555,12 @@ class _TripScreenState extends State<TripScreen> {
           children: [
             Expanded(
               child: ChoiceChip(
-                label: const Text('Point de départ'),
+                label: const Text('Enlèvement / Départ'),
                 selected: _pickTarget == _MapPickTarget.origin,
                 onSelected: (_) => setState(() => _pickTarget = _MapPickTarget.origin),
                 selectedColor: AppColors.bleu.withValues(alpha: 0.2),
                 labelStyle: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: _pickTarget == _MapPickTarget.origin
                       ? AppColors.bleu
@@ -571,13 +571,13 @@ class _TripScreenState extends State<TripScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: ChoiceChip(
-                label: const Text('Destination'),
+                label: const Text('Destination / Arrivée'),
                 selected: _pickTarget == _MapPickTarget.destination,
                 onSelected: (_) =>
                     setState(() => _pickTarget = _MapPickTarget.destination),
                 selectedColor: AppColors.vert.withValues(alpha: 0.2),
                 labelStyle: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: _pickTarget == _MapPickTarget.destination
                       ? AppColors.vert
@@ -589,8 +589,8 @@ class _TripScreenState extends State<TripScreen> {
         ),
         const SizedBox(height: 12),
         _buildPointField(
-          label: 'Point de départ',
-          hint: 'Adresse, ou touchez la carte',
+          label: 'Enlèvement / Départ',
+          hint: 'Adresse de départ, ou appuyez sur la carte',
           controller: _originAddrCtrl,
           target: _MapPickTarget.origin,
           accent: AppColors.bleu,
@@ -598,8 +598,8 @@ class _TripScreenState extends State<TripScreen> {
         ),
         const SizedBox(height: 12),
         _buildPointField(
-          label: 'Destination',
-          hint: 'Adresse, ou touchez la carte',
+          label: 'Destination / Arrivée',
+          hint: 'Adresse d\'arrivée, ou appuyez sur la carte',
           controller: _destAddrCtrl,
           target: _MapPickTarget.destination,
           accent: AppColors.vert,
