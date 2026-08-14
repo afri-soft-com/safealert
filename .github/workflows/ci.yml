@@ -310,7 +310,7 @@ jobs:
             echo "Impossible de lire l'ID du deploy Render"
             exit 1
           fi
-          if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then
+          if [ "$http_code" != "200" ] && [ "$http_code" != "201" ] && [ "$http_code" != "202" ]; then
             echo "Deploy Render HTTP inattendu: ${http_code}"
             exit 1
           fi
