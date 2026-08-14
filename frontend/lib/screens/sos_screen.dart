@@ -165,6 +165,11 @@ class _SOSScreenState extends State<SOSScreen> {
       return;
     }
 
+    final note = result['positionNote']?.toString();
+    if (note != null && note.isNotEmpty) {
+      _statusMsg = note;
+    }
+
     final incident = result['incident'] as Map<String, dynamic>?;
     _incidentId = incident?['id'] as String?;
 
@@ -249,7 +254,7 @@ class _SOSScreenState extends State<SOSScreen> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                 children: [
-                  if (_failed || (_queued == true))
+                  if (_failed || (_queued == true) || (_statusMsg != null && _statusMsg!.isNotEmpty))
                     Container(
                       width: double.infinity,
                       margin: const EdgeInsets.only(bottom: 12),

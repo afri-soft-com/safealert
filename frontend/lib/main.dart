@@ -394,6 +394,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       case 'annuaire':
         screen = AnnuaireScreen(onNavigate: _navigate, onBack: _onBack);
       case 'heatmap':
+        if (!AppConfigService().heatmapEnabled) {
+          screen = HomeScreen(onNavigate: _navigate);
+          break;
+        }
         screen = HeatmapScreen(onNavigate: _navigate, onBack: _onBack);
       case 'safety':
         screen = SafetyScreen(onNavigate: _navigate, onBack: _onBack);

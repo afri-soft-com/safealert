@@ -52,6 +52,8 @@ module.exports = {
   structuredGroupAlerts: () => isEnabled("FEATURE_STRUCTURED_GROUP_ALERTS", true),
   /** Corridors / repères locaux + suggestion d'itinéraire */
   corridors: () => isEnabled("FEATURE_CORRIDORS", true),
+  /** Carte de chaleur (UI mobile) — API reste disponible */
+  heatmap: () => isEnabled("FEATURE_HEATMAP", false),
 
   /** Mode maintenance / bannière dégradée (kill switch soft) */
   maintenanceMode: () => isEnabled("FEATURE_MAINTENANCE_MODE", false),

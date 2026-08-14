@@ -47,21 +47,30 @@ class LocationService {
   /// Best-effort GPS for SOS: current → lastKnown → cached local → null.
   /// Never returns 0,0.
   Future<Position?> getPositionForSos() async {
+    final resolved = await getPositionWithSource();
+    return resolved.position;
+  }
+
+  /// Same cascade as [getPositionForSos], with a source label for UI messages.
+  /// Sources: `gps` | `last_known` | `cache` | `none`.
+  Future<({Position? position, String source})> getPositionWithSource() async {
     final current = await getCurrentPosition();
     if (current != null && !_isNullIsland(current.latitude, current.longitude)) {
       await _cacheGoodPosition(current.latitude, current.longitude);
-      return current;
+      return (position: current, source: 'gps');
     }
 
     try {
       final last = await Geolocator.getLastKnownPosition();
       if (last != null && !_isNullIsland(last.latitude, last.longitude)) {
         await _cacheGoodPosition(last.latitude, last.longitude);
-        return last;
+        return (position: last, source: 'last_known');
       }
     } catch (_) {}
 
-    return _cachedPosition();
+    final cached = await _cachedPosition();
+    if (cached != null) return (position: cached, source: 'cache');
+    return (position: null, source: 'none');
   }
 
   Future<Position?> getCurrentPosition() async {

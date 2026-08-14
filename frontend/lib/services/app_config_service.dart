@@ -35,4 +35,7 @@ class AppConfigService {
   }
 
   bool get canSendSos => sosEnabled && !maintenance;
+
+  /// Carte de chaleur — masquée par défaut (`FEATURE_HEATMAP=false`).
+  bool get heatmapEnabled => features['heatmap'] == true;
 }

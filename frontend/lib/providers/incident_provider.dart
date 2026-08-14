@@ -170,11 +170,12 @@ class IncidentProvider extends ChangeNotifier {
       };
     }
 
-    final pos = await LocationService().getPositionForSos();
+    final resolved = await LocationService().getPositionWithSource();
+    final pos = resolved.position;
     var useLat = pos?.latitude ?? lat;
     var useLng = pos?.longitude ?? lng;
     if ((useLat.abs() < 0.0001 && useLng.abs() < 0.0001)) {
-      // Still null-island — queue with best effort; server may use last_lat
+      // Still null-island — server may substitute users.last_lat/last_lng
       useLat = lat;
       useLng = lng;
     }
@@ -196,8 +197,25 @@ class IncidentProvider extends ChangeNotifier {
         await LocationService().updatePosition(useLat, useLng);
       }
       final res = await _api.post('/sos/trigger', payload);
+      if (resolved.source == 'last_known' || resolved.source == 'cache') {
+        res['positionNote'] =
+            'Position approximative (dernière connue). Activez le GPS pour une localisation plus précise.';
+      } else if (resolved.source == 'none') {
+        res['positionNote'] =
+            'GPS indisponible — le serveur a utilisé votre dernière position enregistrée si elle existe.';
+      }
       return res;
-    } catch (_) {
+    } catch (e) {
+      if (e is ApiException && (e.statusCode == 400 || e.statusCode == 422)) {
+        return {
+          'blocked': true,
+          'message': userFacingError(
+            e,
+            fallback:
+                'Position GPS indisponible. Activez la localisation et réessayez, ou utilisez l\'annuaire d\'urgence.',
+          ),
+        };
+      }
       await _cache.enqueuePendingSos(payload);
       _isOffline = true;
       notifyListeners();

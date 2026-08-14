@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/incident_provider.dart';
+import '../services/app_config_service.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/nav_bar.dart';
@@ -193,7 +194,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildCard('🏠', 'Zones confiance', 'Domicile / travail', () => widget.onNavigate('trust_zones'), AppColors.bleuFonce),
                     _buildCard('🏘️', 'Veille quartier', 'Résumé quotidien', () => widget.onNavigate('neighborhood'), AppColors.orange),
                     _buildCard('🛡', 'Conseils sécurité', 'Astuces hors-ligne', () => widget.onNavigate('safety'), AppColors.rouge),
-                    _buildCard('🔥', 'Carte chaleur', 'Densité incidents', () => widget.onNavigate('heatmap'), AppColors.orange),
+                    if (AppConfigService().heatmapEnabled)
+                      _buildCard('🔥', 'Carte chaleur', 'Densité incidents', () => widget.onNavigate('heatmap'), AppColors.orange),
                     _buildCard('📋', 'Mon historique', 'Mes alertes', () => widget.onNavigate('history'), AppColors.gris),
                     _buildCard('📖', 'Aide / Manuel', 'Guide d\'utilisation', () => widget.onNavigate('help'), AppColors.bleu),
                   ],

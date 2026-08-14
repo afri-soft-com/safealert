@@ -105,9 +105,22 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
     final descCtrl = TextEditingController();
-    final pos = await LocationService().getCurrentPosition();
-    final lat = pos?.latitude ?? _center.latitude;
-    final lng = pos?.longitude ?? _center.longitude;
+    final resolved = await LocationService().getPositionWithSource();
+    final pos = resolved.position;
+    if (pos == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Position inconnue. Activez le GPS (ou autorisez la localisation) pour signaler un incident.',
+          ),
+        ),
+      );
+      return;
+    }
+    final lat = pos.latitude;
+    final lng = pos.longitude;
+    final approx = resolved.source != 'gps';
     final picker = ImagePicker();
 
     if (!mounted) return;
@@ -137,8 +150,15 @@ class _MapScreenState extends State<MapScreen> {
                 children: [
                   const Text('Signaler un incident', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
                   const SizedBox(height: 6),
-                  Text('Position : ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}',
-                      style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                  Text(
+                    approx
+                        ? 'Position approximative (dernière connue) : ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)} — activez le GPS pour plus de précision'
+                        : 'Position : ${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: approx ? AppColors.orange : AppColors.gris,
+                    ),
+                  ),
                   const SizedBox(height: 14),
                   const Text('Type d\'incident', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.gris)),
                   const SizedBox(height: 6),

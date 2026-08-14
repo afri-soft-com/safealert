@@ -727,6 +727,7 @@ describe("App version", () => {
     expect(res.body).toHaveProperty("maintenance", false);
     expect(res.body).toHaveProperty("features");
     expect(res.body.features).toHaveProperty("liveStatus");
+    expect(res.body.features).toHaveProperty("heatmap");
     expect(res.body.latestVersion).toBe("1.0.2");
   });
 });

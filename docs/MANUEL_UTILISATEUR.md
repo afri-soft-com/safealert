@@ -133,7 +133,6 @@ Pour masquer l'application derrière une calculatrice :
 | **Envois en attente** | Voir et renvoyer SOS / signalements hors ligne (Paramètres) |
 | **Aide / Manuel** | Guide intégré (connexion, SOS, rôles, FAQ) depuis l'accueil ou Paramètres |
 | **Conseils sécurité** | Astuces disponibles hors ligne |
-| **Carte chaleur** | Densité des incidents par zone et créneau (matin / soir / week-end) |
 | **Mon historique** | Vos alertes passées |
 | **Mode responsable** | Réservé aux rôles leader/agent (filtré par secteur si assigné) ; ETA visible par le citoyen |
 | **Administration** | Réservé au rôle `platform_admin` (utilisateurs, rôles, partenaires API) |

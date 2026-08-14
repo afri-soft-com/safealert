@@ -46,6 +46,7 @@ function configPayload() {
       circleInvite: features.circleInvite(),
       corridors: features.corridors(),
       premium: features.premium(),
+      heatmap: features.heatmap(),
     },
   };
 }
