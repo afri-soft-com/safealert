@@ -5,16 +5,45 @@ const { deliverEvent } = require("../services/partnerWebhooks");
 const { witnessEvidence, reliabilityScore } = require("../config/features");
 const { withReliabilityBadge } = require("../utils/reliability");
 
-const buildIncidentsCacheKey = (hours, status) =>
-  `map:incidents:h${hours}:s${status || "all"}`;
+const ACTIVE_STATUSES = ["active", "verified", "acknowledged", "in_progress"];
+const FILTER_TO_DB = {
+  danger: ["danger", "alert"],
+  vigilance: ["vigilance"],
+  safe: ["safe"],
+};
+
+/** Parse severity=danger,vigilance,safe or repeated severity= params into UI filter keys. */
+const parseSeverityFilters = (raw) => {
+  if (raw == null || raw === "") return null;
+  const parts = Array.isArray(raw) ? raw : String(raw).split(",");
+  const keys = [
+    ...new Set(
+      parts
+        .map((s) => String(s).trim().toLowerCase())
+        .filter((s) => s && FILTER_TO_DB[s])
+    ),
+  ];
+  return keys.length ? keys.sort() : null;
+};
+
+const buildIncidentsCacheKey = (hours, status, severityKey) =>
+  `map:incidents:h${hours}:s${status || "all"}:sev${severityKey || "all"}`;
 
 const getIncidents = async (req, res) => {
   const { lat, lng, radius_km, status, limit, hours, incident_type } = req.query;
   const hoursVal = Math.min(Math.max(parseInt(hours) || 24, 1), 168);
   const hasGeoFilter = lat && lng && radius_km;
+  const severityFilters = parseSeverityFilters(req.query.severity);
+  const severityKey = severityFilters ? severityFilters.join(",") : null;
+  const wantSafe = severityFilters ? severityFilters.includes("safe") : false;
+  const activeSeverities = severityFilters
+    ? severityFilters
+        .filter((k) => k !== "safe")
+        .flatMap((k) => FILTER_TO_DB[k])
+    : null;
 
   if (!hasGeoFilter && !incident_type) {
-    const cacheKey = buildIncidentsCacheKey(hoursVal, status);
+    const cacheKey = buildIncidentsCacheKey(hoursVal, status, severityKey);
     const cached = await cacheGet(cacheKey);
     if (cached) {
       try {
@@ -24,6 +53,12 @@ const getIncidents = async (req, res) => {
   }
 
   try {
+    // When "safe" is requested, also surface recently resolved safe-zone markers
+    // (leaders set severity=safe + status=resolved — normally excluded from the map).
+    const includeSafeResolved = wantSafe;
+    const hasActiveSeveritySlice =
+      !severityFilters || (activeSeverities && activeSeverities.length > 0);
+
     let query = `
       SELECT i.id, i.incident_type, i.description, i.lat, i.lng,
              i.severity, i.status, i.verified_by, i.is_anonymous, i.created_at,
@@ -31,11 +66,45 @@ const getIncidents = async (req, res) => {
              CASE WHEN i.is_anonymous THEN 'Anonyme' ELSE u.pseudo END as reporter
       FROM incidents i
       JOIN users u ON i.user_id = u.id
-      WHERE i.status IN ('active', 'verified', 'acknowledged', 'in_progress')
-        AND i.created_at > NOW() - make_interval(hours => $1)
+      WHERE (
     `;
     const params = [hoursVal];
     let paramIndex = 2;
+    const clauses = [];
+
+    if (hasActiveSeveritySlice) {
+      const statusParam = paramIndex++;
+      params.push(ACTIVE_STATUSES);
+      let activeClause = `(
+        i.status = ANY($${statusParam}::text[])
+        AND i.created_at > NOW() - make_interval(hours => $1)
+      )`;
+      if (activeSeverities) {
+        const sevParam = paramIndex++;
+        params.push(activeSeverities);
+        activeClause = `(
+          i.status = ANY($${statusParam}::text[])
+          AND i.created_at > NOW() - make_interval(hours => $1)
+          AND i.severity = ANY($${sevParam}::text[])
+        )`;
+      }
+      clauses.push(activeClause);
+    }
+
+    if (includeSafeResolved) {
+      clauses.push(`(
+        i.severity = 'safe'
+        AND i.status = 'resolved'
+        AND COALESCE(i.resolved_at, i.created_at) > NOW() - make_interval(hours => $1)
+      )`);
+    }
+
+    // Empty severity filter after parse should not happen; guard empty result.
+    if (clauses.length === 0) {
+      return res.json([]);
+    }
+
+    query += clauses.join(" OR ") + ")";
 
     if (status) {
       query += ` AND i.status = $${paramIndex++}`;
@@ -67,8 +136,8 @@ const getIncidents = async (req, res) => {
       ? result.rows.map(withReliabilityBadge)
       : result.rows;
 
-    if (!hasGeoFilter) {
-      const cacheKey = buildIncidentsCacheKey(hoursVal, status);
+    if (!hasGeoFilter && !incident_type) {
+      const cacheKey = buildIncidentsCacheKey(hoursVal, status, severityKey);
       await cacheSet(cacheKey, JSON.stringify(rows), 60);
     }
 

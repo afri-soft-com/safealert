@@ -33,6 +33,8 @@ class _MapScreenState extends State<MapScreen> {
   bool _locating = false;
   String _typeFilter = 'all';
   int _hoursFilter = 24;
+  /// Multi-select severity chips (default: all on = comportement inchangé).
+  final Set<String> _severityFilters = {'danger', 'vigilance', 'safe'};
 
   static const _typeOptions = {
     'all': 'Tous types',
@@ -56,6 +58,7 @@ class _MapScreenState extends State<MapScreen> {
     await context.read<IncidentProvider>().fetchIncidents(
       hours: _hoursFilter,
       incidentType: _typeFilter,
+      severities: _severityFilters.toList(),
     );
   }
 
@@ -476,11 +479,11 @@ class _MapScreenState extends State<MapScreen> {
                           scrollDirection: Axis.horizontal,
                           child: Row(
                             children: [
-                              _badge('Danger', AppColors.rouge),
+                              _severityChip('danger', 'Danger', AppColors.rouge),
                               const SizedBox(width: 6),
-                              _badge('Vigilance', AppColors.orange),
+                              _severityChip('vigilance', 'Vigilance', AppColors.orange),
                               const SizedBox(width: 6),
-                              _badge('Sûr', AppColors.vert),
+                              _severityChip('safe', 'Sûr', AppColors.vert),
                             ],
                           ),
                         ),
@@ -702,15 +705,46 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Widget _badge(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        border: Border.all(color: color),
-        borderRadius: BorderRadius.circular(20),
+  Widget _severityChip(String id, String label, Color color) {
+    final selected = _severityFilters.contains(id);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: selected
+          ? 'Filtre $label activé, appuyer pour désactiver'
+          : 'Filtre $label désactivé, appuyer pour activer',
+      child: GestureDetector(
+        onTap: () async {
+          setState(() {
+            if (selected) {
+              _severityFilters.remove(id);
+            } else {
+              _severityFilters.add(id);
+            }
+          });
+          await _loadIncidents();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: selected ? color.withValues(alpha: 0.12) : AppColors.grisClair,
+            border: Border.all(
+              color: selected ? color : const Color(0xFFDDDDDD),
+              width: selected ? 1.5 : 1,
+            ),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: selected ? color : AppColors.gris,
+            ),
+          ),
+        ),
       ),
-      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
     );
   }
 }

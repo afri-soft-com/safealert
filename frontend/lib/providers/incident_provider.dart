@@ -42,10 +42,20 @@ class IncidentProvider extends ChangeNotifier {
     double? radiusKm,
     int hours = 24,
     String? incidentType,
+    List<String>? severities,
   }) async {
     _loading = true;
     _isOffline = false;
     notifyListeners();
+
+    // Empty multi-select → no markers (no API call).
+    if (severities != null && severities.isEmpty) {
+      _incidents = [];
+      _loading = false;
+      notifyListeners();
+      return;
+    }
+
     try {
       String path = '/map/incidents?limit=100&hours=$hours';
       if (lat != null && lng != null && radiusKm != null) {
@@ -53,6 +63,10 @@ class IncidentProvider extends ChangeNotifier {
       }
       if (incidentType != null && incidentType.isNotEmpty && incidentType != 'all') {
         path += '&incident_type=$incidentType';
+      }
+      if (severities != null && severities.isNotEmpty) {
+        final sorted = [...severities]..sort();
+        path += '&severity=${Uri.encodeQueryComponent(sorted.join(','))}';
       }
       final res = await _api.get(path);
       _incidents = (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];

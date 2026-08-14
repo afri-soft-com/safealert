@@ -155,6 +155,10 @@ Future<void> _pumpNarrow(WidgetTester tester, Size size, Widget app) async {
 Widget _wrapProviders(Widget child) {
   final fakeApi = FakeApiService();
   fakeApi.onGet('/map/incidents?limit=100&hours=24', () => {'data': []});
+  fakeApi.onGet(
+    '/map/incidents?limit=100&hours=24&severity=${Uri.encodeQueryComponent('danger,safe,vigilance')}',
+    () => {'data': []},
+  );
   fakeApi.onGet('/map/stats', () => {
     'total_incidents': 0,
     'total_sos': 0,

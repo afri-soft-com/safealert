@@ -169,6 +169,33 @@ describe("Incidents", () => {
     expect(res.body[0].incident_type).toBe("agression");
   });
 
+  it("GET /api/map/incidents filters by severity and includes safe resolved", async () => {
+    mockQuery.mockResolvedValue({
+      rows: [
+        { id: "i1", incident_type: "agression", severity: "danger", status: "active" },
+        { id: "i2", incident_type: "autre", severity: "safe", status: "resolved" },
+      ],
+    });
+    const res = await request(app).get("/api/map/incidents?severity=danger,safe");
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    const sql = mockQuery.mock.calls[0][0];
+    expect(sql).toMatch(/severity = ANY/i);
+    expect(sql).toMatch(/severity = 'safe'/i);
+    expect(sql).toMatch(/status = 'resolved'/i);
+    const params = mockQuery.mock.calls[0][1];
+    expect(params).toEqual(expect.arrayContaining([["active", "verified", "acknowledged", "in_progress"]]));
+    expect(params).toEqual(expect.arrayContaining([["danger", "alert"]]));
+  });
+
+  it("GET /api/map/incidents maps danger filter to danger+alert", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    const res = await request(app).get("/api/map/incidents?severity=danger");
+    expect(res.status).toBe(200);
+    const params = mockQuery.mock.calls[0][1];
+    expect(params).toEqual(expect.arrayContaining([["danger", "alert"]]));
+  });
+
   it("POST /api/map/incidents requires auth", async () => {
     const res = await request(app)
       .post("/api/map/incidents")

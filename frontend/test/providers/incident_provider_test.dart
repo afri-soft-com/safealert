@@ -34,6 +34,29 @@ void main() {
       expect(cached, isNotNull);
     });
 
+    test('passes severity filter to API', () async {
+      final path =
+          '/map/incidents?limit=100&hours=24&severity=${Uri.encodeQueryComponent('danger,vigilance')}';
+      fakeApi.onGet(path, () => {
+        'data': [
+          {'id': 1, 'incident_type': 'agression', 'severity': 'danger'},
+        ],
+      });
+
+      await provider.fetchIncidents(severities: ['vigilance', 'danger']);
+
+      expect(fakeApi.lastPath, path);
+      expect(provider.incidents.length, 1);
+    });
+
+    test('skips API when severity filter is empty', () async {
+      await provider.fetchIncidents(severities: []);
+
+      expect(fakeApi.lastPath, isNull);
+      expect(provider.incidents, isEmpty);
+      expect(provider.loading, false);
+    });
+
     test('falls back to cache on error', () async {
       await fakeDb.put('incidents', [
         {'id': 1, 'incident_type': 'vol'},
