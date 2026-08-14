@@ -74,6 +74,25 @@ Ou télécharger la release GitHub **`aab-main`** (CI, si `frontend/**` a chang�
 - [ ] Feature flags revue (`docs/FEATURES.md`) — `FEATURE_PREMIUM` off par défaut
 - [ ] Compte `platform_admin` pour admin-web
 - [ ] Incrémenter `version` dans `pubspec.yaml` (`1.0.0+1` → `1.0.1+2`) à chaque upload
+- [ ] (Optionnel) Vars Render pour le fallback version : `APP_LATEST_VERSION`, `APP_MIN_VERSION`, `APP_FORCE_UPDATE`, `APP_STORE_URL` — voir ci-dessous
+
+### Mises à jour in-app (Android)
+
+Deux mécanismes complémentaires :
+
+1. **Google Play In-App Updates** (`in_app_update`) — sur les builds installés via Play (piste Internal incluse). Au démarrage / reprise / toutes les ~45 min, l’app vérifie une mise à jour et privilégie le mode **flexible** (téléchargement en arrière-plan, puis redémarrage).
+2. **API `GET /api/app/version`** — fallback soft / force avant propagation Play. Réponse : `{ minVersion, latestVersion, forceUpdate, storeUrl }`.
+
+Configurer sur Render (ou `.env`) :
+
+| Variable | Rôle |
+|----------|------|
+| `APP_LATEST_VERSION` | Dernière version recommandée (ex. `1.0.1`) — bannière soft si l’app est plus ancienne |
+| `APP_MIN_VERSION` | Version minimale — dialogue bloquant si l’app est en dessous |
+| `APP_FORCE_UPDATE` | `true` pour forcer la mise à jour même sans `APP_MIN_VERSION` |
+| `APP_STORE_URL` | Lien Play (défaut : fiche `com.safealert.safealert`) |
+
+Après chaque upload Play Internal réussi, mettez à jour `APP_LATEST_VERSION` sur l’API pour les utilisateurs qui n’ont pas encore reçu la propagation Play.
 
 ### F. CI automatique
 

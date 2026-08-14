@@ -682,6 +682,42 @@ describe("Public trip follow", () => {
   });
 });
 
+describe("App version", () => {
+  const prev = {};
+  beforeEach(() => {
+    for (const k of ["APP_LATEST_VERSION", "APP_MIN_VERSION", "APP_FORCE_UPDATE", "APP_STORE_URL"]) {
+      prev[k] = process.env[k];
+    }
+  });
+  afterEach(() => {
+    for (const k of Object.keys(prev)) {
+      if (prev[k] === undefined) delete process.env[k];
+      else process.env[k] = prev[k];
+    }
+  });
+
+  it("GET /api/app/version returns policy from env", async () => {
+    process.env.APP_LATEST_VERSION = "1.0.2";
+    process.env.APP_MIN_VERSION = "1.0.0";
+    process.env.APP_FORCE_UPDATE = "false";
+    process.env.APP_STORE_URL = "https://play.google.com/store/apps/details?id=com.safealert.safealert";
+    const res = await request(app).get("/api/app/version");
+    expect(res.status).toBe(200);
+    expect(res.body.latestVersion).toBe("1.0.2");
+    expect(res.body.minVersion).toBe("1.0.0");
+    expect(res.body.forceUpdate).toBe(false);
+    expect(res.body.storeUrl).toContain("com.safealert.safealert");
+  });
+
+  it("GET /api/app/version forceUpdate when APP_FORCE_UPDATE=true", async () => {
+    process.env.APP_FORCE_UPDATE = "true";
+    process.env.APP_LATEST_VERSION = "1.0.2";
+    const res = await request(app).get("/api/app/version");
+    expect(res.status).toBe(200);
+    expect(res.body.forceUpdate).toBe(true);
+  });
+});
+
 describe("Heatmap slots", () => {
   it("GET /api/map/heatmap accepts slot=evening", async () => {
     mockQuery

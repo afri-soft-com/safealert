@@ -14,6 +14,16 @@ Guide pas à pas pour les citoyens utilisant l'application SafeAlert sur Android
 
 > [À capturer] Écran Play Store avec SafeAlert
 
+### Mises à jour
+
+SafeAlert peut vous prévenir **pendant que vous utilisez l’app** lorsqu’une nouvelle version est disponible :
+
+- Une bannière « **Nouvelle version disponible** » apparaît en haut de l’écran (vous pouvez continuer à utiliser l’app, puis appuyer sur **Mettre à jour**).
+- Si une mise à jour est **obligatoire**, un message vous demande de mettre à jour avant de continuer.
+- Sur Android (installation via Play), la mise à jour peut aussi se télécharger en arrière-plan ; un message propose ensuite de **redémarrer** pour l’appliquer.
+
+Vérifiez aussi régulièrement le Play Store → SafeAlert → **Mettre à jour**.
+
 ### Installation manuelle (APK)
 
 Si vous recevez un fichier `.apk` de votre organisation :

@@ -47,6 +47,7 @@ const invitesRoutes = require("./routes/invites");
 const safetyPingsRoutes = require("./routes/safetyPings");
 const corridorsRoutes = require("./routes/corridors");
 const publicRoutes = require("./routes/public");
+const appRoutes = require("./routes/app");
 
 const app = express();
 const server = http.createServer(app);
@@ -165,6 +166,7 @@ app.use("/api/invites", invitesRoutes);
 app.use("/api/safety-pings", safetyPingsRoutes);
 app.use("/api/corridors", corridorsRoutes);
 app.use("/api/public", publicRoutes);
+app.use("/api/app", appRoutes);
 
 // Ephemeral public trip follow page (short token, read-only map)
 const followTripHtml = path.join(__dirname, "public", "follow-trip.html");

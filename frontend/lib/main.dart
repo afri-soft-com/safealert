@@ -46,6 +46,7 @@ import 'screens/neighborhood_screen.dart';
 import 'services/volume_sos_service.dart';
 import 'services/shake_sos_service.dart';
 import 'services/fcm_service.dart';
+import 'services/app_update_service.dart';
 
 /// Onglets principaux de la barre de navigation inférieure.
 const kMainTabScreens = {'home', 'map', 'contacts', 'annuaire', 'dashboard'};
@@ -105,12 +106,14 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final List<String> _navStack = ['splash'];
   bool _discreetLocked = false;
   bool _discreetChecked = false;
+  bool _softUpdateDismissed = false;
   final QuickActions _quickActions = const QuickActions();
   final AppLinks _appLinks = AppLinks();
+  final AppUpdateService _appUpdates = AppUpdateService();
 
   String get _currentScreen => _navStack.last;
 
@@ -181,6 +184,10 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _appUpdates.attach(() {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _checkDiscreetMode();
       if (!mounted) return;
@@ -188,6 +195,7 @@ class _AppShellState extends State<AppShell> {
       VolumeSOSService.init(_triggerSilentSos);
       ShakeSOSService.init(_triggerSilentSos);
       _initDeepLinks();
+      _appUpdates.startPolling(context);
 
       _quickActions.initialize((shortcutType) {
         if (shortcutType == 'sos') _triggerSilentSos();
@@ -199,13 +207,23 @@ class _AppShellState extends State<AppShell> {
       final auth = context.read<AuthProvider>();
       if (auth.isAuthenticated) {
         await FCMService().uploadToken();
+        if (!mounted) return;
         await context.read<IncidentProvider>().flushOfflineQueue();
       }
     });
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _appUpdates.check(context);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _appUpdates.dispose();
     ShakeSOSService.dispose();
     super.dispose();
   }
@@ -392,14 +410,33 @@ class _AppShellState extends State<AppShell> {
         screen = HomeScreen(onNavigate: _navigate);
     }
 
+    final showSoftBanner = _appUpdates.updateAvailable &&
+        !_appUpdates.forceUpdate &&
+        !_softUpdateDismissed &&
+        !_discreetLocked &&
+        _currentScreen != 'splash' &&
+        _currentScreen != 'calculator';
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _goBack();
       },
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 200),
-        child: KeyedSubtree(key: ValueKey(_currentScreen), child: screen),
+      child: Column(
+        children: [
+          if (showSoftBanner)
+            AppUpdateBanner(
+              latestVersion: _appUpdates.latestVersion,
+              onUpdate: () => _appUpdates.openStoreOrUpdate(context),
+              onDismiss: () => setState(() => _softUpdateDismissed = true),
+            ),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: KeyedSubtree(key: ValueKey(_currentScreen), child: screen),
+            ),
+          ),
+        ],
       ),
     );
   }
