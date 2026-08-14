@@ -65,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final loadingIncidents = incidentProvider.loading && incidents.isEmpty;
     final activeCount = incidents.length;
     final latest = incidents.isNotEmpty ? incidents.first : null;
+    final recentActivities = incidents.take(5).toList();
 
     return Scaffold(
       body: Column(
@@ -208,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                if (incidents.length > 1)
+                if (incidents.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -221,14 +222,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         const Text('ACTIVITÉ RÉCENTE (24h)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.rouge, letterSpacing: 1)),
                         const SizedBox(height: 8),
-                        ...incidents.take(3).toList().asMap().entries.map((entry) {
+                        ...recentActivities.asMap().entries.map((entry) {
                           final inc = entry.value;
-                          final isLast = entry.key == 2 || entry.key == incidents.length - 1;
+                          final isLast = entry.key == recentActivities.length - 1;
                           final type = inc['incident_type'] as String? ?? 'incident';
                           final icon = type == 'agression' || type == 'sos' ? '🔴' : (type == 'vol' || type == 'suspect' ? '🟡' : '🟢');
+                          final desc = (inc['description'] as String?)?.trim();
+                          final title = (desc != null && desc.isNotEmpty)
+                              ? '${_incidentLabel(inc)} — $desc'
+                              : _incidentLabel(inc);
                           return _activityItem(
                             icon,
-                            '${_incidentLabel(inc)} — ${LocationFormat.fromIncident(inc)}',
+                            title,
+                            LocationFormat.fromIncident(inc),
                             _timeAgo(inc['created_at'] as String?),
                             isLast,
                           );
@@ -282,7 +288,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _activityItem(String icon, String text, String time, bool isLast) {
+  Widget _activityItem(
+    String icon,
+    String title,
+    String placeLine,
+    String time,
+    bool isLast,
+  ) {
     return Container(
       padding: const EdgeInsets.only(bottom: 8),
       margin: const EdgeInsets.only(bottom: 8),
@@ -298,7 +310,21 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(text, style: const TextStyle(fontSize: 11, color: AppColors.bleuFonce, fontWeight: FontWeight.w500), maxLines: 3, overflow: TextOverflow.ellipsis),
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 11, color: AppColors.bleuFonce, fontWeight: FontWeight.w600),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (placeLine.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Lieu : $placeLine',
+                    style: const TextStyle(fontSize: 11, color: AppColors.bleuFonce, fontWeight: FontWeight.w500),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
                 if (time.isNotEmpty)
                   Text('Il y a $time', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
               ],
