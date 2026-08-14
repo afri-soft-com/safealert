@@ -37,7 +37,7 @@ void main() {
         SOSScreen(onBack: () {}),
       ));
       expect(tester.takeException(), isNull);
-      expect(find.textContaining('APPUYER'), findsOneWidget);
+      expect(find.textContaining('MAINTENIR'), findsOneWidget);
     });
 
     testWidgets('DashboardScreen fits on $label', (tester) async {

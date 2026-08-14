@@ -1,4 +1,7 @@
 import 'package:app_links/app_links.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -6,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:quick_actions/quick_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'theme.dart';
+import 'firebase_options.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/auth_provider.dart';
 import 'providers/incident_provider.dart';
@@ -47,14 +51,33 @@ import 'services/volume_sos_service.dart';
 import 'services/shake_sos_service.dart';
 import 'services/fcm_service.dart';
 import 'services/app_update_service.dart';
+import 'services/app_config_service.dart';
 
 /// Onglets principaux de la barre de navigation inférieure.
 const kMainTabScreens = {'home', 'map', 'contacts', 'annuaire', 'dashboard'};
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await _initCrashReporting();
   FCMService().initialize();
   runApp(const SafeAlertApp());
+}
+
+Future<void> _initCrashReporting() async {
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+    };
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+    await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
+  } catch (e) {
+    debugPrint('Crashlytics init skipped: $e');
+  }
 }
 
 class SafeAlertApp extends StatelessWidget {
@@ -192,6 +215,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       await _checkDiscreetMode();
       if (!mounted) return;
 
+      await AppConfigService().refresh(force: true);
+      if (mounted) setState(() {});
+
       VolumeSOSService.init(_triggerSilentSos);
       ShakeSOSService.init(_triggerSilentSos);
       _initDeepLinks();
@@ -313,7 +339,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
 
     if (_discreetLocked) {
-      return CalculatorScreen(onUnlock: _unlockDiscreet);
+      return CalculatorScreen(
+        onUnlock: _unlockDiscreet,
+        onDuress: _triggerSilentSos,
+      );
     }
 
     final auth = context.watch<AuthProvider>();
@@ -350,7 +379,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           },
         );
       case 'calculator':
-        screen = CalculatorScreen(onUnlock: _unlockDiscreet);
+        screen = CalculatorScreen(
+          onUnlock: _unlockDiscreet,
+          onDuress: _triggerSilentSos,
+        );
       case 'home':
         screen = HomeScreen(onNavigate: _navigate);
       case 'sos':
@@ -410,6 +442,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         screen = HomeScreen(onNavigate: _navigate);
     }
 
+    final cfg = AppConfigService();
+    final showMaintenance = cfg.maintenance || !cfg.sosEnabled;
     final showSoftBanner = _appUpdates.updateAvailable &&
         !_appUpdates.forceUpdate &&
         !_softUpdateDismissed &&
@@ -424,6 +458,22 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       },
       child: Column(
         children: [
+          if (showMaintenance)
+            Material(
+              color: const Color(0xFF7A4F00),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                  child: Text(
+                    cfg.maintenanceBanner.isNotEmpty
+                        ? cfg.maintenanceBanner
+                        : 'Certaines fonctions sont temporairement limitées. L\'annuaire d\'urgence reste disponible.',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ),
+            ),
           if (showSoftBanner)
             AppUpdateBanner(
               latestVersion: _appUpdates.latestVersion,

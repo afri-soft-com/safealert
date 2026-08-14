@@ -96,7 +96,10 @@ class _AnnuaireScreenState extends State<AnnuaireScreen> {
                                   final s = numbers[i];
                                   final color = _colorForService(s['service_type'] as String?);
                                   final phone = s['phone_number'] as String? ?? '';
-                                  return Material(
+                                  return Semantics(
+                                    button: true,
+                                    label: 'Appeler ${s['service_name'] ?? 'urgence'} au $phone',
+                                    child: Material(
                                     color: AppColors.blanc,
                                     borderRadius: BorderRadius.circular(12),
                                     child: InkWell(
@@ -174,6 +177,7 @@ class _AnnuaireScreenState extends State<AnnuaireScreen> {
                                         ),
                                       ),
                                     ),
+                                  ),
                                   );
                                 },
                               ),

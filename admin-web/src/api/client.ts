@@ -211,6 +211,18 @@ export const api = {
       `/admin/groups?page=${page}&limit=${limit}`
     ),
 
+  getAuditLogs: (page = 1, limit = 30, q = "", action = "") => {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (q.trim()) params.set("q", q.trim());
+    if (action.trim()) params.set("action", action.trim());
+    return request<{ data: AuditLogRow[]; page: number; limit: number; total: number }>(
+      `/admin/audit-logs?${params}`
+    );
+  },
+
   getOpsQueue: () =>
     request<{
       queue: Array<{
@@ -313,6 +325,19 @@ export interface GroupRow {
   created_at: string;
   creator_pseudo: string;
   creator_phone: string;
+}
+
+export interface AuditLogRow {
+  id: string;
+  actor_id: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  metadata: Record<string, unknown> | null;
+  ip: string | null;
+  created_at: string;
+  actor_pseudo: string | null;
+  actor_phone: string | null;
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {

@@ -1,6 +1,8 @@
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
+import '../services/app_config_service.dart';
 import '../services/local_database.dart';
 import '../services/location_service.dart';
 import '../services/socket_service.dart';
@@ -158,14 +160,36 @@ class IncidentProvider extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> triggerSOS(double lat, double lng, {String? type, String? description}) async {
-    final pos = await LocationService().getCurrentPosition();
-    final useLat = pos?.latitude ?? lat;
-    final useLng = pos?.longitude ?? lng;
+    await AppConfigService().refresh();
+    if (!AppConfigService().canSendSos) {
+      return {
+        'blocked': true,
+        'message': AppConfigService().maintenanceBanner.isNotEmpty
+            ? AppConfigService().maintenanceBanner
+            : 'Les alertes sont temporairement indisponibles. Utilisez l\'annuaire d\'urgence si besoin.',
+      };
+    }
+
+    final pos = await LocationService().getPositionForSos();
+    var useLat = pos?.latitude ?? lat;
+    var useLng = pos?.longitude ?? lng;
+    if ((useLat.abs() < 0.0001 && useLng.abs() < 0.0001)) {
+      // Still null-island — queue with best effort; server may use last_lat
+      useLat = lat;
+      useLng = lng;
+    }
+
+    int? battery;
+    try {
+      battery = await Battery().batteryLevel;
+    } catch (_) {}
+
     final payload = {
       'lat': useLat,
       'lng': useLng,
       'incident_type': type ?? 'sos',
       if (description != null) 'description': description,
+      if (battery != null) 'battery': battery,
     };
     try {
       if (pos != null) {
@@ -174,24 +198,48 @@ class IncidentProvider extends ChangeNotifier {
       final res = await _api.post('/sos/trigger', payload);
       return res;
     } catch (_) {
-      // Offline-first : file d'attente locale, sync dès que possible
       await _cache.enqueuePendingSos(payload);
       _isOffline = true;
       notifyListeners();
+      // Optional SMS fallback if we have trust contacts cached
+      await _trySmsFallback(payload);
       return {
         'queued': true,
-        'message': 'SOS enregistré hors-ligne — envoi dès reconnexion',
+        'message': 'Alerte enregistrée hors ligne — envoi automatique dès que le réseau revient',
         ...payload,
       };
     }
   }
 
+  Future<void> _trySmsFallback(Map<String, dynamic> payload) async {
+    try {
+      final contacts = await _cache.get('trust_contacts', maxAgeSeconds: 86400 * 7)
+          ?? await _cache.get('contacts', maxAgeSeconds: 86400 * 7);
+      if (contacts is! List || contacts.isEmpty) return;
+      final first = contacts.first;
+      String? phone;
+      if (first is Map) {
+        phone = first['contact_phone']?.toString() ?? first['phone']?.toString();
+      }
+      if (phone == null || phone.isEmpty) return;
+      final lat = payload['lat'];
+      final lng = payload['lng'];
+      final body = Uri.encodeComponent(
+        'SafeAlert SOS — j\'ai besoin d\'aide. Position: https://maps.google.com/?q=$lat,$lng',
+      );
+      final uri = Uri.parse('sms:$phone?body=$body');
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      }
+    } catch (_) {}
+  }
+
   /// Renvoie les SOS en file locale (après perte réseau).
   Future<int> flushPendingSos() async => flushOfflineQueue(kinds: const ['sos']);
 
-  /// Flush SOS + signalements + messages groupe hors-ligne.
+  /// Flush SOS + signalements + messages groupe hors-ligne (avec backoff).
   Future<int> flushOfflineQueue({List<String>? kinds}) async {
-    final pending = await _cache.listPending();
+    final pending = await _cache.listPending(dueOnly: true);
     var sent = 0;
     for (final item in pending) {
       final kind = item['kind'] as String;
@@ -215,7 +263,8 @@ class IncidentProvider extends ChangeNotifier {
         sent++;
       } catch (_) {
         await _cache.bumpPendingAttempt(id);
-        break;
+        // Continue other kinds; stop only for same kind chain via backoff
+        continue;
       }
     }
     if (sent > 0) {

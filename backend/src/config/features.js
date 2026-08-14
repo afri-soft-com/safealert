@@ -53,5 +53,10 @@ module.exports = {
   /** Corridors / repères locaux + suggestion d'itinéraire */
   corridors: () => isEnabled("FEATURE_CORRIDORS", true),
 
+  /** Mode maintenance / bannière dégradée (kill switch soft) */
+  maintenanceMode: () => isEnabled("FEATURE_MAINTENANCE_MODE", false),
+  /** Kill switch SOS (false = SOS désactivé côté API + app) */
+  sosEnabled: () => isEnabled("FEATURE_SOS_ENABLED", true),
+
   isEnabled,
 };

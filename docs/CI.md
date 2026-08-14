@@ -77,6 +77,8 @@ GitHub → **Actions** → **CI** → **Run workflow** :
 - `force_deploy_web` (défaut **true**) — force backend + admin + deploy Render
 - `force_mobile_aab` (défaut **false**) — force build AAB
 
+Restore dry-run (hors CI obligatoire) : [`docs/DR_RESTORE.md`](DR_RESTORE.md) + `scripts/db-restore-dry-run.sh`.
+
 ## Vérifier
 
 1. Actions → dernier run `CI` sur `main` : jobs `db-backup` puis `deploy-render`.

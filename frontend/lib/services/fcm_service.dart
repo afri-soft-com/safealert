@@ -24,9 +24,11 @@ class FCMService extends ChangeNotifier {
     _initialized = true;
 
     try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      }
       final messaging = FirebaseMessaging.instance;
 
       // iOS + Android 13+ (POST_NOTIFICATIONS)
@@ -66,7 +68,12 @@ class FCMService extends ChangeNotifier {
     try {
       await _api.init();
       if (!_api.hasToken) return;
-      await _api.put('/auth/fcm-token', {'fcm_token': _token!});
+      final deviceId = await _api.ensureDeviceId();
+      await _api.put('/auth/fcm-token', {
+        'fcm_token': _token!,
+        'device_id': deviceId,
+        'device_label': defaultTargetPlatform.name,
+      });
       debugPrint('FCM token registered with API');
     } catch (e) {
       debugPrint('FCM token upload failed: $e');

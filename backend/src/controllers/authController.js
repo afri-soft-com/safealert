@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { pool } = require("../config/database");
@@ -6,6 +7,35 @@ const { normalizePhone } = require("../utils/phone");
 const { log } = require("../utils/logger");
 const { incrPhoneOtp } = require("../config/redis");
 const { otpPhoneLimit } = require("../config/features");
+const { writeAudit } = require("../services/audit");
+
+const createSessionToken = async (user, { deviceId, deviceLabel, fcmToken } = {}) => {
+  const jti = crypto.randomUUID();
+  const resolvedDeviceId = deviceId || crypto.randomUUID();
+  const token = jwt.sign(
+    { userId: user.id, role: user.role, jti, deviceId: resolvedDeviceId },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || "30d" }
+  );
+
+  try {
+    await pool.query(
+      `INSERT INTO user_devices (user_id, device_id, device_label, session_jti, fcm_token, last_seen_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (user_id, device_id) DO UPDATE SET
+         session_jti = EXCLUDED.session_jti,
+         device_label = COALESCE(EXCLUDED.device_label, user_devices.device_label),
+         fcm_token = COALESCE(EXCLUDED.fcm_token, user_devices.fcm_token),
+         revoked_at = NULL,
+         last_seen_at = NOW()`,
+      [user.id, resolvedDeviceId, deviceLabel || null, jti, fcmToken || null]
+    );
+  } catch (err) {
+    console.error("createSessionToken device upsert:", err.message);
+  }
+
+  return { token, deviceId: resolvedDeviceId, jti };
+};
 
 const OTP_TTL_SECONDS = 300;
 const OTP_PHONE_MAX = Number(process.env.OTP_PHONE_MAX_PER_WINDOW || 5);
@@ -160,14 +190,16 @@ const verifyCode = async (req, res) => {
       user = user.rows[0];
     }
 
-    const token = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || "30d" }
-    );
+    const { device_id, device_label, fcm_token } = req.body || {};
+    const { token, deviceId } = await createSessionToken(user, {
+      deviceId: device_id,
+      deviceLabel: device_label,
+      fcmToken: fcm_token,
+    });
 
     return res.json({
       token,
+      deviceId,
       user: {
         id: user.id,
         phone: user.phone,
@@ -249,13 +281,109 @@ const updatePosition = async (req, res) => {
 };
 
 const updateFCMToken = async (req, res) => {
-  const { fcm_token } = req.body;
+  const { fcm_token, device_id, device_label } = req.body;
   if (!fcm_token) return res.status(400).json({ error: "FCM token requis" });
   try {
-    await pool.query("UPDATE users SET fcm_token = $1, updated_at = NOW() WHERE id = $2", [fcm_token, req.userId]);
-    return res.json({ message: "Token mis à jour" });
+    await pool.query("UPDATE users SET fcm_token = $1, updated_at = NOW() WHERE id = $2", [
+      fcm_token,
+      req.userId,
+    ]);
+
+    const deviceId = device_id || req.deviceId || crypto.randomUUID();
+    try {
+      await pool.query(
+        `INSERT INTO user_devices (user_id, device_id, device_label, session_jti, fcm_token, last_seen_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (user_id, device_id) DO UPDATE SET
+           fcm_token = EXCLUDED.fcm_token,
+           device_label = COALESCE(EXCLUDED.device_label, user_devices.device_label),
+           session_jti = COALESCE(EXCLUDED.session_jti, user_devices.session_jti),
+           last_seen_at = NOW(),
+           revoked_at = NULL`,
+        [req.userId, deviceId, device_label || null, req.sessionJti || null, fcm_token]
+      );
+    } catch (devErr) {
+      console.error("updateFCMToken device upsert:", devErr.message);
+    }
+
+    return res.json({ message: "Token mis à jour", deviceId });
   } catch (err) {
     console.error("updateFCMToken error:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
+};
+
+const listDevices = async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, device_id, device_label, last_seen_at, created_at,
+              (session_jti = $2) AS is_current
+       FROM user_devices
+       WHERE user_id = $1 AND revoked_at IS NULL
+       ORDER BY last_seen_at DESC NULLS LAST`,
+      [req.userId, req.sessionJti || ""]
+    );
+    return res.json({ data: result.rows });
+  } catch (err) {
+    console.error("listDevices error:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
+};
+
+/** Revoke all sessions except optionally the current one. */
+const revokeAllSessions = async (req, res) => {
+  const keepCurrent = req.body?.keep_current !== false;
+  try {
+    if (keepCurrent && req.sessionJti) {
+      await pool.query(
+        `UPDATE user_devices SET revoked_at = NOW(), fcm_token = NULL
+         WHERE user_id = $1 AND (session_jti IS DISTINCT FROM $2) AND revoked_at IS NULL`,
+        [req.userId, req.sessionJti]
+      );
+    } else {
+      await pool.query(
+        `UPDATE user_devices SET revoked_at = NOW(), fcm_token = NULL
+         WHERE user_id = $1 AND revoked_at IS NULL`,
+        [req.userId]
+      );
+      await pool.query(`UPDATE users SET fcm_token = NULL, updated_at = NOW() WHERE id = $1`, [
+        req.userId,
+      ]);
+    }
+    await writeAudit({
+      actorId: req.userId,
+      action: "sessions.revoke_all",
+      entityType: "user",
+      entityId: req.userId,
+      ip: req.ip,
+      metadata: { keepCurrent },
+    });
+    return res.json({
+      message: keepCurrent
+        ? "Autres appareils déconnectés"
+        : "Tous les appareils ont été déconnectés",
+    });
+  } catch (err) {
+    console.error("revokeAllSessions error:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
+};
+
+const revokeDevice = async (req, res) => {
+  const { deviceId } = req.params;
+  try {
+    const result = await pool.query(
+      `UPDATE user_devices SET revoked_at = NOW(), fcm_token = NULL
+       WHERE user_id = $1 AND device_id = $2 AND revoked_at IS NULL
+       RETURNING id`,
+      [req.userId, deviceId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Appareil introuvable" });
+    }
+    return res.json({ message: "Appareil déconnecté" });
+  } catch (err) {
+    console.error("revokeDevice error:", err);
     return res.status(500).json({ error: "Erreur serveur" });
   }
 };
@@ -265,6 +393,7 @@ const deleteAccount = async (req, res) => {
     await pool.query("DELETE FROM otp_codes WHERE phone = (SELECT phone FROM users WHERE id = $1)", [req.userId]);
     await pool.query("DELETE FROM incidents WHERE user_id = $1", [req.userId]);
     await pool.query("DELETE FROM trust_contacts WHERE user_id = $1 OR contact_phone = (SELECT phone FROM users WHERE id = $1)", [req.userId]);
+    await pool.query("DELETE FROM user_devices WHERE user_id = $1", [req.userId]);
     await pool.query("DELETE FROM users WHERE id = $1", [req.userId]);
     return res.json({ message: "Compte supprimé" });
   } catch (err) {
@@ -280,5 +409,8 @@ module.exports = {
   updateProfile,
   updatePosition,
   updateFCMToken,
+  listDevices,
+  revokeAllSessions,
+  revokeDevice,
   deleteAccount,
 };

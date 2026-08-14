@@ -69,13 +69,15 @@ Vous arrivez sur l'**écran d'accueil**.
 ### 3.1 Bouton SOS (urgence)
 
 1. Depuis l'accueil, appuyez sur le grand bouton rouge **🆘 BOUTON SOS**.
-2. Sur l'écran SOS, appuyez sur le cercle central **APPUYER**.
+2. Sur l'écran SOS, **maintenez** le cercle central environ **2 secondes** (ne relâchez pas trop tôt).
 3. L'application envoie votre position et alerte vos **contacts de confiance** et la communauté.
 4. Pour **annuler** une alerte envoyée par erreur, utilisez **Annuler l'alerte**.
 
 > [À capturer] Écran SOS avec les étapes de confirmation
 
-**SOS discret (Android)** : avec l'application ouverte, appuyez **3 fois** sur le bouton **Volume bas** pour déclencher une alerte sans afficher l'écran SOS.
+**SOS discret (Android)** : avec l'application ouverte, appuyez **3 fois** sur le bouton **Volume bas** pour déclencher une alerte sans afficher l'écran SOS. Vous pouvez aussi **secouer** le téléphone ou utiliser le raccourci d'écran d'accueil.
+
+**Conseil** : activez le GPS et gardez une batterie suffisante pendant une alerte. Si la position précise est indisponible, SafeAlert utilise la dernière position connue.
 
 ### 3.2 Cercle de confiance (contacts)
 
@@ -115,7 +117,9 @@ Pour masquer l'application derrière une calculatrice :
 
 1. Menu ☰ → **Paramètres**.
 2. Activez **Camouflage calculatrice** (Mode discret).
-3. L'application affiche une calculatrice. Saisissez le code de déverrouillage configuré pour retrouver SafeAlert.
+3. L'application affiche une calculatrice. Saisissez le code de déverrouillage (**1234=**) pour retrouver SafeAlert.
+
+**Code de contrainte** (optionnel) : dans Paramètres, configurez un code à 4–8 chiffres **différent** du déverrouillage. Sur la calculatrice, ce code envoie une alerte **sans ouvrir** l'application.
 
 > [À capturer] Écran calculatrice (mode discret)
 
@@ -192,7 +196,7 @@ Le **nom de zone** (`zone_name`) est déterminé automatiquement à partir du GP
 ### 3.8 Profil et paramètres
 
 1. Menu ☰ (coin supérieur droit de l'accueil).
-2. **Paramètres** : pseudo, téléphone, confidentialité, déconnexion, suppression de compte.
+2. **Paramètres** : pseudo, téléphone, confidentialité, **déconnecter les autres appareils**, déconnexion, suppression de compte.
 
 ### 3.9 Navigation et retour arrière
 

@@ -12,6 +12,7 @@ import GroupsPage from "./pages/GroupsPage";
 import OpsPage from "./pages/OpsPage";
 import PartnerPortalPage from "./pages/PartnerPortalPage";
 import HelpPage from "./pages/HelpPage";
+import AuditPage from "./pages/AuditPage";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
               <Route path="annuaire" element={<EmergencyPage />} />
               <Route path="incidents" element={<IncidentsPage />} />
               <Route path="groupes" element={<GroupsPage />} />
+              <Route path="audit" element={<AuditPage />} />
               <Route path="aide" element={<HelpPage />} />
             </Route>
           </Route>

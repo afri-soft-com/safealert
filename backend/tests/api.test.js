@@ -716,6 +716,68 @@ describe("App version", () => {
     expect(res.status).toBe(200);
     expect(res.body.forceUpdate).toBe(true);
   });
+
+  it("GET /api/app/config returns flags and maintenance banner fields", async () => {
+    process.env.FEATURE_MAINTENANCE_MODE = "false";
+    process.env.FEATURE_SOS_ENABLED = "true";
+    process.env.APP_LATEST_VERSION = "1.0.2";
+    const res = await request(app).get("/api/app/config");
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("sosEnabled", true);
+    expect(res.body).toHaveProperty("maintenance", false);
+    expect(res.body).toHaveProperty("features");
+    expect(res.body.features).toHaveProperty("liveStatus");
+    expect(res.body.latestVersion).toBe("1.0.2");
+  });
+});
+
+describe("Admin audit logs", () => {
+  it("GET /api/admin/audit-logs returns paginated rows", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "a1",
+            actor_id: "admin-1",
+            action: "user.role_update",
+            entity_type: "user",
+            entity_id: "user-1",
+            metadata: {},
+            ip: "127.0.0.1",
+            created_at: new Date().toISOString(),
+            actor_pseudo: "Admin",
+            actor_phone: "+243811111111",
+          },
+        ],
+      });
+    const res = await request(app)
+      .get("/api/admin/audit-logs?page=1&limit=10")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].action).toBe("user.role_update");
+    expect(res.body.total).toBe(1);
+  });
+});
+
+describe("Sessions revoke", () => {
+  it("POST /api/auth/sessions/revoke-all revokes other devices", async () => {
+    const sessionToken = jwt.sign(
+      { userId: "user-1", role: "citizen", jti: "jti-current", deviceId: "dev-1" },
+      process.env.JWT_SECRET
+    );
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "dev-row" }] }) // session check in authenticate
+      .mockResolvedValueOnce({ rows: [] }) // revoke update
+      .mockResolvedValueOnce({ rows: [] }); // audit (optional)
+    const res = await request(app)
+      .post("/api/auth/sessions/revoke-all")
+      .set("Authorization", `Bearer ${sessionToken}`)
+      .send({ keep_current: true });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/déconnectés/i);
+  });
 });
 
 describe("Heatmap slots", () => {

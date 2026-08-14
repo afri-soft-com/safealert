@@ -1,12 +1,13 @@
 const { Router } = require("express");
 const { body } = require("express-validator");
 const { authenticate } = require("../middleware/auth");
+const { sosLimiter } = require("../middleware/rateLimit");
 const ctrl = require("../controllers/sosController");
 const live = require("../controllers/liveStatusController");
 
 const router = Router();
 
-router.post("/trigger", authenticate, [
+router.post("/trigger", authenticate, sosLimiter, [
   body("lat").isFloat({ min: -90, max: 90 }),
   body("lng").isFloat({ min: -180, max: 180 }),
 ], ctrl.triggerSOS);

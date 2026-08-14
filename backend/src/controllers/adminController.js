@@ -390,6 +390,60 @@ const listGroups = async (req, res) => {
   }
 };
 
+const listAuditLogs = async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 30));
+    const offset = (page - 1) * limit;
+    const action = (req.query.action || "").trim();
+    const q = (req.query.q || "").trim();
+
+    const params = [];
+    const where = [];
+    if (action) {
+      params.push(action);
+      where.push(`a.action ILIKE $${params.length}`);
+    }
+    if (q) {
+      params.push(`%${q}%`);
+      where.push(
+        `(a.entity_type ILIKE $${params.length} OR a.entity_id ILIKE $${params.length} OR u.pseudo ILIKE $${params.length} OR u.phone ILIKE $${params.length})`
+      );
+    }
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM audit_logs a
+       LEFT JOIN users u ON u.id = a.actor_id
+       ${whereSql}`,
+      params
+    );
+
+    params.push(limit, offset);
+    const result = await pool.query(
+      `SELECT a.id, a.actor_id, a.action, a.entity_type, a.entity_id, a.metadata, a.ip, a.created_at,
+              u.pseudo AS actor_pseudo, u.phone AS actor_phone
+       FROM audit_logs a
+       LEFT JOIN users u ON u.id = a.actor_id
+       ${whereSql}
+       ORDER BY a.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    return res.json({
+      data: result.rows,
+      page,
+      limit,
+      total: countRes.rows[0].total,
+    });
+  } catch (err) {
+    console.error("listAuditLogs error:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
+};
+
 module.exports = {
   listUsers,
   updateUserRole,
@@ -404,5 +458,6 @@ module.exports = {
   deleteEmergencyNumber,
   listIncidents,
   listGroups,
+  listAuditLogs,
   VALID_ROLES,
 };

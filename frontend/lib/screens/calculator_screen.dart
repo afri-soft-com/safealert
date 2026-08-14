@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/duress_pin_service.dart';
 
 /// Code démo pour déverrouiller l'app en mode camouflage : 1234=
 const kDiscreetUnlockCode = '1234=';
 
 class CalculatorScreen extends StatefulWidget {
   final VoidCallback onUnlock;
-  const CalculatorScreen({super.key, required this.onUnlock});
+  /// Called when the duress PIN is entered (silent SOS, no unlock).
+  final VoidCallback? onDuress;
+  const CalculatorScreen({super.key, required this.onUnlock, this.onDuress});
 
   @override
   State<CalculatorScreen> createState() => _CalculatorScreenState();
@@ -28,7 +31,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         return;
       }
       if (value == '=') {
-        _tryUnlock();
+        _tryUnlockOrDuress();
         _compute();
         return;
       }
@@ -48,7 +51,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     });
   }
 
-  void _tryUnlock() {
+  Future<void> _tryUnlockOrDuress() async {
+    final digits = _display.replaceAll(RegExp(r'\D'), '');
+    if (await DuressPinService().matches(digits)) {
+      widget.onDuress?.call();
+      return;
+    }
     if (_display == '1234' || '$_operand1$_operator$_display' == kDiscreetUnlockCode) {
       SharedPreferences.getInstance().then((p) => p.setBool('discreet_unlocked_session', true));
       widget.onUnlock();
@@ -90,37 +98,40 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF1C1C1E),
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              flex: 2,
-              child: Container(
-                alignment: Alignment.bottomRight,
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  _display,
-                  style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.w300),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+        child: Semantics(
+          label: 'Calculatrice',
+          child: Column(
+            children: [
+              Expanded(
+                flex: 2,
+                child: Container(
+                  alignment: Alignment.bottomRight,
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    _display,
+                    style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.w300),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
-            ),
-            Expanded(
-              flex: 3,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Column(
-                  children: [
-                    _row(['C', '±', '%', '÷']),
-                    _row(['7', '8', '9', '×']),
-                    _row(['4', '5', '6', '-']),
-                    _row(['1', '2', '3', '+']),
-                    Expanded(child: _bottomRow()),
-                  ],
+              Expanded(
+                flex: 3,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    children: [
+                      _row(['C', '±', '%', '÷']),
+                      _row(['7', '8', '9', '×']),
+                      _row(['4', '5', '6', '-']),
+                      _row(['1', '2', '3', '+']),
+                      Expanded(child: _bottomRow()),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -129,10 +140,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   Widget _bottomRow() {
     return Row(
       children: [
-        Expanded(
-          flex: 2,
-          child: _key('0', wide: true),
-        ),
+        Expanded(flex: 2, child: _key('0', wide: true)),
         Expanded(child: _key('.')),
         Expanded(child: _key('=')),
       ],
@@ -155,14 +163,18 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         : (isUtil ? const Color(0xFF505050) : const Color(0xFF333333));
     return Padding(
       padding: const EdgeInsets.all(4),
-      child: Material(
-        color: bg,
-        borderRadius: BorderRadius.circular(wide ? 36 : 999),
-        child: InkWell(
+      child: Semantics(
+        button: true,
+        label: 'Touche $label',
+        child: Material(
+          color: bg,
           borderRadius: BorderRadius.circular(wide ? 36 : 999),
-          onTap: () => _input(label),
-          child: Center(
-            child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 24)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(wide ? 36 : 999),
+            onTap: () => _input(label),
+            child: Center(
+              child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 24)),
+            ),
           ),
         ),
       ),

@@ -27,6 +27,9 @@ router.put(
   ctrl.updatePosition
 );
 router.put("/fcm-token", authenticate, ctrl.updateFCMToken);
+router.get("/devices", authenticate, ctrl.listDevices);
+router.post("/sessions/revoke-all", authenticate, ctrl.revokeAllSessions);
+router.delete("/devices/:deviceId", authenticate, ctrl.revokeDevice);
 router.delete("/account", authenticate, ctrl.deleteAccount);
 
 module.exports = router;

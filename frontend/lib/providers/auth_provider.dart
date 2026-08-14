@@ -113,12 +113,18 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
+      final deviceId = await _api.ensureDeviceId();
       final res = await _api.post('/auth/verify-code', {
         'phone': _phone!,
         'code': code,
         if (pseudo != null) 'pseudo': pseudo,
+        'device_id': deviceId,
+        'device_label': defaultTargetPlatform.name,
       });
       await _api.setToken(res['token'] as String);
+      if (res['deviceId'] != null) {
+        // server may echo device id
+      }
       _user = res['user'] as Map<String, dynamic>;
       _isAuthenticated = true;
       _isGuest = false;
@@ -194,6 +200,16 @@ class AuthProvider extends ChangeNotifier {
     _devCode = null;
     LocationService().sharePresence = true;
     notifyListeners();
+  }
+
+  /// Déconnecter tous les autres appareils (garde la session actuelle).
+  Future<bool> revokeAllOtherSessions() async {
+    try {
+      await _api.post('/auth/sessions/revoke-all', {'keep_current': true});
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   void _startRealtimeServices() {

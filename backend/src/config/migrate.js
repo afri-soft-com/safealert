@@ -408,6 +408,25 @@ const migrate = async () => {
       CREATE INDEX IF NOT EXISTS idx_route_corridors_path ON route_corridors USING GIST (path);
     `);
 
+    // Multi-device sessions + FCM tokens
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_devices (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        device_id VARCHAR(128) NOT NULL,
+        device_label VARCHAR(120),
+        session_jti VARCHAR(64),
+        fcm_token TEXT,
+        last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        revoked_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE (user_id, device_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_devices_jti ON user_devices(session_jti)
+        WHERE revoked_at IS NULL;
+    `);
+
     // Widen group_alerts type CHECK for utility outage types
     await client.query(`
       ALTER TABLE group_alerts DROP CONSTRAINT IF EXISTS group_alerts_type_check;

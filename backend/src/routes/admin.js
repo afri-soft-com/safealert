@@ -19,5 +19,6 @@ router.put("/emergency-numbers/:id", ctrl.updateEmergencyNumber);
 router.delete("/emergency-numbers/:id", ctrl.deleteEmergencyNumber);
 router.get("/incidents", ctrl.listIncidents);
 router.get("/groups", ctrl.listGroups);
+router.get("/audit-logs", ctrl.listAuditLogs);
 
 module.exports = router;

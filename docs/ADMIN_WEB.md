@@ -71,6 +71,7 @@ L'utilisateur doit **se reconnecter** pour obtenir un JWT avec le nouveau rôle.
 | **Annuaire d'urgence** | CRUD des numéros d'urgence |
 | **Incidents** | Liste paginée, filtres, panneau de détail (description, GPS, signaleur) |
 | **Groupes** | Vue des groupes de voisins |
+| **Journal d'audit** | Historique des actions admin (`FEATURE_AUDIT_LOG`) — rôles, partenaires, annuaire… |
 | **Aide** | Rappel des rôles et liens vers la documentation |
 
 ### Portail partenaire (hors console admin)

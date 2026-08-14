@@ -20,6 +20,17 @@ Sans `FCM_*` sur Render, l’API démarre mais les push sont ignorées (`FCM not
 
 ---
 
+## Crashlytics (Firebase)
+
+1. Firebase Console → projet **`safealert-be940`** → **Crashlytics** → activer pour l'app Android `com.safealert.safealert`
+2. Le code Flutter (`firebase_crashlytics`) + plugin Gradle sont déjà branchés (`google-services.json` existant)
+3. Rebuild AAB / installer une build release pour voir les premiers rapports
+4. Les crashes debug peuvent être filtrés ; collection activée au démarrage de l'app
+
+Sans activation console, l'app démarre normalement (init Crashlytics best-effort).
+
+---
+
 ## Prérequis
 
 - Compte [Firebase Console](https://console.firebase.google.com/)

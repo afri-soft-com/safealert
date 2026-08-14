@@ -89,7 +89,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Text('Connectez-vous avec votre numéro', style: TextStyle(color: Colors.white60, fontSize: 13)),
                 const SizedBox(height: 32),
                 if (!_codeSent) ...[
-                  TextField(
+                  Semantics(
+                    label: 'Numéro de téléphone',
+                    textField: true,
+                    child: TextField(
                     controller: _phoneCtrl,
                     keyboardType: TextInputType.phone,
                     decoration: InputDecoration(
@@ -102,14 +105,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                   ),
+                  ),
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
+                    child: Semantics(
+                      button: true,
+                      label: 'Envoyer le code de connexion',
+                      child: ElevatedButton(
                       onPressed: auth.loading ? null : _sendCode,
                       child: auth.loading
                           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Text('Envoyer le code', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    ),
                     ),
                   ),
                 ] else ...[

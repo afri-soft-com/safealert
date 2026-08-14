@@ -29,6 +29,10 @@ Variables `FEATURE_*=true|1|yes` — voir `backend/src/config/features.js`.
 | `FEATURE_SAFETY_PING` | on | Contrôle planifié « Tu es OK ? » |
 | `FEATURE_STRUCTURED_GROUP_ALERTS` | on | Alertes utilitaires (électricité, eau, inondation, rue) |
 | `FEATURE_CORRIDORS` | on | Repères / suggestion d'itinéraire (MVP) |
+| `FEATURE_MAINTENANCE_MODE` | **off** | Bannière maintenance + mode dégradé |
+| `FEATURE_SOS_ENABLED` | on | Kill switch SOS (`false` = SOS API/app off) |
+
+Endpoint public : `GET /api/app/config` (flags + bannière + versions).
 
 Après déploiement : `npm run migrate` dans `backend/`.
 

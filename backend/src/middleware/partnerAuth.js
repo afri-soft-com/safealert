@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { pool } = require("../config/database");
+const { enforcePartnerRateLimit } = require("./rateLimit");
 
 const authenticatePartner = async (req, res, next) => {
   const apiKey = req.headers["x-api-key"];
@@ -24,7 +25,7 @@ const authenticatePartner = async (req, res, next) => {
 
     req.partner = partner;
     req.partnerId = partner.id;
-    next();
+    return enforcePartnerRateLimit(req, res, next);
   } catch (err) {
     console.error("partnerAuth error:", err);
     return res.status(500).json({ error: "Erreur serveur" });

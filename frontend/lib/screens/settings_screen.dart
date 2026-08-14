@@ -9,6 +9,7 @@ import '../providers/locale_provider.dart';
 import '../providers/contacts_provider.dart';
 import '../services/api_service.dart';
 import '../services/contact_backup_service.dart';
+import '../services/duress_pin_service.dart';
 import '../widgets/app_feedback.dart';
 import 'calculator_screen.dart' show kDiscreetUnlockCode;
 
@@ -102,6 +103,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
       trailing: const Icon(Icons.chevron_right, size: 18),
       onTap: () => widget.onNavigate?.call(screen),
     );
+  }
+
+  Future<void> _configureDuressPin() async {
+    final ctrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Code de contrainte', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '4 à 8 chiffres, différent de 1234 (déverrouillage calculatrice).',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Nouveau code', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: confirmCtrl,
+              keyboardType: TextInputType.number,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Confirmer', border: OutlineInputBorder()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enregistrer')),
+        ],
+      ),
+    );
+    final pin = ctrl.text.trim();
+    final confirm = confirmCtrl.text.trim();
+    ctrl.dispose();
+    confirmCtrl.dispose();
+    if (ok != true || !mounted) return;
+    if (pin != confirm) {
+      showAppSnackBar(context, 'Les codes ne correspondent pas', isError: true);
+      return;
+    }
+    try {
+      await DuressPinService().setPin(pin);
+      if (mounted) showAppSnackBar(context, 'Code de contrainte enregistré');
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          e is ArgumentError ? e.message.toString() : 'Impossible d\'enregistrer ce code',
+          isError: true,
+        );
+      }
+    }
   }
 
   Future<String?> _askPassphrase(String title) async {
@@ -367,6 +427,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      const Text('Code de contrainte', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bleuFonce)),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Sur la calculatrice, ce code envoie une alerte sans ouvrir l\'app. Différent du code de déverrouillage.',
+                        style: TextStyle(fontSize: 10, color: AppColors.gris),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _configureDuressPin,
+                              child: const Text('Configurer', style: TextStyle(fontSize: 12)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () async {
+                                await DuressPinService().clearPin();
+                                if (mounted) {
+                                  showAppSnackBar(context, 'Code de contrainte retiré');
+                                }
+                              },
+                              child: const Text('Retirer', style: TextStyle(fontSize: 12, color: AppColors.gris)),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -584,6 +674,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: auth.loading
+                              ? null
+                              : () async {
+                                  final ok = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('Déconnecter partout ?',
+                                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                                      content: const Text(
+                                        'Tous vos autres appareils seront déconnectés. Cet appareil reste connecté.',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+                                        ElevatedButton(
+                                          onPressed: () => Navigator.pop(ctx, true),
+                                          child: const Text('Confirmer'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (ok != true || !mounted) return;
+                                  final success = await auth.revokeAllOtherSessions();
+                                  if (!mounted) return;
+                                  showAppSnackBar(
+                                    context,
+                                    success
+                                        ? 'Autres appareils déconnectés'
+                                        : 'Impossible pour le moment. Réessayez.',
+                                    isError: !success,
+                                  );
+                                },
+                          icon: const Icon(Icons.phonelink_erase, size: 16),
+                          label: const Text('Déconnecter les autres appareils', style: TextStyle(fontSize: 13)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.bleuFonce,
+                            side: const BorderSide(color: AppColors.bleuFonce),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 10),
                       SizedBox(
                         width: double.infinity,

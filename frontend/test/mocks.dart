@@ -68,11 +68,19 @@ class FakeLocalDatabase implements LocalDatabase {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listPending({String? kind}) async {
+  Future<List<Map<String, dynamic>>> listPending({String? kind, bool dueOnly = false}) async {
     final rows = kind == null
         ? _pending
         : _pending.where((r) => r['kind'] == kind);
-    return rows.map((r) => Map<String, dynamic>.from(r)).toList();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return rows
+        .where((r) {
+          if (!dueOnly) return true;
+          final next = (r['next_attempt_at'] as int?) ?? 0;
+          return next <= now;
+        })
+        .map((r) => Map<String, dynamic>.from(r))
+        .toList();
   }
 
   @override
@@ -94,7 +102,10 @@ class FakeLocalDatabase implements LocalDatabase {
   Future<void> bumpPendingAttempt(int id) async {
     for (final row in _pending) {
       if (row['id'] == id) {
-        row['attempts'] = (row['attempts'] as int) + 1;
+        final attempts = ((row['attempts'] as int?) ?? 0) + 1;
+        row['attempts'] = attempts;
+        final delaySec = (30 * (1 << (attempts - 1).clamp(0, 6))).clamp(30, 1800);
+        row['next_attempt_at'] = DateTime.now().millisecondsSinceEpoch + delaySec * 1000;
         return;
       }
     }
@@ -118,6 +129,12 @@ class FakeApiService implements ApiService {
 
   @override
   String? get token => _token;
+
+  @override
+  String? get deviceId => 'test-device';
+
+  @override
+  Future<String> ensureDeviceId() async => 'test-device';
 
   void onGet(String path, Map<String, dynamic> Function() response) {
     _getResponses[path] = response;

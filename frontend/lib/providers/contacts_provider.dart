@@ -30,6 +30,7 @@ class ContactsProvider extends ChangeNotifier {
         return m;
       }).toList();
       await _cache.put('contacts', _contacts);
+      await _cache.put('trust_contacts', _contacts);
     } catch (_) {
       final cached = await _cache.get('contacts', maxAgeSeconds: 3600);
       if (cached != null) {

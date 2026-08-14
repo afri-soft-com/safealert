@@ -20,7 +20,7 @@ class LocalDatabase {
     final path = join(dbPath, 'safealert_cache.db');
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE cache (
@@ -35,7 +35,8 @@ class LocalDatabase {
             kind TEXT NOT NULL,
             payload TEXT NOT NULL,
             created_at INTEGER NOT NULL,
-            attempts INTEGER NOT NULL DEFAULT 0
+            attempts INTEGER NOT NULL DEFAULT 0,
+            next_attempt_at INTEGER NOT NULL DEFAULT 0
           )
         ''');
       },
@@ -60,7 +61,6 @@ class LocalDatabase {
               attempts INTEGER NOT NULL DEFAULT 0
             )
           ''');
-          // Migrate legacy pending_sos → pending_queue
           try {
             final rows = await db.query('pending_sos');
             for (final r in rows) {
@@ -71,6 +71,13 @@ class LocalDatabase {
                 'attempts': r['attempts'] ?? 0,
               });
             }
+          } catch (_) {}
+        }
+        if (oldVersion < 4) {
+          try {
+            await db.execute(
+              'ALTER TABLE pending_queue ADD COLUMN next_attempt_at INTEGER NOT NULL DEFAULT 0',
+            );
           } catch (_) {}
         }
       },
@@ -123,6 +130,7 @@ class LocalDatabase {
       'payload': jsonEncode(payload),
       'created_at': DateTime.now().millisecondsSinceEpoch,
       'attempts': 0,
+      'next_attempt_at': 0,
     });
   }
 
@@ -131,17 +139,24 @@ class LocalDatabase {
     return all;
   }
 
-  Future<List<Map<String, dynamic>>> listPending({String? kind}) async {
+  Future<List<Map<String, dynamic>>> listPending({String? kind, bool dueOnly = false}) async {
     final db = await database;
+    final now = DateTime.now().millisecondsSinceEpoch;
     final rows = kind == null
         ? await db.query('pending_queue', orderBy: 'created_at ASC')
         : await db.query('pending_queue', where: 'kind = ?', whereArgs: [kind], orderBy: 'created_at ASC');
     return rows
+        .where((r) {
+          if (!dueOnly) return true;
+          final next = (r['next_attempt_at'] as int?) ?? 0;
+          return next <= now;
+        })
         .map((r) => {
               'id': r['id'],
               'kind': r['kind'],
               'payload': jsonDecode(r['payload'] as String) as Map<String, dynamic>,
               'attempts': r['attempts'],
+              'next_attempt_at': r['next_attempt_at'] ?? 0,
             })
         .toList();
   }
@@ -159,8 +174,19 @@ class LocalDatabase {
     await bumpPendingAttempt(id);
   }
 
+  /// Exponential backoff: 30s, 60s, 120s, … capped at 30 min.
   Future<void> bumpPendingAttempt(int id) async {
     final db = await database;
-    await db.rawUpdate('UPDATE pending_queue SET attempts = attempts + 1 WHERE id = ?', [id]);
+    final rows = await db.query('pending_queue', where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return;
+    final attempts = ((rows.first['attempts'] as int?) ?? 0) + 1;
+    final delaySec = (30 * (1 << (attempts - 1).clamp(0, 6))).clamp(30, 1800);
+    final nextAt = DateTime.now().millisecondsSinceEpoch + delaySec * 1000;
+    await db.update(
+      'pending_queue',
+      {'attempts': attempts, 'next_attempt_at': nextAt},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 }

@@ -7,6 +7,7 @@ const { deliverEvent } = require("../services/partnerWebhooks");
 const { notifyLeadersForSOS } = require("../services/sectorNotify");
 const { findMatchingZones } = require("./trustZoneController");
 const { sendPush } = require("../config/firebase");
+const { sosEnabled, maintenanceMode } = require("../config/features");
 
 const CANCEL_WINDOW_MS = 2 * 60 * 1000;
 
@@ -18,10 +19,45 @@ const assertWithinCancelWindow = (incident) => {
   return null;
 };
 
+const isNullIsland = (lat, lng) =>
+  Math.abs(Number(lat)) < 0.0001 && Math.abs(Number(lng)) < 0.0001;
+
 const triggerSOS = async (req, res) => {
-  const { lat, lng, incident_type, description } = req.body;
-  if (!lat || !lng) {
-    return res.status(400).json({ error: "Position GPS requise" });
+  if (maintenanceMode() || !sosEnabled()) {
+    return res.status(503).json({
+      error:
+        "Les alertes sont temporairement indisponibles. Contactez les numéros d'urgence locaux si besoin.",
+      maintenance: true,
+    });
+  }
+
+  let { lat, lng, incident_type, description } = req.body;
+  lat = Number(lat);
+  lng = Number(lng);
+
+  // Prefer last-known server position over 0,0 / null island
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || isNullIsland(lat, lng)) {
+    try {
+      const last = await pool.query(
+        `SELECT last_lat, last_lng FROM users WHERE id = $1`,
+        [req.userId]
+      );
+      const la = last.rows[0]?.last_lat;
+      const ln = last.rows[0]?.last_lng;
+      if (la != null && ln != null && !isNullIsland(la, ln)) {
+        lat = Number(la);
+        lng = Number(ln);
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || isNullIsland(lat, lng)) {
+    return res.status(400).json({
+      error:
+        "Position GPS indisponible. Activez la localisation et réessayez, ou utilisez l'annuaire d'urgence.",
+    });
   }
 
   try {
