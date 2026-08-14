@@ -258,11 +258,21 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     await context.read<AuthProvider>().checkAuth();
     if (!mounted) return;
     final prefs = await SharedPreferences.getInstance();
+
+    // One-time: clear stuck local camouflage from early tester builds (default must stay OFF).
+    const migrationKey = 'discreet_default_off_v1';
+    if (!(prefs.getBool(migrationKey) ?? false)) {
+      await prefs.setBool('discreet_mode_local', false);
+      await prefs.setBool(migrationKey, true);
+    }
+
     final sessionUnlocked = prefs.getBool('discreet_unlocked_session') ?? false;
+    // Default OFF for new installs (null → false).
     final localDiscreet = prefs.getBool('discreet_mode_local') ?? false;
+    final profileDiscreet = context.read<AuthProvider>().isDiscreetMode;
     if (mounted) {
       setState(() {
-        _discreetLocked = (localDiscreet || context.read<AuthProvider>().isDiscreetMode) && !sessionUnlocked;
+        _discreetLocked = (localDiscreet || profileDiscreet) && !sessionUnlocked;
         _discreetChecked = true;
         if (_discreetLocked) _navStack..clear()..add('calculator');
       });
@@ -273,6 +283,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     setState(() {
       _discreetLocked = false;
       _navStack..clear()..add('splash');
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Camouflage déverrouillé. Pour le désactiver : Paramètres → Camouflage calculatrice. Code : 1234=',
+          ),
+          duration: Duration(seconds: 6),
+        ),
+      );
     });
   }
 

@@ -122,11 +122,16 @@ Vous arrivez sur l'**écran d'accueil**.
 
 ### 3.6 Mode discret (calculatrice)
 
+Le camouflage est **désactivé par défaut**. Il ne s'affiche qu'après activation volontaire.
+
 Pour masquer l'application derrière une calculatrice :
 
 1. Menu ☰ → **Paramètres**.
 2. Activez **Camouflage calculatrice** (Mode discret).
-3. L'application affiche une calculatrice. Saisissez le code de déverrouillage (**1234=**) pour retrouver SafeAlert.
+3. L'application affiche une calculatrice. Saisissez **1234=** pour retrouver SafeAlert.
+4. Pour **désactiver** définitivement : Paramètres → désactivez **Camouflage calculatrice**.
+
+**Si la calculatrice s'affiche au démarrage** (préférence restée active) : tapez **1234=**, puis désactivez le commutateur dans Paramètres. Appui long sur l'écran de la calculatrice rappelle aussi le code.
 
 **Code de contrainte** (optionnel) : dans Paramètres, configurez un code à 4–8 chiffres **différent** du déverrouillage. Sur la calculatrice, ce code envoie une alerte **sans ouvrir** l'application.
 
@@ -138,7 +143,7 @@ Pour masquer l'application derrière une calculatrice :
 |----------|-------------|
 | **Groupes voisins** | Créer un groupe ou rejoindre via code / QR ; alertes structurées (électricité, eau, inondation, rue bloquée) |
 | **Veille quartier** | Résumé quotidien des alertes près de chez vous |
-| **Trajet sécurisé** | Partagez un lien « suivez mon trajet » (page web temporaire) + WhatsApp |
+| **Trajet sécurisé** | Carte en haut : touchez pour **point de départ** / **destination**, saisissez une adresse, ou « Ma position » (réticule). Coordonnées GPS optionnelles. Puis partagez le lien de suivi + WhatsApp |
 | **Contrôle « Tu es OK ? »** | Rappel planifié ; silence → proches prévenus (Paramètres) |
 | **Envois en attente** | Voir et renvoyer SOS / signalements hors ligne (Paramètres) |
 | **Aide / Manuel** | Guide intégré (connexion, SOS, rôles, FAQ) depuis l'accueil ou Paramètres |
@@ -281,6 +286,10 @@ Paramètres → **Supprimer le compte** → confirmer. Action **irréversible**.
 ### Le mode discret ne fonctionne pas sur iPhone
 
 La détection des touches volume en arrière-plan est **limitée sur iOS**. Le SOS discret par volume est optimisé pour **Android**.
+
+### Pourquoi une calculatrice s'affiche à l'ouverture ?
+
+C'est le **mode camouflage** (Paramètres → Camouflage calculatrice). Il est **désactivé par défaut** ; s'il reste actif, tapez **1234=** pour déverrouiller, puis désactivez le commutateur dans Paramètres.
 
 ---
 

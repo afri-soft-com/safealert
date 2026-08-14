@@ -104,14 +104,24 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
             children: [
               Expanded(
                 flex: 2,
-                child: Container(
-                  alignment: Alignment.bottomRight,
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    _display,
-                    style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.w300),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                child: GestureDetector(
+                  onLongPress: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Déverrouillage SafeAlert : $kDiscreetUnlockCode'),
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    alignment: Alignment.bottomRight,
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      _display,
+                      style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.w300),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ),

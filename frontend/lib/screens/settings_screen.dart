@@ -49,10 +49,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadPrefs());
   }
 
-  void _loadPrefs() {
+  Future<void> _loadPrefs() async {
     final auth = context.read<AuthProvider>();
+    final prefs = await SharedPreferences.getInstance();
+    // Mirror lock logic: local OR profile (so testers can always turn OFF what locks them).
+    final localDiscreet = prefs.getBool('discreet_mode_local') ?? false;
+    if (!mounted) return;
     setState(() {
-      _discreetMode = auth.isDiscreetMode;
+      _discreetMode = localDiscreet || auth.isDiscreetMode;
       _sharePresence = auth.sharePresence;
       _sosNotifyGroups = auth.sosNotifyGroups;
     });
@@ -65,6 +69,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool('discreet_mode_local', value);
     if (value) {
       await prefs.setBool('discreet_unlocked_session', false);
+    } else {
+      // Turning off: clear session lock so next launch stays open.
+      await prefs.setBool('discreet_unlocked_session', true);
     }
     if (!mounted) return;
     if (auth.isAuthenticated) {
@@ -72,6 +79,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await auth.updateProfile(isDiscreetMode: value);
       if (mounted) setState(() => _saving = false);
     }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          value
+              ? 'Camouflage activé. Déverrouillage : $kDiscreetUnlockCode'
+              : 'Camouflage désactivé. L\'app s\'ouvrira normalement.',
+        ),
+      ),
+    );
   }
 
   Future<void> _saveSharePresence(bool value) async {
@@ -390,7 +407,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text('Camouflage calculatrice', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bleuFonce)),
-                                Text('Code déverrouillage : $kDiscreetUnlockCode', style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                                Text(
+                                  'Désactivé par défaut. Code : $kDiscreetUnlockCode',
+                                  style: const TextStyle(fontSize: 10, color: AppColors.gris),
+                                ),
                               ],
                             ),
                           ),
@@ -408,10 +428,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           color: AppColors.grisClair,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Column(
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
+                            Text(
+                              'Si la calculatrice s\'affiche au démarrage : tapez $kDiscreetUnlockCode puis désactivez ce commutateur.',
+                              style: const TextStyle(fontSize: 10, color: AppColors.gris),
+                            ),
+                            const SizedBox(height: 6),
+                            const Row(
                               children: [
                                 Text('📖', style: TextStyle(fontSize: 14)),
                                 SizedBox(width: 8),
@@ -421,8 +446,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                               ],
                             ),
-                            SizedBox(height: 4),
-                            Text('iOS : détection volume non disponible (limitation système)',
+                            const SizedBox(height: 4),
+                            const Text('iOS : détection volume non disponible (limitation système)',
                                 style: TextStyle(fontSize: 10, color: AppColors.gris, fontStyle: FontStyle.italic)),
                           ],
                         ),

@@ -113,7 +113,9 @@ class HelpManualScreen extends StatelessWidget {
                   icon: Icons.route,
                   title: 'Trajet sécurisé',
                   children: const [
-                    _P('Indiquez une destination et une durée estimée. Des proches peuvent suivre le trajet.'),
+                    _P('Carte en haut : touchez pour fixer le point de départ, puis la destination.'),
+                    _P('Vous pouvez aussi saisir une adresse ou utiliser « Ma position » (icône réticule).'),
+                    _P('Les coordonnées GPS restent optionnelles (section repliable). Indiquez une durée estimée ; des proches peuvent suivre le trajet.'),
                     _P('Si vous ne confirmez pas votre arrivée à temps, une alerte peut être déclenchée.'),
                   ],
                 ),
@@ -121,8 +123,9 @@ class HelpManualScreen extends StatelessWidget {
                   icon: Icons.visibility_off_outlined,
                   title: 'Mode discret',
                   children: const [
-                    _P('Paramètres → « Camouflage calculatrice » : l\'app affiche une calculatrice.'),
-                    _P('Saisissez le code de déverrouillage configuré pour retrouver SafeAlert.'),
+                    _P('Désactivé par défaut. Paramètres → « Camouflage calculatrice » pour l\'activer.'),
+                    _P('Déverrouillage : tapez 1234= sur la calculatrice (appui long sur l\'afficheur pour le rappel).'),
+                    _P('Pour désactiver : Paramètres → désactivez le commutateur Camouflage.'),
                     _P('Code de contrainte (optionnel) : envoie une alerte sans ouvrir l\'application.'),
                   ],
                 ),

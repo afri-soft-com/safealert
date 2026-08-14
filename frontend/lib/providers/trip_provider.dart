@@ -108,6 +108,8 @@ class TripProvider extends ChangeNotifier {
   Future<Map<String, dynamic>?> startTrip({
     required double destLat,
     required double destLng,
+    double? originLat,
+    double? originLng,
     String? destLabel,
     int etaMinutes = 30,
     List<String>? escortContactIds,
@@ -116,16 +118,22 @@ class TripProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final pos = await LocationService().getCurrentPosition();
-      if (pos == null) {
-        _error = 'Position GPS indisponible';
-        _loading = false;
-        notifyListeners();
-        return null;
+      var oLat = originLat;
+      var oLng = originLng;
+      if (oLat == null || oLng == null) {
+        final pos = await LocationService().getCurrentPosition();
+        if (pos == null) {
+          _error = 'Position GPS indisponible — définissez le départ sur la carte';
+          _loading = false;
+          notifyListeners();
+          return null;
+        }
+        oLat = pos.latitude;
+        oLng = pos.longitude;
       }
       final res = await _api.post('/trips', {
-        'origin_lat': pos.latitude,
-        'origin_lng': pos.longitude,
+        'origin_lat': oLat,
+        'origin_lng': oLng,
         'dest_lat': destLat,
         'dest_lng': destLng,
         if (destLabel != null) 'dest_label': destLabel,
