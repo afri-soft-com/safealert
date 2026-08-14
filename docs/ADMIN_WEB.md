@@ -44,9 +44,10 @@ Sur l’API Render (`safealert-api`) :
 
 ```env
 ALLOW_DEV_OTP=true
+OTP_BYPASS_CODE=123456
 ```
 
-Puis demander un code avec `+243971163574` : le code apparaît dans la réponse API, l’UI admin (« Code de test : … ») et les logs Render. **Supprimer `ALLOW_DEV_OTP` dès que le SMS est configuré.**
+Puis demander un code avec `+243971163574` : le code apparaît dans la réponse API, l’UI admin (« Code de test : … ») et les logs Render (avec bypass fixe : toujours `123456`). **Supprimer `ALLOW_DEV_OTP` / `OTP_BYPASS_CODE` dès que le SMS fonctionne.**
 
 ### Promouvoir un administrateur
 

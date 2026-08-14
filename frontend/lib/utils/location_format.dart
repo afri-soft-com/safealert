@@ -43,7 +43,7 @@ class LocationFormat {
     final hasPlace = z != null && z.isNotEmpty;
     final coords = formatCoords(lat, lng);
     if (hasPlace && coords.isNotEmpty) return '$z · $coords';
-    if (hasPlace) return z!;
+    if (hasPlace) return z;
     if (coords.isNotEmpty) {
       return approximate ? '$approxLabel · $coords' : coords;
     }

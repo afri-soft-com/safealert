@@ -56,7 +56,7 @@ DATABASE_URL_DIRECT=postgresql://USER:PASS@ep-xxx.region.aws.neon.tech/safealert
 2. Sur Render (ou `.env` local) : `SERDIPAY_API_KEY`, `SERDIPAY_SMS_URL`, éventuellement `SERDIPAY_SENDER_ID=SafeAlert`.
 3. Si l’auth n’est pas Bearer : `SERDIPAY_API_KEY_HEADER=apiKey`.
 4. Fallback recommandé : configurer aussi Twilio (`TWILIO_*`) pour secours.
-5. Vérifier : `POST /api/auth/request-code` → SMS reçu (avec SMS configuré, `devCode` n’est **pas** renvoyé).
+5. Vérifier : `POST /api/auth/request-code` → SMS reçu. Avec SMS fiable en prod, **ne pas** laisser `ALLOW_DEV_OTP` (sinon `devCode` reste renvoyé).
 6. Sans aucun fournisseur : simulation console (dev) ou bypass explicite ci-dessous.
 
 Priorité automatique (`SMS_PROVIDER=auto`) : **SerdiPay → Twilio → Africa’s Talking → simulation**.
@@ -83,9 +83,9 @@ Priorité automatique (`SMS_PROVIDER=auto`) : **SerdiPay → Twilio → Africa�
 | **Statut** | À configurer (sinon simulation console en dev) |
 | **Valeur (placeholder)** | SID / Token depuis [console.twilio.com](https://console.twilio.com) |
 
-**Sans Twilio :**
+**Sans Twilio / avec bypass :**
 - **Dev** (`NODE_ENV=development`, SMS vide) : code dans le terminal (`[DEV OTP]`) + champ `devCode` dans `POST /api/auth/request-code`.
-- **Prod temporaire** : uniquement si `ALLOW_DEV_OTP=true` et SMS toujours non configuré — même comportement (`devCode` + logs). À retirer dès que Twilio/SerdiPay arrive.
+- **Prod temporaire** : `ALLOW_DEV_OTP=true` → toujours `devCode` + logs, **même si** des clés SMS sont présentes (SMS tenté en parallèle). Optionnel : `OTP_BYPASS_CODE=123456` pour un code fixe. À retirer dès que Twilio/SerdiPay livre réellement.
 
 ---
 

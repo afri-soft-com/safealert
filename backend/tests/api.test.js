@@ -80,6 +80,26 @@ describe("Auth", () => {
     expect(res.body.expiresIn).toBe(300);
   }, 15000);
 
+  it("POST /api/auth/request-code returns fixed OTP_BYPASS_CODE as devCode", async () => {
+    const prevAllow = process.env.ALLOW_DEV_OTP;
+    const prevBypass = process.env.OTP_BYPASS_CODE;
+    process.env.ALLOW_DEV_OTP = "true";
+    process.env.OTP_BYPASS_CODE = "123456";
+    mockQuery.mockResolvedValue({ rows: [] });
+    try {
+      const res = await request(app)
+        .post("/api/auth/request-code")
+        .send({ phone: "+243810000001" });
+      expect(res.status).toBe(200);
+      expect(res.body.devCode).toBe("123456");
+    } finally {
+      if (prevAllow === undefined) delete process.env.ALLOW_DEV_OTP;
+      else process.env.ALLOW_DEV_OTP = prevAllow;
+      if (prevBypass === undefined) delete process.env.OTP_BYPASS_CODE;
+      else process.env.OTP_BYPASS_CODE = prevBypass;
+    }
+  }, 15000);
+
   it("POST /api/auth/request-code fails without phone", async () => {
     const res = await request(app).post("/api/auth/request-code").send({});
     expect(res.status).toBe(400);

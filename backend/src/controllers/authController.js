@@ -41,17 +41,22 @@ const OTP_TTL_SECONDS = 300;
 const OTP_PHONE_MAX = Number(process.env.OTP_PHONE_MAX_PER_WINDOW || 5);
 
 /**
- * Temporary OTP bypass for admin testing without working SMS.
+ * Temporary OTP bypass for admin / client testing without reliable SMS.
  * SECURITY: never enable by default. Only when ALLOW_DEV_OTP=true
- * (or OTP_BYPASS_ENABLED=true). Prefer also leaving SMS keys empty so
- * codes are not dual-path; either way, DISABLE this flag as soon as
- * Twilio/SerdiPay delivery works — otherwise OTP leaks in API + logs.
+ * (or OTP_BYPASS_ENABLED=true). When set, ALWAYS return/log `devCode`
+ * even if SMS providers are also configured (SMS may still be attempted).
+ * DISABLE as soon as Twilio/SerdiPay delivery works — otherwise OTP leaks
+ * in API responses + logs.
  */
 const isDevOtpBypassEnabled = () =>
   process.env.ALLOW_DEV_OTP === "true" ||
   process.env.OTP_BYPASS_ENABLED === "true";
 
-/** Expose OTP in API/logs: local/dev without SMS, or explicit flag (incl. prod). */
+/**
+ * Expose OTP in API/logs when:
+ * - ALLOW_DEV_OTP / OTP_BYPASS_ENABLED is true (incl. production + SMS on), OR
+ * - non-production and SMS is not configured
+ */
 const shouldExposeDevOtp = () =>
   isDevOtpBypassEnabled() ||
   (process.env.NODE_ENV !== "production" && !isSMSConfigured());
@@ -110,17 +115,25 @@ const requestCode = async (req, res) => {
       [phone, codeHash, expiresAt]
     );
 
-    await sendSMS(phone, `Votre code SafeAlert: ${code}. Valide 5 minutes.`);
+    // Never let SMS failures block OTP when bypass is on (testers still get devCode)
+    try {
+      await sendSMS(phone, `Votre code SafeAlert: ${code}. Valide 5 minutes.`);
+    } catch (smsErr) {
+      console.error("requestCode SMS error (continuing):", smsErr.message || smsErr);
+    }
 
     const exposeDevOtp = shouldExposeDevOtp();
 
     if (exposeDevOtp) {
+      const smsNote = isSMSConfigured()
+        ? "SMS aussi configuré — code exposé via ALLOW_DEV_OTP (désactiver dès que SMS fiable)."
+        : "SMS non configuré — bypass temporaire (ALLOW_DEV_OTP).";
       // console.warn so Render (and other hosts) always surface this in logs
       console.warn("");
       console.warn("══════════════════════════════════════════════");
       console.warn(`  [DEV OTP] ${phone} → ${code}  (valide 5 min)`);
-      console.warn("  SMS non configuré — bypass temporaire (ALLOW_DEV_OTP).");
-      console.warn("  DÉSACTIVER dès que Twilio/SerdiPay est en place.");
+      console.warn(`  ${smsNote}`);
+      console.warn("  DÉSACTIVER ALLOW_DEV_OTP / OTP_BYPASS_CODE en prod réelle.");
       console.warn("══════════════════════════════════════════════");
       console.warn("");
       log(`[DEV OTP] ${phone} → ${code}`);

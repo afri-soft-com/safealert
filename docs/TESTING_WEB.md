@@ -57,11 +57,11 @@ Sur Render → service **safealert-api** → Environment :
 
 ```env
 ALLOW_DEV_OTP=true
-# optionnel : OTP_BYPASS_CODE=123456   # sinon code aléatoire à chaque demande
+OTP_BYPASS_CODE=123456   # recommandé pour tests : code fixe pour tous les numéros
 PLATFORM_ADMIN_PHONE=+243971163574
 ```
 
-Le flag suffit même si `TWILIO_*` est encore présent (ex. Trial qui n’envoie pas vers +243). Préférer vider les clés SMS en parallèle. **Retirer le flag** dès que le SMS fonctionne.
+Avec `ALLOW_DEV_OTP=true`, `devCode` est **toujours** renvoyé (UI « Code de test ») même si Twilio/SerdiPay est configuré ; le SMS est quand même tenté. `OTP_BYPASS_CODE=123456` évite un code aléatoire à chaque demande (pratique pour ~15 testeurs). **Retirer les deux flags** dès que le SMS fonctionne.
 
 Après `POST /api/auth/request-code` :
 - réponse JSON : `{ "devCode": "XXXXXX", ... }`
