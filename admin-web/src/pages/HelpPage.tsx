@@ -38,7 +38,8 @@ export default function HelpPage() {
             organisations partenaires avec leur clé API.
           </li>
           <li>
-            <strong>Incidents</strong> — consultation et détail (description, position, signaleur).
+            <strong>Incidents</strong> — consultation et détail (description, zone / lieu,
+            coordonnées GPS, signaleur).
           </li>
         </ul>
 

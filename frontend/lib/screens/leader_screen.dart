@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../services/api_service.dart';
 import '../providers/leader_provider.dart';
 import '../providers/auth_provider.dart';
+import '../utils/location_format.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
@@ -225,7 +226,7 @@ class _LeaderScreenState extends State<LeaderScreen> {
     final type = inc['incident_type'] as String? ?? 'Incident';
     final desc = inc['description'] as String? ?? '';
     final reporter = inc['reporter'] as String? ?? 'Anonyme';
-    final zone = inc['zone_name'] as String? ?? '';
+    final locationLine = LocationFormat.fromIncident(inc);
     final verif = inc['verified_by'] as int? ?? 0;
     final status = inc['status'] as String? ?? 'active';
     final color = _statusColor(status);
@@ -294,13 +295,14 @@ class _LeaderScreenState extends State<LeaderScreen> {
               Flexible(
                 child: Text('Par $reporter', style: const TextStyle(fontSize: 10, color: AppColors.gris), overflow: TextOverflow.ellipsis),
               ),
-              if (zone.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text('📍 $zone', style: const TextStyle(fontSize: 10, color: AppColors.gris), overflow: TextOverflow.ellipsis),
-                ),
-              ],
             ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '📍 $locationLine',
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
           if (status == 'active' || status == 'verified' || status == 'acknowledged')

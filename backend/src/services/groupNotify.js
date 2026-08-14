@@ -30,7 +30,7 @@ const notifyGroupMembers = async (groupId, excludeUserId, notification, data) =>
   return notified;
 };
 
-const notifyUserGroupsOnSOS = async (userId, lat, lng, pseudo) => {
+const notifyUserGroupsOnSOS = async (userId, lat, lng, pseudo, zoneName = null) => {
   const userRes = await pool.query(
     "SELECT sos_notify_groups FROM users WHERE id = $1",
     [userId]
@@ -46,6 +46,17 @@ const notifyUserGroupsOnSOS = async (userId, lat, lng, pseudo) => {
     [userId]
   );
 
+  const place = (typeof zoneName === "string" && zoneName.trim())
+    ? zoneName.trim()
+    : "Lieu en cours de résolution";
+  const la = Number(lat);
+  const ln = Number(lng);
+  const coords =
+    Number.isFinite(la) && Number.isFinite(ln)
+      ? `${la.toFixed(4)}, ${ln.toFixed(4)}`
+      : "";
+  const where = coords ? `${place} · ${coords}` : place;
+
   let membersNotified = 0;
   for (const group of groups.rows) {
     const count = await notifyGroupMembers(
@@ -53,7 +64,7 @@ const notifyUserGroupsOnSOS = async (userId, lat, lng, pseudo) => {
       userId,
       {
         title: "🚨 SOS — membre du groupe",
-        body: `${pseudo} a déclenché une alerte SOS dans ${group.name} !`,
+        body: `${pseudo} a déclenché une alerte SOS dans ${group.name} ! ${where}`,
       },
       {
         type: "group_sos",
@@ -61,6 +72,7 @@ const notifyUserGroupsOnSOS = async (userId, lat, lng, pseudo) => {
         userId: String(userId),
         lat: String(lat),
         lng: String(lng),
+        zone_name: zoneName ? String(zoneName) : "",
       }
     );
     membersNotified += count;

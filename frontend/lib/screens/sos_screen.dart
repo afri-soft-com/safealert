@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../services/share_helper.dart';
 import '../services/location_service.dart';
 import '../services/app_config_service.dart';
+import '../utils/location_format.dart';
 
 class SOSScreen extends StatefulWidget {
   final VoidCallback onBack;
@@ -28,8 +29,12 @@ class _SOSScreenState extends State<SOSScreen> {
   bool _cancelling = false;
   bool _checkingIn = false;
   bool _queued = false;
+  bool _positionApprox = false;
   String? _incidentId;
   String? _statusMsg;
+  String? _zoneName;
+  double? _sosLat;
+  double? _sosLng;
   Map<String, dynamic>? _dispatch;
   Timer? _progressTimer;
   Timer? _liveTimer;
@@ -129,6 +134,10 @@ class _SOSScreenState extends State<SOSScreen> {
       _statusMsg = null;
       _incidentId = null;
       _dispatch = null;
+      _zoneName = null;
+      _sosLat = null;
+      _sosLng = null;
+      _positionApprox = false;
     });
 
     final result = await context.read<IncidentProvider>().triggerSOS(
@@ -154,6 +163,8 @@ class _SOSScreenState extends State<SOSScreen> {
     }
 
     if (result['queued'] == true) {
+      final qLat = (result['lat'] as num?)?.toDouble();
+      final qLng = (result['lng'] as num?)?.toDouble();
       setState(() {
         _queued = true;
         _failed = false;
@@ -161,17 +172,28 @@ class _SOSScreenState extends State<SOSScreen> {
         _completed = true;
         _step = 4;
         _statusMsg = result['message']?.toString();
+        _sosLat = qLat;
+        _sosLng = qLng;
+        _zoneName = result['zone_name']?.toString();
+        _positionApprox = true;
       });
       return;
     }
 
     final note = result['positionNote']?.toString();
-    if (note != null && note.isNotEmpty) {
-      _statusMsg = note;
-    }
-
     final incident = result['incident'] as Map<String, dynamic>?;
     _incidentId = incident?['id'] as String?;
+    final approx = note != null && note.isNotEmpty;
+
+    setState(() {
+      if (note != null && note.isNotEmpty) {
+        _statusMsg = note;
+      }
+      _zoneName = incident?['zone_name']?.toString();
+      _sosLat = (incident?['lat'] as num?)?.toDouble() ?? (result['lat'] as num?)?.toDouble();
+      _sosLng = (incident?['lng'] as num?)?.toDouble() ?? (result['lng'] as num?)?.toDouble();
+      _positionApprox = approx;
+    });
 
     int i = 0;
     _progressTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {
@@ -203,12 +225,29 @@ class _SOSScreenState extends State<SOSScreen> {
     _dispatchTimer = Timer.periodic(const Duration(seconds: 20), (_) => tick());
   }
 
-  Future<void> _shareSos() async {
-    final pos = await LocationService().getPositionForSos();
+  Future<String> _buildShareText() async {
     final pseudo = context.read<AuthProvider>().user?['pseudo']?.toString();
-    final lat = pos?.latitude ?? 0.0;
-    final lng = pos?.longitude ?? 0.0;
-    final text = ShareHelper.sosMessage(lat: lat, lng: lng, pseudo: pseudo);
+    var lat = _sosLat;
+    var lng = _sosLng;
+    var zone = _zoneName;
+    var approx = _positionApprox;
+    if (lat == null || lng == null) {
+      final pos = await LocationService().getPositionForSos();
+      lat = pos?.latitude ?? 0.0;
+      lng = pos?.longitude ?? 0.0;
+      approx = true;
+    }
+    return ShareHelper.sosMessage(
+      lat: lat,
+      lng: lng,
+      pseudo: pseudo,
+      zoneName: zone,
+      approximate: approx,
+    );
+  }
+
+  Future<void> _shareSos() async {
+    final text = await _buildShareText();
     await ShareHelper.shareText(text);
   }
 
@@ -388,6 +427,37 @@ class _SOSScreenState extends State<SOSScreen> {
                     ),
                   ],
                   if (_completed && !_cancelling) ...[
+                    if (_sosLat != null && _sosLng != null) ...[
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.rougeLight,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.rouge),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Lieu partagé avec vos contacts',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.rouge),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              LocationFormat.displayLine(
+                                zoneName: _zoneName,
+                                lat: _sosLat,
+                                lng: _sosLng,
+                                approximate: _positionApprox,
+                              ),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     if (_dispatch != null && _dispatch!['agent_pseudo'] != null) ...[
                       Container(
                         width: double.infinity,
@@ -431,13 +501,7 @@ class _SOSScreenState extends State<SOSScreen> {
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: () async {
-                              final pos = await LocationService().getPositionForSos();
-                              final pseudo = context.read<AuthProvider>().user?['pseudo']?.toString();
-                              final text = ShareHelper.sosMessage(
-                                lat: pos?.latitude ?? 0,
-                                lng: pos?.longitude ?? 0,
-                                pseudo: pseudo,
-                              );
+                              final text = await _buildShareText();
                               await ShareHelper.shareWhatsApp(text);
                             },
                             icon: const Icon(Icons.chat, size: 16),

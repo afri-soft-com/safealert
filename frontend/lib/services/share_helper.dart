@@ -1,5 +1,6 @@
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../utils/location_format.dart';
 
 /// Partage système + raccourci WhatsApp (FR, sans jargon).
 class ShareHelper {
@@ -22,10 +23,18 @@ class ShareHelper {
     required double lat,
     required double lng,
     String? pseudo,
+    String? zoneName,
+    bool approximate = false,
   }) {
     final maps = 'https://maps.google.com/?q=$lat,$lng';
     final who = pseudo != null && pseudo.isNotEmpty ? '$pseudo — ' : '';
-    return '${who}🚨 Alerte SafeAlert ! Ma position : $maps';
+    final where = LocationFormat.displayLine(
+      zoneName: zoneName,
+      lat: lat,
+      lng: lng,
+      approximate: approximate,
+    );
+    return '${who}🚨 Alerte SafeAlert ! Lieu : $where. Carte : $maps';
   }
 
   static String tripMessage(String shareUrl, {String? dest}) {

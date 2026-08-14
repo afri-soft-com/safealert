@@ -4,6 +4,7 @@ import '../theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/incident_provider.dart';
 import '../services/app_config_service.dart';
+import '../utils/location_format.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/nav_bar.dart';
@@ -122,6 +123,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Text(
+                                LocationFormat.fromIncident(latest),
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
                                 'Signalé il y a ${_timeAgo(latest['created_at'] as String?)}',
                                 style: const TextStyle(fontSize: 11, color: AppColors.gris),
                                 overflow: TextOverflow.ellipsis,
@@ -221,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           final icon = type == 'agression' || type == 'sos' ? '🔴' : (type == 'vol' || type == 'suspect' ? '🟡' : '🟢');
                           return _activityItem(
                             icon,
-                            '${_incidentLabel(inc)}${inc['description'] != null ? ' — ${inc['description']}' : ''}',
+                            '${_incidentLabel(inc)} — ${LocationFormat.fromIncident(inc)}',
                             _timeAgo(inc['created_at'] as String?),
                             isLast,
                           );

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/groups_provider.dart';
+import '../services/location_service.dart';
+import '../utils/location_format.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 
@@ -149,11 +151,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                 if (titleCtrl.text.trim().isEmpty) return;
                 Navigator.pop(ctx);
                 final p = context.read<GroupsProvider>();
+                final pos = await LocationService().getCurrentPosition();
                 final ok = await p.createAlert(
                   _groupId,
                   type: alertType,
                   title: titleCtrl.text.trim(),
                   body: bodyCtrl.text.trim().isEmpty ? null : bodyCtrl.text.trim(),
+                  lat: pos?.latitude,
+                  lng: pos?.longitude,
                 );
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -460,6 +465,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
           if (body.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(body, style: const TextStyle(fontSize: 11, color: AppColors.gris)),
+          ],
+          if (a['lat'] != null && a['lng'] != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              '📍 ${LocationFormat.displayLine(lat: a['lat'] as num?, lng: a['lng'] as num?)}',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
+            ),
           ],
           const SizedBox(height: 6),
           Text('Par $author${createdAt.isNotEmpty ? ' · ${_formatDate(createdAt)}' : ''}',

@@ -65,9 +65,11 @@ class HelpManualScreen extends StatelessWidget {
                   icon: Icons.sos,
                   title: 'Créer une alerte SOS',
                   children: const [
-                    _P('Depuis l\'accueil, appuyez sur le bouton rouge SOS, puis confirmez.'),
-                    _P('Votre position est envoyée et vos contacts de confiance sont alertés.'),
-                    _P('Annulation : utilisez « Annuler l\'alerte » dans les 2 minutes suivant l\'envoi.'),
+                    _P('Depuis l\'accueil, appuyez sur le bouton rouge SOS, puis maintenez environ 2 secondes.'),
+                    _P('Votre position (lieu + coordonnées) est envoyée ; vos contacts de confiance sont alertés.'),
+                    _P('Après l\'envoi, l\'écran affiche le lieu partagé. Vous pouvez Partager ou envoyer via WhatsApp.'),
+                    _P('GPS : position actuelle, sinon dernière connue, sinon mémorisée. Activez le GPS pour plus de précision.'),
+                    _P('Annulation : « Fausse alerte — annuler » dans les minutes suivant l\'envoi.'),
                     _P('SOS discret (Android) : 3× Volume bas avec l\'app ouverte pour déclencher sans afficher l\'écran SOS.'),
                   ],
                 ),
@@ -76,7 +78,7 @@ class HelpManualScreen extends StatelessWidget {
                   title: 'Contacts de confiance',
                   children: const [
                     _P('Onglet Confiance → « + Ajouter un contact » : nom et numéro du proche à alerter.'),
-                    _P('Ces personnes reçoivent une notification lorsque vous déclenchez un SOS.'),
+                    _P('Ces personnes reçoivent une notification (avec lieu et coordonnées) lorsque vous déclenchez un SOS.'),
                   ],
                 ),
                 _section(
@@ -84,8 +86,10 @@ class HelpManualScreen extends StatelessWidget {
                   title: 'Carte et signalements',
                   children: const [
                     _P('Consultez les signalements autour de vous (marqueurs colorés).'),
-                    _P('Filtrez par type et période. Touchez un marqueur pour les détails.'),
+                    _P('Filtres cliquables Danger / Vigilance / Sûr en haut de la carte (plusieurs peuvent être actifs).'),
+                    _P('Filtrez aussi par type et période (24h / 7j). Touchez un marqueur pour les détails : lieu et coordonnées GPS.'),
                     _P('Signalez un incident (bouton rouge) ou confirmez un signalement existant.'),
+                    _P('La carte chaleur n\'apparaît sur l\'accueil que si elle est activée côté serveur (masquée par défaut).'),
                   ],
                 ),
                 _section(
@@ -95,6 +99,14 @@ class HelpManualScreen extends StatelessWidget {
                     _P('Créez un groupe ou rejoignez-en un avec un code d\'invitation.'),
                     _P('Rejoindre un groupe envoie une demande à l\'administrateur du groupe.'),
                     _P('Les admins du groupe voient les demandes en attente et peuvent les traiter.'),
+                    _P('Alertes locales : le lieu s\'affiche lorsque la position est disponible.'),
+                  ],
+                ),
+                _section(
+                  icon: Icons.home_work_outlined,
+                  title: 'Veille quartier',
+                  children: const [
+                    _P('Accueil → Veille quartier : résumé quotidien des alertes près de chez vous.'),
                   ],
                 ),
                 _section(
@@ -111,6 +123,7 @@ class HelpManualScreen extends StatelessWidget {
                   children: const [
                     _P('Paramètres → « Camouflage calculatrice » : l\'app affiche une calculatrice.'),
                     _P('Saisissez le code de déverrouillage configuré pour retrouver SafeAlert.'),
+                    _P('Code de contrainte (optionnel) : envoie une alerte sans ouvrir l\'application.'),
                   ],
                 ),
                 if (_isOps)
@@ -155,9 +168,20 @@ class HelpManualScreen extends StatelessWidget {
                     _P('Vigilance (orange) : signalement carte (vol, agression…).'),
                     _P('Danger (rouge foncé) : plusieurs confirmations citoyennes sur un signalement.'),
                     _P('Sûr (vert) : un responsable a résolu l\'incident et le quartier est calme.'),
+                    _P('Le nom du lieu (quartier) est calculé automatiquement à partir du GPS (OpenStreetMap).'),
+                    _P('Sur SOS et signalements, le lieu et les coordonnées sont visibles pour ceux qui consultent l\'alerte.'),
                     _P('Qui fait quoi : citoyen → SOS, signalement, confirmation ; responsable → prise en charge et résolution.'),
                   ],
                 ),
+                if (_isOps)
+                  _section(
+                    icon: Icons.place_outlined,
+                    title: 'Lieu visible en Mode responsable',
+                    children: const [
+                      _P('Chaque carte d\'incident affiche le nom de zone et les coordonnées GPS.'),
+                      _P('Le filtrage secteur utilise le nom de zone (ex. Gombe) assigné à votre profil.'),
+                    ],
+                  ),
                 _section(
                   icon: Icons.help_outline,
                   title: 'Questions fréquentes',

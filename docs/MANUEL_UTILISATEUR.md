@@ -71,13 +71,19 @@ Vous arrivez sur l'**écran d'accueil**.
 1. Depuis l'accueil, appuyez sur le grand bouton rouge **🆘 BOUTON SOS**.
 2. Sur l'écran SOS, **maintenez** le cercle central environ **2 secondes** (ne relâchez pas trop tôt).
 3. L'application envoie votre position et alerte vos **contacts de confiance** et la communauté.
-4. Pour **annuler** une alerte envoyée par erreur, utilisez **Annuler l'alerte**.
+4. Après l'envoi, l'écran affiche le **lieu** (nom de quartier / zone) et les **coordonnées GPS** partagés avec vos contacts. Vous pouvez aussi **Partager** ou envoyer via **WhatsApp**.
+5. Pour **annuler** une alerte envoyée par erreur, utilisez **Fausse alerte — annuler**.
 
 > [À capturer] Écran SOS avec les étapes de confirmation
 
 **SOS discret (Android)** : avec l'application ouverte, appuyez **3 fois** sur le bouton **Volume bas** pour déclencher une alerte sans afficher l'écran SOS. Vous pouvez aussi **secouer** le téléphone ou utiliser le raccourci d'écran d'accueil.
 
-**Conseil** : activez le GPS et gardez une batterie suffisante pendant une alerte. Si la position précise est indisponible, SafeAlert utilise la dernière position connue.
+**GPS et position** :
+- SafeAlert utilise d'abord le GPS **actuel**, sinon la **dernière position connue** du téléphone, sinon une position **mémorisée** récemment.
+- Si la position précise est indisponible, un message indique une **position approximative** — activez le GPS pour plus de précision.
+- Activez la localisation et gardez une batterie suffisante pendant une alerte.
+
+**Notifications** : vos contacts, voisins proches, groupes (si activé) et responsables de secteur voient le **nom du lieu** et les **coordonnées** dans le message d'alerte.
 
 ### 3.2 Cercle de confiance (contacts)
 
@@ -93,12 +99,15 @@ Vous arrivez sur l'**écran d'accueil**.
 
 1. Onglet **Carte**.
 2. Consultez les signalements autour de vous (marqueurs colorés).
-3. Filtrez par **type** et période (**24h** ou **7j**).
-4. Touchez un marqueur pour voir les détails.
-5. **Signaler un incident** : bouton rouge en bas (connexion requise).
-6. **Confirmer** un signalement existant pour aider la communauté.
+3. **Filtres de gravité** (pastilles cliquables en haut) : **Danger**, **Vigilance**, **Sûr** — appuyez pour activer / désactiver chaque niveau. Plusieurs filtres peuvent être actifs en même temps.
+4. Filtrez aussi par **type** (menu déroulant) et période (**24h** ou **7j**).
+5. Touchez un marqueur pour voir les détails : type, description, **lieu (quartier)** et **coordonnées GPS**, confirmations.
+6. **Signaler un incident** : bouton rouge en bas (connexion requise). Si le GPS n'est pas prêt, SafeAlert propose la dernière position connue (approximative).
+7. **Confirmer** un signalement existant pour aider la communauté.
 
-> [À capturer] Carte avec marqueurs et légende
+> [À capturer] Carte avec marqueurs, filtres Danger/Vigilance/Sûr et fiche détail
+
+**Carte chaleur** : l'entrée « Carte chaleur » n'apparaît sur l'accueil **que si** elle est activée côté serveur (configuration distante). Par défaut elle est **masquée**.
 
 ### 3.4 Annuaire d'urgence
 
@@ -128,6 +137,7 @@ Pour masquer l'application derrière une calculatrice :
 | Fonction | Description |
 |----------|-------------|
 | **Groupes voisins** | Créer un groupe ou rejoindre via code / QR ; alertes structurées (électricité, eau, inondation, rue bloquée) |
+| **Veille quartier** | Résumé quotidien des alertes près de chez vous |
 | **Trajet sécurisé** | Partagez un lien « suivez mon trajet » (page web temporaire) + WhatsApp |
 | **Contrôle « Tu es OK ? »** | Rappel planifié ; silence → proches prévenus (Paramètres) |
 | **Envois en attente** | Voir et renvoyer SOS / signalements hors ligne (Paramètres) |
@@ -183,14 +193,27 @@ Les responsables (leader/agent) avec un secteur assigné ne voient que les incid
 
 Les incidents sont classés par **gravité** (`severity`) selon leur type et les confirmations communautaires :
 
-| Niveau | Couleur CDC | Quand |
-|--------|-------------|-------|
+| Niveau | Couleur | Quand |
+|--------|---------|-------|
 | **Alerte** (`alert`) | Rouge vif | SOS déclenché — urgence immédiate |
 | **Vigilance** (`vigilance`) | Orange | Signalement communautaire (vol, agression, etc.) |
 | **Danger** (`danger`) | Rouge confirmé | **3 confirmations** ou plus par la communauté |
 | **Sûr** (`safe`) | Vert | Zone sans incident actif récent après résolution par un responsable |
 
-Le **nom de zone** (`zone_name`) est déterminé automatiquement à partir du GPS (quartier / ville via OpenStreetMap). Il alimente la carte chaleur et le filtrage secteur des responsables.
+Sur la **carte**, les pastilles **Danger / Vigilance / Sûr** filtrent l'affichage (plusieurs peuvent être actives).
+
+### 3.15 Lieu et coordonnées (SOS & signalements)
+
+À chaque **SOS** ou **signalement carte**, SafeAlert enregistre :
+
+| Information | Origine | Affichage |
+|-------------|---------|-----------|
+| **Coordonnées** (latitude, longitude) | GPS du téléphone (ou dernière position connue) | Fiche détail carte, écran SOS, historique, Mode responsable, console admin |
+| **Nom du lieu / zone** (`zone_name`) | Géocodage automatique via OpenStreetMap (Nominatim) à partir du GPS | Même écrans + notifications push / SMS |
+
+Exemples d'affichage : `Gombe · -4.3210, 15.3123` ou `Lieu en cours de résolution · -4.3210, 15.3123` si le nom n'est pas encore résolu.
+
+Le nom de zone sert aussi à la **carte chaleur** (quand elle est activée) et au **filtrage par secteur** des responsables / agents.
 
 ### 3.8 Profil et paramètres
 

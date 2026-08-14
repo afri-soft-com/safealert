@@ -62,7 +62,25 @@ const getNearbyUsers = async (client, userId, lat, lng) => {
   return nearbyResult.rows;
 };
 
-const sendAlert = async (userId, lat, lng, incidentType) => {
+const formatCoords = (lat, lng) => {
+  const la = Number(lat);
+  const ln = Number(lng);
+  if (!Number.isFinite(la) || !Number.isFinite(ln)) return "";
+  return `${la.toFixed(4)}, ${ln.toFixed(4)}`;
+};
+
+const placeLabel = (zoneName) => {
+  const z = typeof zoneName === "string" ? zoneName.trim() : "";
+  return z || "Lieu en cours de résolution";
+};
+
+const locationSnippet = (lat, lng, zoneName) => {
+  const place = placeLabel(zoneName);
+  const coords = formatCoords(lat, lng);
+  return coords ? `${place} · ${coords}` : place;
+};
+
+const sendAlert = async (userId, lat, lng, incidentType, zoneName = null) => {
   const client = await pool.connect();
   try {
     const userResult = await client.query(
@@ -72,13 +90,16 @@ const sendAlert = async (userId, lat, lng, incidentType) => {
     const user = userResult.rows[0];
     if (!user) throw new Error("Utilisateur non trouvé");
 
+    const where = locationSnippet(lat, lng, zoneName);
+    const maps = `https://maps.google.com/?q=${lat},${lng}`;
+
     const contactsNotified = await notifyContacts(
       client,
       userId,
       user,
       "🚨 Alerte SafeAlert",
-      `${user.pseudo} a besoin d'aide ! (${incidentType})`,
-      `🔴 ALERTE SafeAlert — ${user.pseudo} a besoin d'aide ! Position: https://maps.google.com/?q=${lat},${lng}`,
+      `${user.pseudo} a besoin d'aide ! ${where}`,
+      `🔴 ALERTE SafeAlert — ${user.pseudo} a besoin d'aide ! Lieu : ${where}. Carte : ${maps}`,
       "sos_alert"
     );
 
@@ -89,13 +110,14 @@ const sendAlert = async (userId, lat, lng, incidentType) => {
         await sendPush(nu.fcm_token, {
           notification: {
             title: "🚨 Alerte dans votre quartier",
-            body: `${user.pseudo} signale un incident à proximité !`,
+            body: `${user.pseudo} signale un incident à proximité — ${where}`,
           },
           data: {
             type: "nearby_alert",
             userId: String(userId),
             lat: String(lat),
             lng: String(lng),
+            zone_name: zoneName ? String(zoneName) : "",
             incidentType,
           },
         });

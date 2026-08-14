@@ -69,7 +69,7 @@ L'utilisateur doit **se reconnecter** pour obtenir un JWT avec le nouveau rôle.
 | **Utilisateurs** | Liste, recherche serveur (téléphone / pseudo / secteur), rôles et secteurs |
 | **Partenaires API** | Création de clés (affichées une seule fois), révocation |
 | **Annuaire d'urgence** | CRUD des numéros d'urgence |
-| **Incidents** | Liste paginée, filtres, panneau de détail (description, GPS, signaleur) |
+| **Incidents** | Liste paginée, filtres, panneau de détail (description, **nom du lieu**, GPS / coordonnées, signaleur) |
 | **Groupes** | Vue des groupes de voisins |
 | **Journal d'audit** | Historique des actions admin (`FEATURE_AUDIT_LOG`) — rôles, partenaires, annuaire… |
 | **Aide** | Rappel des rôles et liens vers la documentation |

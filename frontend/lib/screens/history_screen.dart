@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/history_provider.dart';
+import '../utils/location_format.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/nav_bar.dart';
@@ -72,9 +73,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 style: const TextStyle(fontWeight: FontWeight.w600),
                               ),
                               subtitle: Text(
-                                '${_formatDate(item['created_at'] as String?)}  ·  ${hp.statusLabel(item['status'] as String?)}',
-                                style: const TextStyle(fontSize: 13),
+                                '${LocationFormat.fromIncident(item)}\n${_formatDate(item['created_at'] as String?)}  ·  ${hp.statusLabel(item['status'] as String?)}',
+                                style: const TextStyle(fontSize: 12),
                               ),
+                              isThreeLine: true,
                               trailing: item['status'] == 'active'
                                   ? TextButton(
                                       onPressed: () => hp.cancelSOS(item['id'] as int),

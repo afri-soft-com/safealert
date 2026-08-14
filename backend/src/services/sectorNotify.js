@@ -51,16 +51,28 @@ const notifyLeadersForSOS = async (incident) => {
       if (seen.has(leader.id)) continue;
       seen.add(leader.id);
       if (leader.fcm_token) {
+        const place =
+          typeof zone_name === "string" && zone_name.trim()
+            ? zone_name.trim()
+            : "Lieu en cours de résolution";
+        const la = Number(lat);
+        const ln = Number(lng);
+        const coords =
+          Number.isFinite(la) && Number.isFinite(ln)
+            ? `${la.toFixed(4)}, ${ln.toFixed(4)}`
+            : "";
+        const where = coords ? `${place} · ${coords}` : place;
         await sendPush(leader.fcm_token, {
           notification: {
             title: "🚨 SOS dans votre secteur",
-            body: `${incident_type || "sos"} — ${zone_name || "zone inconnue"}`,
+            body: `${incident_type || "sos"} — ${where}`,
           },
           data: {
             type: "sector_sos",
             incidentId: String(id),
             lat: String(lat),
             lng: String(lng),
+            zone_name: zone_name ? String(zone_name) : "",
           },
         });
         leadersNotified += 1;

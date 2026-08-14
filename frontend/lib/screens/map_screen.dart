@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/incident_provider.dart';
 import '../services/location_service.dart';
+import '../utils/location_format.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/nav_bar.dart';
@@ -597,6 +598,13 @@ class _MapScreenState extends State<MapScreen> {
                                     if (selected['description'] != null)
                                       Text(selected['description'] as String,
                                           style: const TextStyle(fontSize: 11, color: AppColors.gris)),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        '📍 ${LocationFormat.fromIncident(selected)}',
+                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
+                                      ),
+                                    ),
                                     Text('✅ ${selected['verified_by'] ?? selected['verifications'] ?? 0} confirmations',
                                         style: const TextStyle(fontSize: 10, color: AppColors.gris)),
                                     if (selected['reliability_badge'] != null)

@@ -70,14 +70,21 @@ const triggerSOS = async (req, res) => {
     );
     const incident = result.rows[0];
 
-    const notification = await sendAlert(req.userId, lat, lng, incident_type || "sos");
+    const notification = await sendAlert(
+      req.userId,
+      lat,
+      lng,
+      incident_type || "sos",
+      incident.zone_name
+    );
 
     const userRes = await pool.query("SELECT pseudo FROM users WHERE id = $1", [req.userId]);
     const groupNotification = await notifyUserGroupsOnSOS(
       req.userId,
       lat,
       lng,
-      userRes.rows[0]?.pseudo || "Un membre"
+      userRes.rows[0]?.pseudo || "Un membre",
+      incident.zone_name
     );
     notification.groupSos = groupNotification;
 
@@ -126,6 +133,7 @@ const triggerSOS = async (req, res) => {
         id: incident.id,
         lat: incident.lat,
         lng: incident.lng,
+        zone_name: incident.zone_name,
         incident_type: incident.incident_type,
         created_at: incident.created_at,
       });

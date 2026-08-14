@@ -6,6 +6,7 @@ import '../services/app_config_service.dart';
 import '../services/local_database.dart';
 import '../services/location_service.dart';
 import '../services/socket_service.dart';
+import '../utils/location_format.dart';
 import '../utils/network_error.dart';
 
 class IncidentProvider extends ChangeNotifier {
@@ -256,8 +257,14 @@ class IncidentProvider extends ChangeNotifier {
       if (phone == null || phone.isEmpty) return;
       final lat = payload['lat'];
       final lng = payload['lng'];
+      final where = LocationFormat.displayLine(
+        zoneName: payload['zone_name']?.toString(),
+        lat: lat as num?,
+        lng: lng as num?,
+        approximate: true,
+      );
       final body = Uri.encodeComponent(
-        'SafeAlert SOS — j\'ai besoin d\'aide. Position: https://maps.google.com/?q=$lat,$lng',
+        'SafeAlert SOS — j\'ai besoin d\'aide. Lieu : $where. Carte : https://maps.google.com/?q=$lat,$lng',
       );
       final uri = Uri.parse('sms:$phone?body=$body');
       if (await canLaunchUrl(uri)) {

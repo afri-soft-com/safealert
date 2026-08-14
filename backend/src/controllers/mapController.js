@@ -60,7 +60,7 @@ const getIncidents = async (req, res) => {
       !severityFilters || (activeSeverities && activeSeverities.length > 0);
 
     let query = `
-      SELECT i.id, i.incident_type, i.description, i.lat, i.lng,
+      SELECT i.id, i.incident_type, i.description, i.lat, i.lng, i.zone_name,
              i.severity, i.status, i.verified_by, i.is_anonymous, i.created_at,
              COALESCE(i.reliability_score, 50) as reliability_score,
              CASE WHEN i.is_anonymous THEN 'Anonyme' ELSE u.pseudo END as reporter
