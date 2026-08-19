@@ -346,6 +346,7 @@ const migrate = async () => {
     await client.query(`
       ALTER TABLE safe_trips ADD COLUMN IF NOT EXISTS share_token VARCHAR(32);
       ALTER TABLE safe_trips ADD COLUMN IF NOT EXISTS share_expires_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE safe_trips ADD COLUMN IF NOT EXISTS transport_mode VARCHAR(16) DEFAULT 'moto';
       CREATE UNIQUE INDEX IF NOT EXISTS idx_safe_trips_share_token
         ON safe_trips(share_token) WHERE share_token IS NOT NULL;
 

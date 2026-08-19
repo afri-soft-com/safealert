@@ -148,7 +148,7 @@ En mode discret, les alertes **reçues** ne jouent pas de sirène dans l'applica
 |----------|-------------|
 | **Groupes voisins** | Créer un groupe ou rejoindre via code / QR ; alertes structurées (électricité, eau, inondation, rue bloquée) |
 | **Veille quartier** | Résumé quotidien des alertes près de chez vous |
-| **Trajet sécurisé** | Carte en haut : appuyez pour **Départ** puis **Arrivée**, saisissez l’adresse ou utilisez le GPS (« Ma position »). Le GPS continue en arrière-plan (notification persistante) même si vous quittez l’écran. Coordonnées avancées optionnelles. Puis partagez le lien de suivi + WhatsApp |
+| **Trajet sécurisé** | Carte : **Départ** puis **Arrivée**. Choisissez **à pied / moto / véhicule** : la durée est calculée automatiquement (modifiable). Après Démarrer, copiez le **code à donner aux proches** (ou le lien) — c’est cet identifiant que l’escorte colle dans « Suivre le trajet ». GPS en arrière-plan. |
 | **Contrôle « Tu es OK ? »** | Rappel planifié ; silence → proches prévenus (Paramètres) |
 | **Envois en attente** | Voir et renvoyer SOS / signalements hors ligne (Paramètres) |
 | **Aide / Manuel** | Guide intégré (connexion, SOS, rôles, FAQ) depuis l'accueil ou Paramètres |

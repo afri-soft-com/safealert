@@ -1,6 +1,8 @@
 const { pool } = require("../config/database");
 const { generateApiKey } = require("../middleware/partnerAuth");
 const { writeAudit } = require("../services/audit");
+const { premium } = require("../config/features");
+const { PRICING } = require("../services/premiumEntitlements");
 
 const VALID_ROLES = ["citizen", "leader", "agent", "platform_admin"];
 
@@ -192,6 +194,66 @@ const getStats = async (req, res) => {
     });
   } catch (err) {
     console.error("getStats error:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
+};
+
+/** CRUD vue Abonnements Premium (modèle économique). */
+const listPremiumSubscriptions = async (req, res) => {
+  const page = Math.max(parseInt(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 100);
+  const offset = (page - 1) * limit;
+  const q = (req.query.q || "").toString().trim();
+  const status = (req.query.status || "all").toString();
+
+  try {
+    const statsRes = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE premium_until > NOW())::int AS active,
+        COUNT(*) FILTER (WHERE premium_until IS NOT NULL AND premium_until <= NOW())::int AS expired,
+        COUNT(*) FILTER (
+          WHERE premium_until > NOW() AND premium_until < NOW() + INTERVAL '7 days'
+        )::int AS expiring_7d
+      FROM users
+    `);
+    const stats = statsRes.rows[0];
+
+    const params = [];
+    const where = ["premium_until IS NOT NULL"];
+    if (status === "active") where.push("premium_until > NOW()");
+    if (status === "expired") where.push("premium_until <= NOW()");
+    if (q) {
+      params.push(`%${q}%`);
+      where.push(`(phone ILIKE $${params.length} OR pseudo ILIKE $${params.length})`);
+    }
+    const whereSql = `WHERE ${where.join(" AND ")}`;
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM users ${whereSql}`,
+      params
+    );
+    params.push(limit, offset);
+    const result = await pool.query(
+      `SELECT id, phone, pseudo, role, premium_until, created_at
+       FROM users ${whereSql}
+       ORDER BY premium_until DESC NULLS LAST
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    return res.json({
+      feature_enabled: premium(),
+      pricing: PRICING,
+      stats: {
+        ...stats,
+        estimated_mrr_usd: (stats.active || 0) * (PRICING.monthly_usd || 2),
+      },
+      data: result.rows,
+      page,
+      limit,
+      total: countRes.rows[0].total,
+    });
+  } catch (err) {
+    console.error("listPremiumSubscriptions error:", err);
     return res.status(500).json({ error: "Erreur serveur" });
   }
 };
@@ -459,5 +521,6 @@ module.exports = {
   listIncidents,
   listGroups,
   listAuditLogs,
+  listPremiumSubscriptions,
   VALID_ROLES,
 };

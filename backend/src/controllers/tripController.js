@@ -6,6 +6,15 @@ const { sendAlert } = require("../services/alert");
 const { safeTrip, escortMode, publicShare } = require("../config/features");
 const { notifyTrustCircle } = require("./checkInController");
 const { getEntitlementsForUser } = require("../services/premiumEntitlements");
+const { estimateEtaMinutes, normalizeTransportMode } = require("../utils/geo");
+
+const PUBLIC_BASE =
+  process.env.PUBLIC_APP_URL ||
+  process.env.API_PUBLIC_URL ||
+  "https://safealert-api.onrender.com";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const PUBLIC_BASE =
   process.env.PUBLIC_APP_URL ||
@@ -25,12 +34,17 @@ const startTrip = async (req, res) => {
 
   const {
     origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
-    eta_minutes, escort_contact_ids, notify_on_delay,
+    eta_minutes, escort_contact_ids, notify_on_delay, transport_mode,
   } = req.body;
 
+  const originLat = Number(origin_lat);
+  const originLng = Number(origin_lng);
+  const destLat = Number(dest_lat);
+  const destLng = Number(dest_lng);
+
   if (
-    origin_lat == null || origin_lng == null ||
-    dest_lat == null || dest_lng == null
+    !Number.isFinite(originLat) || !Number.isFinite(originLng) ||
+    !Number.isFinite(destLat) || !Number.isFinite(destLng)
   ) {
     return res.status(400).json({ error: "Origine et destination requises" });
   }
@@ -51,7 +65,12 @@ const startTrip = async (req, res) => {
       }
     }
 
-    const requested = Math.max(parseInt(eta_minutes, 10) || 30, 5);
+    const mode = normalizeTransportMode(transport_mode);
+    const suggested = estimateEtaMinutes(originLat, originLng, destLat, destLng, mode);
+    const requestedRaw = eta_minutes == null || eta_minutes === ""
+      ? suggested
+      : parseInt(eta_minutes, 10);
+    const requested = Math.max(Number.isFinite(requestedRaw) ? requestedRaw : suggested, 5);
     if (requested > ents.trip_eta_max_minutes) {
       return res.status(403).json({
         error: `ETA max ${ents.trip_eta_max_minutes} min en gratuit. Premium jusqu'à ${12 * 60} min.`,
@@ -61,39 +80,60 @@ const startTrip = async (req, res) => {
     }
     const minutes = Math.min(requested, ents.trip_eta_max_minutes);
     const escorts = escortMode() && Array.isArray(escort_contact_ids)
-      ? escort_contact_ids.filter(Boolean)
+      ? escort_contact_ids.map(String).filter((id) => UUID_RE.test(id))
       : [];
 
     const shareToken = publicShare() ? crypto.randomBytes(12).toString("hex") : null;
     // Token lives until ETA + 2h (or max 24h)
     const shareHours = Math.min(Math.max(Math.ceil(minutes / 60) + 2, 2), 24);
 
-    const result = await pool.query(
-      `INSERT INTO safe_trips
-         (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
-          eta_at, last_lat, last_lng, last_ping_at, escort_contact_ids, notify_on_delay,
-          share_token, share_expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 * INTERVAL '1 minute'), $2,$3, NOW(), $8, $9,
-               $10, CASE WHEN $10::text IS NOT NULL THEN NOW() + ($11 * INTERVAL '1 hour') ELSE NULL END)
-       RETURNING *`,
-      [
-        req.userId, origin_lat, origin_lng, dest_lat, dest_lng,
-        dest_label || null, minutes, escorts, notify_on_delay !== false,
-        shareToken, shareHours,
-      ]
-    );
+    const insertParams = [
+      req.userId, originLat, originLng, destLat, destLng,
+      dest_label || null, minutes, escorts, notify_on_delay !== false,
+      shareToken, shareHours, mode,
+    ];
+    let result;
+    try {
+      result = await pool.query(
+        `INSERT INTO safe_trips
+           (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
+            eta_at, last_lat, last_lng, last_ping_at, escort_contact_ids, notify_on_delay,
+            share_token, share_expires_at, transport_mode)
+         VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 * INTERVAL '1 minute'), $2,$3, NOW(), $8, $9,
+                 $10, CASE WHEN $10::text IS NOT NULL THEN NOW() + ($11 * INTERVAL '1 hour') ELSE NULL END,
+                 $12)
+         RETURNING *`,
+        insertParams
+      );
+    } catch (insertErr) {
+      if (insertErr.code !== "42703") throw insertErr;
+      result = await pool.query(
+        `INSERT INTO safe_trips
+           (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
+            eta_at, last_lat, last_lng, last_ping_at, escort_contact_ids, notify_on_delay,
+            share_token, share_expires_at)
+         VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 * INTERVAL '1 minute'), $2,$3, NOW(), $8, $9,
+                 $10, CASE WHEN $10::text IS NOT NULL THEN NOW() + ($11 * INTERVAL '1 hour') ELSE NULL END)
+         RETURNING *`,
+        insertParams.slice(0, 11)
+      );
+    }
     const trip = result.rows[0];
     const shareUrl = shareToken
       ? `${PUBLIC_BASE.replace(/\/$/, "")}/t/${shareToken}`
       : null;
 
-    await notifyTrustCircle(
-      req.userId,
-      "🛣️ Trajet SafeAlert",
-      `{pseudo} partage un trajet vers ${dest_label || "sa destination"} (ETA ${minutes} min).`,
-      "safe_trip_started",
-      `🛣️ SafeAlert — {pseudo} a démarré un trajet sécurisé (ETA ${minutes} min).`
-    );
+    try {
+      await notifyTrustCircle(
+        req.userId,
+        "🛣️ Trajet SafeAlert",
+        `{pseudo} partage un trajet vers ${dest_label || "sa destination"} (ETA ${minutes} min).`,
+        "safe_trip_started",
+        `🛣️ SafeAlert — {pseudo} a démarré un trajet sécurisé (ETA ${minutes} min).`
+      );
+    } catch (notifyErr) {
+      console.error("startTrip notify skipped:", notifyErr.message);
+    }
 
     const io = req.app.get("io");
     if (io) {
@@ -112,6 +152,14 @@ const startTrip = async (req, res) => {
     });
   } catch (err) {
     console.error("startTrip error:", err);
+    if (err.code === "22P02") {
+      return res.status(400).json({ error: "Contact d'escorte invalide." });
+    }
+    if (err.code === "42703") {
+      return res.status(500).json({
+        error: "Base trajets incomplète — relancez les migrations serveur.",
+      });
+    }
     return res.status(500).json({ error: "Erreur serveur" });
   }
 };

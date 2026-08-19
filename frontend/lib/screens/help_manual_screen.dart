@@ -116,7 +116,8 @@ class HelpManualScreen extends StatelessWidget {
                   children: const [
                     _P('Carte en haut : appuyez pour fixer le départ, puis l\'arrivée (bandeau « Appuyez sur la carte… »).'),
                     _P('Saisissez l\'adresse ou utilisez le GPS (« Ma position », icône réticule) sur le champ actif.'),
-                    _P('Les coordonnées GPS (avancé) restent optionnelles. Indiquez une durée estimée ; des proches peuvent suivre le trajet.'),
+                    _P('Choisissez le moyen (à pied, moto, véhicule) : la durée est calculée automatiquement, vous pouvez la modifier.'),
+                    _P('Après Démarrer, copiez le « code à donner aux proches » (ou le lien) et envoyez-le à la personne qui vous suit. Elle le colle dans « Suivre le trajet ».'),
                     _P('Une fois le trajet démarré, le GPS continue en arrière-plan (notification persistante), même si vous quittez l\'écran Trajet.'),
                     _P('Si vous ne confirmez pas votre arrivée à temps, une alerte peut être déclenchée.'),
                   ],

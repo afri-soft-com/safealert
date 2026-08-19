@@ -28,7 +28,11 @@ export default function HelpPage() {
             <strong>Ops temps réel</strong> — file SOS, délais de prise en charge, export CSV/PDF.
           </li>
           <li>
-            <strong>Utilisateurs</strong> — recherche, attribution de rôle / secteur, accorder ou révoquer Premium.
+            <strong>Utilisateurs</strong> — recherche, attribution de rôle / secteur.
+          </li>
+          <li>
+            <strong>Abonnements</strong> — CRUD Premium (accorder, prolonger, révoquer), stats MRR,
+            offre 2 USD / mois.
           </li>
           <li>
             <strong>Partenaires API</strong> — création / révocation de clés API.

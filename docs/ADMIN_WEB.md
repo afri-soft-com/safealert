@@ -68,6 +68,7 @@ L'utilisateur doit **se reconnecter** pour obtenir un JWT avec le nouveau rôle.
 | **Tableau de bord** | Utilisateurs, incidents, partenaires actifs, groupes |
 | **Ops temps réel** | File SOS, délais de prise en charge, zones actives, export CSV/PDF (JWT) |
 | **Utilisateurs** | Liste, recherche serveur (téléphone / pseudo / secteur), rôles et secteurs |
+| **Abonnements** | CRUD Premium (accorder / prolonger / révoquer), stats MRR, offre 2 USD/mois |
 | **Partenaires API** | Création de clés (affichées une seule fois), révocation |
 | **Annuaire d'urgence** | CRUD des numéros d'urgence |
 | **Incidents** | Liste paginée, filtres, panneau de détail (description, **nom du lieu**, GPS / coordonnées, signaleur) |

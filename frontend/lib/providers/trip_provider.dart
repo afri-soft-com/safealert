@@ -104,7 +104,31 @@ class TripProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>?> openEscortMap(String id) async {
     openEscortForTrip(id);
-    return fetchTrip(id);
+    final resolved = await resolveFollowInput(id);
+    if (resolved == null) return null;
+    _followTripId = resolved;
+    return fetchTrip(resolved);
+  }
+
+  /// Accepte un UUID, un lien `/t/token`, ou le token de partage.
+  Future<String?> resolveFollowInput(String raw) async {
+    final t = raw.trim();
+    if (t.isEmpty) return null;
+    final uuid = RegExp(
+      r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
+    ).firstMatch(t);
+    if (uuid != null) return uuid.group(0);
+
+    var token = t;
+    final urlMatch = RegExp(r'/t/([A-Za-z0-9]+)').firstMatch(t);
+    if (urlMatch != null) token = urlMatch.group(1)!;
+    if (token.contains('-')) return token;
+    try {
+      final res = await _api.get('/public/trips/${Uri.encodeComponent(token)}');
+      final id = (res['trip'] as Map?)?['id']?.toString();
+      if (id != null && id.isNotEmpty) return id;
+    } catch (_) {}
+    return token;
   }
 
   void clearFollowedTrip() {
@@ -120,6 +144,7 @@ class TripProvider extends ChangeNotifier {
     double? originLng,
     String? destLabel,
     int etaMinutes = 30,
+    String transportMode = 'moto',
     List<String>? escortContactIds,
   }) async {
     _loading = true;
@@ -146,6 +171,7 @@ class TripProvider extends ChangeNotifier {
         'dest_lng': destLng,
         if (destLabel != null) 'dest_label': destLabel,
         'eta_minutes': etaMinutes,
+        'transport_mode': transportMode,
         if (escortContactIds != null && escortContactIds.isNotEmpty)
           'escort_contact_ids': escortContactIds,
       });

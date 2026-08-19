@@ -7,6 +7,7 @@ const router = Router();
 router.use(authenticate, requireRole("platform_admin"));
 
 router.get("/stats", ctrl.getStats);
+router.get("/premium", ctrl.listPremiumSubscriptions);
 router.get("/users", ctrl.listUsers);
 router.patch("/users/:id/role", ctrl.updateUserRole);
 router.patch("/users/:id/sector", ctrl.updateUserSector);

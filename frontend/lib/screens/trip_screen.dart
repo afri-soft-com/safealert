@@ -11,6 +11,7 @@ import '../services/share_helper.dart';
 import '../services/location_service.dart';
 import '../services/geocode_service.dart';
 import '../utils/location_format.dart';
+import '../utils/trip_eta.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
@@ -48,6 +49,8 @@ class _TripScreenState extends State<TripScreen> {
   bool _geocoding = false;
   bool _showAdvancedCoords = false;
   bool _syncingFields = false;
+  bool _etaManual = false;
+  TripTransportMode _transportMode = TripTransportMode.moto;
 
   @override
   void initState() {
@@ -136,6 +139,7 @@ class _TripScreenState extends State<TripScreen> {
       }
       _syncingFields = false;
       if (mounted) setState(() {});
+      _recomputeEta();
       return;
     }
 
@@ -149,6 +153,7 @@ class _TripScreenState extends State<TripScreen> {
       }
       _syncingFields = false;
       if (mounted) setState(() {});
+      _recomputeEta();
       return;
     }
 
@@ -166,6 +171,22 @@ class _TripScreenState extends State<TripScreen> {
     }
     _syncingFields = false;
     setState(() => _geocoding = false);
+    _recomputeEta();
+  }
+
+  void _recomputeEta({bool force = false}) {
+    if (_origin == null || _destination == null) return;
+    if (_etaManual && !force) return;
+    final minutes = estimateTripEtaMinutes(
+      originLat: _origin!.latitude,
+      originLng: _origin!.longitude,
+      destLat: _destination!.latitude,
+      destLng: _destination!.longitude,
+      mode: _transportMode,
+    );
+    _etaCtrl.text = minutes.toString();
+    if (force) _etaManual = false;
+    if (mounted) setState(() {});
   }
 
   Future<void> _useMyLocation(_MapPickTarget target) async {
@@ -300,6 +321,7 @@ class _TripScreenState extends State<TripScreen> {
       destLng: dest.longitude,
       destLabel: destLabel,
       etaMinutes: int.tryParse(_etaCtrl.text) ?? 30,
+      transportMode: _transportMode.apiValue,
       escortContactIds: _selectedEscorts.isEmpty ? null : _selectedEscorts.toList(),
     );
     if (!mounted) return;
@@ -596,13 +618,48 @@ class _TripScreenState extends State<TripScreen> {
           icon: Icons.flag,
         ),
         const SizedBox(height: 10),
+        const Text('Moyen de transport',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bleuFonce)),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          children: TripTransportMode.values.map((mode) {
+            final selected = _transportMode == mode;
+            return ChoiceChip(
+              label: Text(mode.label),
+              selected: selected,
+              onSelected: (_) {
+                setState(() => _transportMode = mode);
+                _recomputeEta(force: true);
+              },
+              selectedColor: AppColors.bleu.withValues(alpha: 0.2),
+              labelStyle: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: selected ? AppColors.bleu : AppColors.gris,
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 10),
         TextField(
           controller: _etaCtrl,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
+          onChanged: (_) => _etaManual = true,
+          decoration: InputDecoration(
             labelText: 'Durée estimée (minutes)',
-            border: OutlineInputBorder(),
+            helperText: _origin != null && _destination != null
+                ? (_etaManual
+                    ? 'Modifiée manuellement — changez le moyen pour recalculer'
+                    : 'Calculée selon ${_transportMode.label.toLowerCase()} — vous pouvez la modifier')
+                : 'Indiquez départ et arrivée pour un calcul automatique',
+            border: const OutlineInputBorder(),
             isDense: true,
+            suffixIcon: IconButton(
+              tooltip: 'Recalculer',
+              onPressed: () => _recomputeEta(force: true),
+              icon: const Icon(Icons.refresh, size: 18),
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -814,17 +871,17 @@ class _TripScreenState extends State<TripScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                'ID : ${trip['id']}',
+                                'Code à donner aux proches : ${trip['id']}',
                                 style: const TextStyle(fontSize: 11, color: AppColors.gris),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             IconButton(
-                              tooltip: 'Copier ID',
+                              tooltip: 'Copier le code trajet',
                               onPressed: () {
                                 Clipboard.setData(ClipboardData(text: '${trip['id']}'));
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('ID trajet copié')),
+                                  const SnackBar(content: Text('Code trajet copié — envoyez-le à la personne qui vous suit')),
                                 );
                               },
                               icon: const Icon(Icons.copy, size: 18),
@@ -906,13 +963,19 @@ class _TripScreenState extends State<TripScreen> {
                 const SizedBox(height: 28),
                 const Divider(),
                 const SizedBox(height: 8),
-                const Text('Suivre un trajet (escorte)',
+                const Text('Suivre le trajet de quelqu\'un',
                     style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
+                const SizedBox(height: 6),
+                const Text(
+                  'Ce n\'est pas un identifiant à inventer : la personne en trajet copie son « code à donner aux proches » (ou vous envoie le lien /t/…) après avoir appuyé sur Démarrer.',
+                  style: TextStyle(fontSize: 12, color: AppColors.gris, height: 1.35),
+                ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _followIdCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'ID trajet à suivre',
+                    labelText: 'Code trajet ou lien de suivi',
+                    hintText: 'UUID copié, ou https://…/t/…',
                     border: OutlineInputBorder(),
                   ),
                 ),

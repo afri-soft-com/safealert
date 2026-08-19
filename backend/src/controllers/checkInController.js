@@ -15,14 +15,18 @@ const notifyTrustCircle = async (userId, title, body, dataType, smsBody) => {
   );
 
   for (const c of contacts.rows) {
-    if (c.fcm_token) {
-      await sendPush(c.fcm_token, {
-        notification: { title, body: body.replace("{pseudo}", pseudo) },
-        data: { type: dataType, userId: String(userId) },
-      });
-    }
-    if (smsBody) {
-      await sendSMS(c.contact_phone, smsBody.replace("{pseudo}", pseudo));
+    try {
+      if (c.fcm_token) {
+        await sendPush(c.fcm_token, {
+          notification: { title, body: body.replace("{pseudo}", pseudo) },
+          data: { type: dataType, userId: String(userId) },
+        });
+      }
+      if (smsBody) {
+        await sendSMS(c.contact_phone, smsBody.replace("{pseudo}", pseudo));
+      }
+    } catch (err) {
+      console.error("notifyTrustCircle contact failed:", err.message);
     }
   }
   return { contactsNotified: contacts.rows.length, pseudo };

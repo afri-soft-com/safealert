@@ -6,6 +6,7 @@ const NAV = [
   { to: "/", label: "Tableau de bord", end: true },
   { to: "/ops", label: "Ops temps réel" },
   { to: "/utilisateurs", label: "Utilisateurs" },
+  { to: "/abonnements", label: "Abonnements" },
   { to: "/partenaires", label: "Partenaires API" },
   { to: "/annuaire", label: "Annuaire d'urgence" },
   { to: "/incidents", label: "Incidents" },

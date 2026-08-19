@@ -181,6 +181,35 @@ export const api = {
       { method: "POST", body: JSON.stringify({ user_id }) }
     ),
 
+  getPremiumSubscriptions: (page = 1, limit = 20, q = "", status = "all") => {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+      status,
+    });
+    if (q.trim()) params.set("q", q.trim());
+    return request<{
+      feature_enabled: boolean;
+      pricing: {
+        currency: string;
+        monthly_usd: number;
+        yearly_usd: number;
+        monthly_cdf_approx: number;
+        yearly_cdf_approx: number;
+      };
+      stats: {
+        active: number;
+        expired: number;
+        expiring_7d: number;
+        estimated_mrr_usd: number;
+      };
+      data: UserRow[];
+      page: number;
+      limit: number;
+      total: number;
+    }>(`/admin/premium?${params}`);
+  },
+
   getPartners: () =>
     request<{ data: PartnerRow[] }>("/admin/partners"),
 

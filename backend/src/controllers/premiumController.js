@@ -35,8 +35,6 @@ const canSelfGrant = (req) => {
 
 /** Grant premium days (admin any user; self only if test purchase allowed). */
 const grantPremium = async (req, res) => {
-  if (!assertPremiumFeature(res)) return;
-
   const days = Math.min(Math.max(parseInt(req.body.days, 10) || 30, 1), 365);
   const targetId = req.body.user_id || req.userId;
 
@@ -44,11 +42,14 @@ const grantPremium = async (req, res) => {
     return res.status(403).json({ error: "Admin requis pour attribuer à un tiers" });
   }
 
-  if (targetId === req.userId && !canSelfGrant(req)) {
-    return res.status(403).json({
-      error: "Paiement non configuré — contactez l'équipe SafeAlert",
-      code: "PAYMENT_NOT_CONFIGURED",
-    });
+  if (targetId === req.userId && req.userRole !== "platform_admin") {
+    if (!assertPremiumFeature(res)) return;
+    if (!canSelfGrant(req)) {
+      return res.status(403).json({
+        error: "Paiement non configuré — contactez l'équipe SafeAlert",
+        code: "PAYMENT_NOT_CONFIGURED",
+      });
+    }
   }
 
   try {
@@ -75,7 +76,6 @@ const grantPremium = async (req, res) => {
 
 /** Revoke premium (platform_admin only). */
 const revokePremium = async (req, res) => {
-  if (!assertPremiumFeature(res)) return;
   if (req.userRole !== "platform_admin") {
     return res.status(403).json({ error: "Admin requis" });
   }
