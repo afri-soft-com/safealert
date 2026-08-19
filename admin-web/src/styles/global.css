@@ -41,6 +41,73 @@ a {
   text-decoration: none;
 }
 
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 1rem;
+  background: #063d3d;
+  border-bottom: 1px solid #0b6e6e;
+  color: #f0f2f5;
+}
+
+body.has-update-banner {
+  padding-top: 3.5rem;
+}
+
+body.has-update-banner .sidebar {
+  top: 3.5rem;
+}
+
+.update-banner-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.update-banner-copy strong {
+  font-size: 0.85rem;
+}
+
+.update-banner-copy span {
+  font-size: 0.75rem;
+  color: #b8e0d2;
+}
+
+.update-banner-action {
+  border: 0;
+  border-radius: 8px;
+  background: #0b6e6e;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.85rem;
+}
+
+.update-banner-action:hover {
+  filter: brightness(1.1);
+}
+
+.update-banner-dismiss {
+  border: 0;
+  background: transparent;
+  color: #b8e0d2;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0.2rem 0.4rem;
+}
+
+.update-banner-dismiss:hover {
+  color: #fff;
+}
+
 button,
 input,
 select,

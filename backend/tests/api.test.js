@@ -745,6 +745,16 @@ describe("App version", () => {
     }
   });
 
+  it("GET /api/app/version defaults latest versions when env is empty", async () => {
+    delete process.env.APP_LATEST_VERSION;
+    delete process.env.ADMIN_WEB_VERSION;
+    const res = await request(app).get("/api/app/version");
+    expect(res.status).toBe(200);
+    expect(res.body.latestVersion).toBe("1.0.6");
+    expect(res.body.adminWebVersion).toBe("1.0.1");
+    expect(res.body.adminWebUrl).toContain("safealert-admin");
+  });
+
   it("GET /api/app/version returns policy from env", async () => {
     process.env.APP_LATEST_VERSION = "1.0.2";
     process.env.APP_MIN_VERSION = "1.0.0";

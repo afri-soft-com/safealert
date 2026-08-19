@@ -87,6 +87,12 @@ services:
         sync: false
       - key: FCM_CLIENT_EMAIL
         sync: false
+      - key: APP_LATEST_VERSION
+        value: "1.0.6"
+      - key: ADMIN_WEB_VERSION
+        value: "1.0.1"
+      - key: ADMIN_WEB_URL
+        value: "https://safealert-admin.onrender.com"
 
   - type: web
     name: safealert-admin
