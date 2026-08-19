@@ -1,6 +1,39 @@
 import 'package:sqflite/sqflite.dart';
+import 'package:safealert/services/alert_sound_service.dart';
 import 'package:safealert/services/api_service.dart';
 import 'package:safealert/services/local_database.dart';
+
+/// No-op sound service for unit tests (avoids AudioPlayer / Flutter binding).
+class FakeAlertSoundService implements AlertSoundService {
+  int playSosAlertCalls = 0;
+  int feedbackDiscreteCalls = 0;
+
+  @override
+  bool get ready => true;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<void> playSosAlert() async {
+    playSosAlertCalls++;
+  }
+
+  @override
+  Future<void> feedbackDiscreteSosTrigger() async {
+    feedbackDiscreteCalls++;
+  }
+
+  @override
+  Future<void> showSosLocalNotification({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {}
+
+  @override
+  Future<void> disposePlayer() async {}
+}
 
 class _CacheEntry {
   final dynamic data;

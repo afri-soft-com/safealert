@@ -13,10 +13,15 @@ import '../utils/network_error.dart';
 class IncidentProvider extends ChangeNotifier {
   final ApiService _api;
   final LocalDatabase _cache;
+  final AlertSoundService _sounds;
 
-  IncidentProvider({ApiService? apiService, LocalDatabase? localDatabase})
-      : _api = apiService ?? ApiService(),
-        _cache = localDatabase ?? LocalDatabase() {
+  IncidentProvider({
+    ApiService? apiService,
+    LocalDatabase? localDatabase,
+    AlertSoundService? alertSoundService,
+  })  : _api = apiService ?? ApiService(),
+        _cache = localDatabase ?? LocalDatabase(),
+        _sounds = alertSoundService ?? AlertSoundService() {
     SocketService().setSosAlertHandler(handleSosAlert);
     SocketService().setSosLiveHandler(handleSosLive);
   }
@@ -37,7 +42,7 @@ class IncidentProvider extends ChangeNotifier {
   void handleSosAlert(Map<String, dynamic> alert) {
     _lastSosAlert = alert;
     // SOS entrant (cercle / carte) : toujours audible
-    AlertSoundService().playSosAlert();
+    _sounds.playSosAlert();
     fetchIncidents();
   }
 
@@ -232,9 +237,9 @@ class IncidentProvider extends ChangeNotifier {
       }
       // SOS in-app : sirène sauf déclenchement discret (émetteur silencieux)
       if (isDiscrete) {
-        await AlertSoundService().feedbackDiscreteSosTrigger();
+        await _sounds.feedbackDiscreteSosTrigger();
       } else {
-        await AlertSoundService().playSosAlert();
+        await _sounds.playSosAlert();
       }
       return res;
     } catch (e) {
@@ -254,9 +259,9 @@ class IncidentProvider extends ChangeNotifier {
       // Optional SMS fallback if we have trust contacts cached
       await _trySmsFallback(payload);
       if (isDiscrete) {
-        await AlertSoundService().feedbackDiscreteSosTrigger();
+        await _sounds.feedbackDiscreteSosTrigger();
       } else {
-        await AlertSoundService().playSosAlert();
+        await _sounds.playSosAlert();
       }
       return {
         'queued': true,

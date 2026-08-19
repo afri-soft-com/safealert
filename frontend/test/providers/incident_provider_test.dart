@@ -4,15 +4,23 @@ import 'package:safealert/providers/incident_provider.dart';
 import '../mocks.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late FakeApiService fakeApi;
   late FakeLocalDatabase fakeDb;
+  late FakeAlertSoundService fakeSounds;
   late IncidentProvider provider;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     fakeApi = FakeApiService();
     fakeDb = FakeLocalDatabase();
-    provider = IncidentProvider(apiService: fakeApi, localDatabase: fakeDb);
+    fakeSounds = FakeAlertSoundService();
+    provider = IncidentProvider(
+      apiService: fakeApi,
+      localDatabase: fakeDb,
+      alertSoundService: fakeSounds,
+    );
   });
 
   group('fetchIncidents', () {
