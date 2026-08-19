@@ -13,7 +13,9 @@ import '../utils/network_error.dart';
 class IncidentProvider extends ChangeNotifier {
   final ApiService _api;
   final LocalDatabase _cache;
-  final AlertSoundService _sounds;
+  final AlertSoundService? _injectedSounds;
+
+  AlertSoundService get _sounds => _injectedSounds ?? AlertSoundService();
 
   IncidentProvider({
     ApiService? apiService,
@@ -21,7 +23,7 @@ class IncidentProvider extends ChangeNotifier {
     AlertSoundService? alertSoundService,
   })  : _api = apiService ?? ApiService(),
         _cache = localDatabase ?? LocalDatabase(),
-        _sounds = alertSoundService ?? AlertSoundService() {
+        _injectedSounds = alertSoundService {
     SocketService().setSosAlertHandler(handleSosAlert);
     SocketService().setSosLiveHandler(handleSosLive);
   }

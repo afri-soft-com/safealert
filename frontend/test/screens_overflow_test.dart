@@ -122,7 +122,12 @@ void main() {
       await _pumpNarrow(tester, size, MultiProvider(
         providers: [
           ChangeNotifierProvider.value(value: auth),
-          ChangeNotifierProvider(create: (_) => IncidentProvider(apiService: fakeApi)),
+          ChangeNotifierProvider(
+            create: (_) => IncidentProvider(
+              apiService: fakeApi,
+              alertSoundService: FakeAlertSoundService(),
+            ),
+          ),
           ChangeNotifierProvider(create: (_) => AdminProvider(apiService: fakeApi)),
         ],
         child: MaterialApp(
@@ -172,7 +177,11 @@ Widget _wrapProviders(Widget child) {
       ChangeNotifierProvider(create: (_) => AuthProvider(apiService: fakeApi)),
       ChangeNotifierProvider(create: (_) => LocaleProvider()),
       ChangeNotifierProvider(
-        create: (_) => IncidentProvider(apiService: fakeApi, localDatabase: FakeLocalDatabase()),
+        create: (_) => IncidentProvider(
+          apiService: fakeApi,
+          localDatabase: FakeLocalDatabase(),
+          alertSoundService: FakeAlertSoundService(),
+        ),
       ),
     ],
     child: MaterialApp(

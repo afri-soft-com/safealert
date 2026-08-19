@@ -4,8 +4,6 @@ import 'package:safealert/providers/incident_provider.dart';
 import '../mocks.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
   late FakeApiService fakeApi;
   late FakeLocalDatabase fakeDb;
   late FakeAlertSoundService fakeSounds;
@@ -167,6 +165,18 @@ void main() {
 
       expect(result, isNotNull);
       expect(result!['incident']['id'], 1);
+      expect(fakeSounds.playSosAlertCalls, 1);
+      expect(fakeSounds.feedbackDiscreteCalls, 0);
+    });
+
+    test('plays discrete feedback instead of siren for sos_discret', () async {
+      fakeApi.onPost('/sos/trigger', () => {'incident': {'id': 2}});
+
+      final result = await provider.triggerSOS(-4.3, 15.3, type: 'sos_discret');
+
+      expect(result, isNotNull);
+      expect(fakeSounds.playSosAlertCalls, 0);
+      expect(fakeSounds.feedbackDiscreteCalls, 1);
     });
 
     test('queues SOS offline on failure', () async {
@@ -175,6 +185,7 @@ void main() {
       expect(result, isNotNull);
       expect(result!['queued'], true);
       expect(provider.isOffline, true);
+      expect(fakeSounds.playSosAlertCalls, 1);
       final pending = await fakeDb.listPendingSos();
       expect(pending, isNotEmpty);
     });
