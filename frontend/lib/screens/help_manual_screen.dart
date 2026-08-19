@@ -128,7 +128,7 @@ class HelpManualScreen extends StatelessWidget {
                     _P('Déverrouillage : tapez 1234= sur la calculatrice (appui long sur l\'afficheur pour le rappel).'),
                     _P('Pour désactiver : Paramètres → désactivez le commutateur Camouflage.'),
                     _P('Code de contrainte (optionnel) : envoie une alerte sans ouvrir l\'application.'),
-                    _P('En mode discret, aucune sirène in-app pour les alertes reçues (camouflage). Le SOS discret reste silencieux sur votre appareil.'),
+                    _P('Sonnerie : les alertes SOS reçues restent toujours audibles à priorité max, même en mode camouflage. Seul votre SOS discret (volume / secousse) reste silencieux sur votre téléphone.'),
                   ],
                 ),
                 if (_isOps)
