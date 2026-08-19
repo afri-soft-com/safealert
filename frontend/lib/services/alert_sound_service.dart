@@ -2,19 +2,17 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-/// Sons et canaux de notification pour les alertes critiques.
+/// Sons et canaux de notification pour les alertes SOS.
 ///
-/// **Politique mode discret / camouflage** :
-/// - Camouflage calculatrice = ne pas attirer l'attention sur l'appareil.
-/// - Les sons **forts** d'alerte entrante (sirène in-app + notif locale sonore)
-///   sont **désactivés** tant que le mode discret local est actif.
-/// - Le déclenchement **SOS discret** (volume / secousse / code contrainte) reste
-///   silencieux sur l'émetteur (vibration courte uniquement).
-/// - Les push système en arrière-plan peuvent encore utiliser le canal Android
-///   `sos_alerts` (son OS) ; le muting discret s'applique surtout au premier plan
-///   et au player in-app.
+/// **Politique mode discret / camouflage (choix produit)** :
+/// - Les alertes SOS **reçues** (cercle, proximité, groupe, secteur, zone)
+///   sont **toujours** sonores à priorité max — le camouflage calculatrice
+///   ne mute pas une urgence entrante.
+/// - Seul le déclenchement **SOS discret local** (`sos_discret` / volume /
+///   secousse / contrainte) reste silencieux sur l'appareil **émetteur**
+///   (vibration courte uniquement).
+/// - Les autres notifications utilisent le canal `safealert_default`.
 class AlertSoundService {
   static final AlertSoundService _instance = AlertSoundService._();
   AlertSoundService._();
@@ -23,14 +21,12 @@ class AlertSoundService {
   static const sosChannelId = 'sos_alerts';
   static const defaultChannelId = 'safealert_default';
 
-  static const _criticalTypes = {
+  static const _sosTypes = {
     'sos_alert',
     'nearby_alert',
     'group_sos',
     'sector_sos',
     'trust_zone_alert',
-    'safety_ping_ask',
-    'safety_ping_missed',
   };
 
   final AudioPlayer _player = AudioPlayer();
@@ -41,19 +37,11 @@ class AlertSoundService {
 
   bool get ready => _ready;
 
-  static bool isCriticalPayloadType(String? type) =>
-      type != null && _criticalTypes.contains(type);
+  static bool isSosPayloadType(String? type) =>
+      type != null && _sosTypes.contains(type);
 
-  static bool isSosPayloadType(String? type) => isCriticalPayloadType(type);
-
-  Future<bool> isDiscreetModeActive() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool('discreet_mode_local') ?? false;
-    } catch (_) {
-      return false;
-    }
-  }
+  /// Alias pour appels existants / FCM.
+  static bool isCriticalPayloadType(String? type) => isSosPayloadType(type);
 
   Future<void> initialize() async {
     if (_ready) return;
@@ -65,7 +53,10 @@ class AlertSoundService {
         requestSoundPermission: true,
       );
       await _notifications.initialize(
-        settings: const InitializationSettings(android: androidInit, iOS: iosInit),
+        settings: const InitializationSettings(
+          android: androidInit,
+          iOS: iosInit,
+        ),
       );
 
       final android = _notifications.resolvePlatformSpecificImplementation<
@@ -76,7 +67,7 @@ class AlertSoundService {
             sosChannelId,
             'Alertes SOS SafeAlert',
             description:
-                'Alertes d\'urgence sonores (désactivées en mode discret in-app)',
+                'Alertes d\'urgence sonores prioritaires (toujours audibles)',
             importance: Importance.max,
             playSound: true,
             sound: RawResourceAndroidNotificationSound('sos_alert'),
@@ -105,12 +96,8 @@ class AlertSoundService {
     }
   }
 
-  /// Son fort d'alerte. Aucun son en mode discret.
+  /// Son fort d'alerte SOS — toujours (ignore le mode camouflage).
   Future<void> playSosAlert() async {
-    if (await isDiscreetModeActive()) {
-      debugPrint('playSosAlert skipped — mode discret');
-      return;
-    }
     final now = DateTime.now();
     if (_lastPlayAt != null &&
         now.difference(_lastPlayAt!) < const Duration(seconds: 3)) {
@@ -130,7 +117,7 @@ class AlertSoundService {
     }
   }
 
-  /// SOS discret local : pas de sirène, vibration seule.
+  /// Déclenchement SOS discret local : pas de sirène (émetteur), vibration seule.
   Future<void> feedbackDiscreteSosTrigger() async {
     try {
       await HapticFeedback.mediumImpact();
@@ -144,35 +131,29 @@ class AlertSoundService {
   }) async {
     try {
       if (!_ready) await initialize();
-      final discreet = await isDiscreetModeActive();
       await _notifications.show(
         id: title.hashCode ^ body.hashCode,
         title: title,
         body: body,
-        notificationDetails: NotificationDetails(
+        notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             sosChannelId,
             'Alertes SOS SafeAlert',
             channelDescription:
-                'Alertes d\'urgence sonores (désactivées en mode discret in-app)',
+                'Alertes d\'urgence sonores prioritaires (toujours audibles)',
             importance: Importance.max,
             priority: Priority.max,
-            playSound: !discreet,
-            sound: discreet
-                ? null
-                : const RawResourceAndroidNotificationSound('sos_alert'),
+            playSound: true,
+            sound: RawResourceAndroidNotificationSound('sos_alert'),
             category: AndroidNotificationCategory.alarm,
             fullScreenIntent: false,
-            enableVibration: !discreet,
-            silent: discreet,
+            enableVibration: true,
           ),
           iOS: DarwinNotificationDetails(
             presentAlert: true,
             presentBadge: true,
-            presentSound: !discreet,
-            interruptionLevel: discreet
-                ? InterruptionLevel.passive
-                : InterruptionLevel.timeSensitive,
+            presentSound: true,
+            interruptionLevel: InterruptionLevel.timeSensitive,
           ),
         ),
         payload: payload,

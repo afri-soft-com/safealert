@@ -85,7 +85,8 @@ Vous arrivez sur l'**écran d'accueil**.
 
 **Notifications** : vos contacts, voisins proches, groupes (si activé) et responsables de secteur voient le **nom du lieu** et les **coordonnées** dans le message d'alerte. Les alertes critiques (SOS, proximité, groupe, secteur, contrôle « Tu es OK ? ») sont **sonores** (canal Android haute priorité + son in-app si l'application est ouverte).
 
-**Mode discret et son** : avec le **camouflage calculatrice** actif, SafeAlert **n'émet pas** de sirène in-app pour les alertes entrantes (pour ne pas attirer l'attention). Le SOS discret (volume / secousse / code contrainte) reste silencieux sur **votre** téléphone. Les bannières système en arrière-plan peuvent encore sonner selon les réglages Android du canal d'alerte.
+**Mode discret et son** : le camouflage calculatrice ne mute **pas** les SOS re�us (urgence prioritaire). Seul le SOS discret que **vous** d�clenchez (volume / secousse / code contrainte) reste silencieux sur **votre** t�l�phone.
+
 
 ### 3.2 Cercle de confiance (contacts)
 
