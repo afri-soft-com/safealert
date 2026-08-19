@@ -138,6 +138,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final QuickActions _quickActions = const QuickActions();
   final AppLinks _appLinks = AppLinks();
   final AppUpdateService _appUpdates = AppUpdateService();
+  AuthProvider? _auth;
 
   String get _currentScreen => _navStack.last;
 
@@ -232,23 +233,41 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       ]);
 
       final auth = context.read<AuthProvider>();
+      _auth = auth;
+      auth.addListener(_onAuthChanged);
       if (auth.isAuthenticated) {
         await FCMService().uploadToken();
         if (!mounted) return;
         await context.read<IncidentProvider>().flushOfflineQueue();
+        if (!mounted) return;
+        await context.read<TripProvider>().fetchActive();
       }
     });
+  }
+
+  void _onAuthChanged() {
+    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+    if (auth.isAuthenticated) {
+      context.read<TripProvider>().fetchActive();
+    } else {
+      context.read<TripProvider>().stopTracking();
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
       _appUpdates.check(context);
+      if (context.read<AuthProvider>().isAuthenticated) {
+        context.read<TripProvider>().fetchActive();
+      }
     }
   }
 
   @override
   void dispose() {
+    _auth?.removeListener(_onAuthChanged);
     WidgetsBinding.instance.removeObserver(this);
     _appUpdates.dispose();
     ShakeSOSService.dispose();

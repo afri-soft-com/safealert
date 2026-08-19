@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import '../services/fcm_service.dart';
 import '../services/location_service.dart';
 import '../services/socket_service.dart';
+import '../services/trip_tracking_service.dart';
 
 /// Routes nécessitant une authentification (US-14 mode invité).
 const kAuthRequiredScreens = {
@@ -220,6 +221,7 @@ class AuthProvider extends ChangeNotifier {
   void _stopRealtimeServices() {
     SocketService().disconnect();
     LocationService().stopPeriodicUpdates();
+    TripTrackingService().stop();
   }
 
   /// Test helper: authenticated session without socket/location side effects.

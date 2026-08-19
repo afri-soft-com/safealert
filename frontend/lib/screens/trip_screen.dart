@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -40,7 +39,6 @@ class _TripScreenState extends State<TripScreen> {
   final _followIdCtrl = TextEditingController();
   final MapController _mapController = MapController();
   final Set<String> _selectedEscorts = {};
-  Timer? _pingTimer;
 
   _MapPickTarget _pickTarget = _MapPickTarget.origin;
   LatLng? _origin;
@@ -61,26 +59,14 @@ class _TripScreenState extends State<TripScreen> {
       await tripProv.fetchActive();
       await contactsProv.fetchContacts();
       if (!mounted) return;
-      _maybeStartPing();
       if (tripProv.activeTrip == null) {
         await _initMyLocationAsOrigin();
       }
     });
   }
 
-  void _maybeStartPing() {
-    _pingTimer?.cancel();
-    final trip = context.read<TripProvider>().activeTrip;
-    if (trip != null && trip['status'] == 'active') {
-      _pingTimer = Timer.periodic(const Duration(seconds: 45), (_) {
-        if (mounted) context.read<TripProvider>().ping();
-      });
-    }
-  }
-
   @override
   void dispose() {
-    _pingTimer?.cancel();
     _originAddrCtrl.dispose();
     _destAddrCtrl.dispose();
     _originLatCtrl.dispose();
@@ -327,7 +313,6 @@ class _TripScreenState extends State<TripScreen> {
       );
       return;
     }
-    _maybeStartPing();
     final share = tripProv.shareText;
     if (share != null && share.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -818,6 +803,13 @@ class _TripScreenState extends State<TripScreen> {
                         Text('ETA : ${trip['eta_at'] ?? '—'}',
                             style: const TextStyle(fontSize: 12, color: AppColors.gris)),
                         const SizedBox(height: 6),
+                        Text(
+                          context.watch<TripProvider>().isTracking
+                              ? 'Suivi GPS actif en arrière-plan (notification persistante).'
+                              : 'Activez le GPS pour le suivi en direct.',
+                          style: const TextStyle(fontSize: 12, color: AppColors.bleuFonce),
+                        ),
+                        const SizedBox(height: 6),
                         Row(
                           children: [
                             Expanded(
@@ -846,7 +838,6 @@ class _TripScreenState extends State<TripScreen> {
                               child: ElevatedButton(
                                 onPressed: () async {
                                   await context.read<TripProvider>().arrive();
-                                  _pingTimer?.cancel();
                                 },
                                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.vert),
                                 child: Text(l10n.imSafe),
@@ -856,7 +847,6 @@ class _TripScreenState extends State<TripScreen> {
                             TextButton(
                               onPressed: () async {
                                 await context.read<TripProvider>().cancel();
-                                _pingTimer?.cancel();
                               },
                               child: const Text('Annuler'),
                             ),

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
 import '../services/socket_service.dart';
+import '../services/trip_tracking_service.dart';
 import '../utils/network_error.dart';
 
 class TripProvider extends ChangeNotifier {
@@ -15,6 +18,8 @@ class TripProvider extends ChangeNotifier {
   bool _loading = false;
   String? _error;
   bool _socketBound = false;
+  String? _trackingTripId;
+  Timer? _fallbackPing;
 
   Map<String, dynamic>? get activeTrip => _activeTrip;
   Map<String, dynamic>? get followedTrip => _followedTrip;
@@ -24,6 +29,8 @@ class TripProvider extends ChangeNotifier {
   Map<String, dynamic>? get routeSuggestion => _routeSuggestion;
   bool get loading => _loading;
   String? get error => _error;
+  bool get isTracking =>
+      TripTrackingService().isRunning || _fallbackPing != null;
 
   TripProvider() {
     _bindSockets();
@@ -72,6 +79,7 @@ class TripProvider extends ChangeNotifier {
     } catch (_) {
       _activeTrip = null;
     }
+    await _syncTracking();
   }
 
   Future<Map<String, dynamic>?> fetchTrip(String id) async {
@@ -146,6 +154,7 @@ class TripProvider extends ChangeNotifier {
       _shareText = res['share_text'] as String?;
       _loading = false;
       notifyListeners();
+      await _syncTracking();
       return _activeTrip;
     } catch (e) {
       _error = userFacingError(e, fallback: 'Impossible de démarrer le trajet.');
@@ -192,14 +201,28 @@ class TripProvider extends ChangeNotifier {
     if (_activeTrip == null) return;
     final pos = await LocationService().getCurrentPosition();
     if (pos == null) return;
+    await pingAt(pos.latitude, pos.longitude);
+  }
+
+  Future<void> pingAt(double lat, double lng) async {
+    if (_activeTrip == null) return;
     try {
       final res = await _api.post('/trips/${_activeTrip!['id']}/ping', {
-        'lat': pos.latitude,
-        'lng': pos.longitude,
+        'lat': lat,
+        'lng': lng,
       });
       _activeTrip = res['trip'] as Map<String, dynamic>?;
       notifyListeners();
-    } catch (_) {}
+      if (_activeTrip == null || _activeTrip!['status'] != 'active') {
+        await _syncTracking();
+      }
+    } catch (e) {
+      if (e is ApiException && (e.statusCode == 404 || e.statusCode == 401)) {
+        _activeTrip = null;
+        notifyListeners();
+        await _syncTracking();
+      }
+    }
   }
 
   Future<void> arrive() async {
@@ -209,6 +232,7 @@ class TripProvider extends ChangeNotifier {
       _activeTrip = res['trip'] as Map<String, dynamic>?;
       notifyListeners();
     } catch (_) {}
+    await _syncTracking();
   }
 
   Future<void> cancel() async {
@@ -218,5 +242,43 @@ class TripProvider extends ChangeNotifier {
       _activeTrip = null;
       notifyListeners();
     } catch (_) {}
+    await _syncTracking();
+  }
+
+  Future<void> stopTracking() async {
+    _trackingTripId = null;
+    _fallbackPing?.cancel();
+    _fallbackPing = null;
+    await TripTrackingService().stop();
+    notifyListeners();
+  }
+
+  Future<void> _syncTracking() async {
+    final id = _activeTrip?['id']?.toString();
+    final active = id != null && _activeTrip?['status'] == 'active';
+    if (!active) {
+      if (_trackingTripId != null || TripTrackingService().isRunning || _fallbackPing != null) {
+        _trackingTripId = null;
+        _fallbackPing?.cancel();
+        _fallbackPing = null;
+        await TripTrackingService().stop();
+        notifyListeners();
+      }
+      return;
+    }
+    if (_trackingTripId == id && (TripTrackingService().isRunning || _fallbackPing != null)) {
+      return;
+    }
+    _trackingTripId = id;
+    final started = await TripTrackingService().start(onPosition: pingAt);
+    if (!started) {
+      _fallbackPing?.cancel();
+      _fallbackPing = Timer.periodic(const Duration(seconds: 20), (_) => ping());
+      debugPrint('TripTracking: GPS stream unavailable, using periodic pings');
+    } else {
+      _fallbackPing?.cancel();
+      _fallbackPing = null;
+    }
+    notifyListeners();
   }
 }

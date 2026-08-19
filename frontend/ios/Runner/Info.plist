@@ -46,11 +46,16 @@
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>SafeAlert utilise votre position pour les alertes SOS et la carte des incidents.</string>
+		<string>SafeAlert utilise votre position pour les alertes SOS, la carte des incidents et le suivi de trajet sécurisé.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>SafeAlert suit votre position pendant un trajet sécurisé, même si l’app est en arrière-plan, pour que vos proches voient où vous êtes.</string>
+		<key>NSLocationAlwaysUsageDescription</key>
+		<string>SafeAlert suit votre position pendant un trajet sécurisé, même si l’app est en arrière-plan, pour que vos proches voient où vous êtes.</string>
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>fetch</string>
 			<string>remote-notification</string>
+			<string>location</string>
 		</array>
 		<key>FirebaseAppDelegateProxyEnabled</key>
 		<false/>

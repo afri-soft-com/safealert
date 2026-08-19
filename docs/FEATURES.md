@@ -43,7 +43,7 @@ Après déploiement : `npm run migrate` dans `backend/`.
 
 1. **Appel 1 tap annuaire** — Flutter `url_launcher` `tel:` sur chaque numéro.
 2. **Check-in** — `POST /api/checkin` + bouton SOS « Je suis en sécurité ».
-3. **Trajet sécurisé** — `POST /api/trips`, ping, arrive, cancel ; job overdue → SOS.
+3. **Trajet sécurisé** — `POST /api/trips`, ping GPS continu (foreground service Android / background iOS), arrive, cancel ; job overdue → SOS.
 4. **SOS discret renforcé** — volume ↓ (existant) + secousse (`sensors_plus`) + raccourci Android (`quick_actions`). Widget home natif : non livré (voir partial).
 5. **Statut live SOS** — `POST /api/sos/live` + socket `sos_live` ; batterie via `battery_plus`.
 6. **Fausse alerte** — cancel → statut `false_alarm`, push/SMS explicites « Fausse alerte ».
