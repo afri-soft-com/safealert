@@ -85,7 +85,7 @@ Vous arrivez sur l'**écran d'accueil**.
 
 **Notifications** : vos contacts, voisins proches, groupes (si activé) et responsables de secteur voient le **nom du lieu** et les **coordonnées** dans le message d'alerte. Les alertes critiques (SOS, proximité, groupe, secteur, contrôle « Tu es OK ? ») sont **sonores** (canal Android haute priorité + son in-app si l'application est ouverte).
 
-**Mode discret et son** : le camouflage calculatrice ne mute **pas** les SOS re�us (urgence prioritaire). Seul le SOS discret que **vous** d�clenchez (volume / secousse / code contrainte) reste silencieux sur **votre** t�l�phone.
+**Mode discret et son** : le camouflage calculatrice ne mute **pas** les SOS re�us (urgence prioritaire). Seul le SOS discret que **vous** d�clenchez (volume / secousse / code contrainte) reste silencieux sur **votre** t�l�phone.
 
 
 ### 3.2 Cercle de confiance (contacts)
@@ -280,6 +280,10 @@ Utilisez un numéro congolais valide : `+243` + 9 chiffres (ex. `+243812345678`)
 
 Les rôles (**responsable**, **agent**, **administrateur**) sont attribués par l'**administrateur plateforme** de votre organisation (console admin → Utilisateurs). Contactez-le si vous avez besoin d'un accès étendu.
 
+### Qu'est-ce que SafeAlert Premium ?
+
+**Premium** élargit les limites (contacts, trajets, historique, priorité SOS). Voir la section **6. Premium** ci-dessous. Prix indicatif : **2 USD / mois** (~5 500 CDF).
+
 ### Puis-je utiliser SafeAlert sans compte ?
 
 Oui, en **mode invité** : consultation de la carte et de l'annuaire. La connexion est requise pour SOS, contacts et signalements.
@@ -298,7 +302,38 @@ C'est le **mode camouflage** (Paramètres → Camouflage calculatrice). Il est *
 
 ---
 
-## 6. Console d'administration (web)
+## 6. Premium
+
+SafeAlert propose une offre **gratuite** et une offre **Premium** (voir aussi `docs/ECONOMIE.md`).
+
+### Accéder à l'écran Premium
+
+1. Ouvrez **Paramètres** (menu ☰ depuis l'accueil).
+2. Rubrique **PREMIUM** → **SafeAlert Premium**.
+
+### Avantages Premium
+
+- Trajets sécurisés **illimités** (gratuit : 3 / semaine)
+- Suivi de trajet jusqu'à **12 h** (gratuit : 2 h)
+- Jusqu'à **25** contacts de confiance (gratuit : 5)
+- Historique des **100** dernières alertes (gratuit : 30)
+- **Priorité** dans la file ops SOS pour les équipes
+
+### Tarif
+
+- **2 USD / mois** (~5 500 CDF)
+- ou **20 USD / an** (~55 000 CDF)
+
+### Activer Premium
+
+- **Testeurs** : si le serveur l'autorise, bouton **Activer Premium (test — 30 jours)** (aucun paiement réel).
+- **Paiement** : Stripe Checkout lorsqu'il est configuré ; sinon message « paiement bientôt ».
+- **Admin** : un administrateur plateforme peut accorder ou révoquer Premium (console → Utilisateurs).
+
+---
+
+## 7. Console d'administration (web)
+
 
 Réservée aux **administrateurs plateforme**. Connexion par téléphone + code SMS.
 
@@ -307,7 +342,7 @@ Réservée aux **administrateurs plateforme**. Connexion par téléphone + code 
 - Aide intégrée : menu **Aide** dans la console.
 - Détails techniques : [ADMIN_WEB.md](ADMIN_WEB.md).
 
-## 7. Support
+## 8. Support
 
 Pour toute question, contactez l'administrateur de votre instance SafeAlert.
 

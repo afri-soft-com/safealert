@@ -3,10 +3,10 @@ const { pool } = require("../config/database");
 const { sendPush } = require("../config/firebase");
 const { sendSMS } = require("../services/sms");
 const { sendAlert } = require("../services/alert");
-const { safeTrip, escortMode, premium, publicShare } = require("../config/features");
+const { safeTrip, escortMode, publicShare } = require("../config/features");
 const { notifyTrustCircle } = require("./checkInController");
+const { getEntitlementsForUser } = require("../services/premiumEntitlements");
 
-const FREE_TRIP_LIMIT = 3;
 const PUBLIC_BASE =
   process.env.PUBLIC_APP_URL ||
   process.env.API_PUBLIC_URL ||
@@ -18,15 +18,6 @@ const assertTripEnabled = (res) => {
     return false;
   }
   return true;
-};
-
-const userIsPremium = async (userId) => {
-  if (!premium()) return false;
-  const r = await pool.query(
-    `SELECT premium_until FROM users WHERE id = $1 AND premium_until > NOW()`,
-    [userId]
-  );
-  return r.rows.length > 0;
 };
 
 const startTrip = async (req, res) => {
@@ -45,22 +36,30 @@ const startTrip = async (req, res) => {
   }
 
   try {
-    const isPremium = await userIsPremium(req.userId);
-    if (!isPremium) {
+    const ents = await getEntitlementsForUser(req.userId);
+    if (ents.trips_per_week != null) {
       const weekCount = await pool.query(
         `SELECT COUNT(*)::int AS c FROM safe_trips
          WHERE user_id = $1 AND created_at > NOW() - INTERVAL '7 days'`,
         [req.userId]
       );
-      if (weekCount.rows[0].c >= FREE_TRIP_LIMIT) {
+      if (weekCount.rows[0].c >= ents.trips_per_week) {
         return res.status(403).json({
-          error: "Limite de trajets gratuits atteinte (3/semaine). Activez Premium pour illimité.",
+          error: `Limite de trajets gratuits atteinte (${ents.trips_per_week}/semaine). Activez Premium pour illimité.`,
           code: "PREMIUM_REQUIRED",
         });
       }
     }
 
-    const minutes = Math.min(Math.max(parseInt(eta_minutes) || 30, 5), 24 * 60);
+    const requested = Math.max(parseInt(eta_minutes, 10) || 30, 5);
+    if (requested > ents.trip_eta_max_minutes) {
+      return res.status(403).json({
+        error: `ETA max ${ents.trip_eta_max_minutes} min en gratuit. Premium jusqu'à ${12 * 60} min.`,
+        code: "PREMIUM_REQUIRED",
+        trip_eta_max_minutes: ents.trip_eta_max_minutes,
+      });
+    }
+    const minutes = Math.min(requested, ents.trip_eta_max_minutes);
     const escorts = escortMode() && Array.isArray(escort_contact_ids)
       ? escort_contact_ids.filter(Boolean)
       : [];

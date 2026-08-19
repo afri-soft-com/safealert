@@ -1,7 +1,9 @@
 const { pool } = require("../config/database");
+const { getEntitlementsForUser } = require("../services/premiumEntitlements");
 
 const getContacts = async (req, res) => {
   try {
+    const ents = await getEntitlementsForUser(req.userId);
     const result = await pool.query(
       `SELECT tc.id, tc.contact_name, tc.contact_phone, tc.created_at,
               u.id as ref_user_id, u.pseudo, u.last_seen_at,
@@ -12,7 +14,11 @@ const getContacts = async (req, res) => {
        ORDER BY tc.created_at DESC`,
       [req.userId]
     );
-    return res.json(result.rows);
+    return res.json({
+      data: result.rows,
+      contacts_max: ents.contacts_max,
+      tier: ents.tier,
+    });
   } catch (err) {
     console.error("getContacts error:", err);
     return res.status(500).json({ error: "Erreur serveur" });
@@ -25,12 +31,18 @@ const addContact = async (req, res) => {
     return res.status(400).json({ error: "Nom et téléphone requis" });
   }
   try {
+    const ents = await getEntitlementsForUser(req.userId);
+    const maxContacts = ents.contacts_max;
     const countRes = await pool.query(
       "SELECT COUNT(*)::int as count FROM trust_contacts WHERE user_id = $1",
       [req.userId]
     );
-    if (countRes.rows[0].count >= 10) {
-      return res.status(400).json({ error: "Maximum 10 contacts de confiance autorisés" });
+    if (countRes.rows[0].count >= maxContacts) {
+      return res.status(403).json({
+        error: `Limite de ${maxContacts} contacts atteinte. Passez à Premium pour en ajouter davantage.`,
+        code: "PREMIUM_REQUIRED",
+        contacts_max: maxContacts,
+      });
     }
 
     const existing = await pool.query(

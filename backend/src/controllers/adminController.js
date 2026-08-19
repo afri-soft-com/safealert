@@ -28,7 +28,7 @@ const listUsers = async (req, res) => {
     const limitIdx = params.length - 1;
     const offsetIdx = params.length;
     const result = await pool.query(
-      `SELECT id, phone, pseudo, role, sector_name, created_at, last_seen_at
+      `SELECT id, phone, pseudo, role, sector_name, premium_until, created_at, last_seen_at
        FROM users ${where}
        ORDER BY created_at DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,

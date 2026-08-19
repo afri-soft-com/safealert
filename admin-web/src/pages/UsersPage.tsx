@@ -4,6 +4,14 @@ import { userFacingError } from "../utils/userFacingError";
 
 const ROLES: UserRole[] = ["citizen", "leader", "agent", "platform_admin"];
 
+function premiumLabel(until?: string | null): string {
+  if (!until) return "—";
+  const d = new Date(until);
+  if (Number.isNaN(d.getTime())) return "—";
+  if (d.getTime() <= Date.now()) return "expiré";
+  return d.toLocaleDateString("fr-FR");
+}
+
 export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [page, setPage] = useState(1);
@@ -13,6 +21,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sectors, setSectors] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const limit = 20;
 
@@ -68,13 +77,41 @@ export default function UsersPage() {
     }
   };
 
+  const handleGrantPremium = async (id: string) => {
+    const raw = window.prompt("Nombre de jours Premium à accorder ?", "30");
+    if (raw == null) return;
+    const days = Math.min(365, Math.max(1, parseInt(raw, 10) || 30));
+    setBusyId(id);
+    try {
+      await api.grantPremium(id, days);
+      await load();
+    } catch (err) {
+      alert(userFacingError(err, "Impossible d'accorder Premium (FEATURE_PREMIUM ?)."));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRevokePremium = async (id: string) => {
+    if (!window.confirm("Révoquer Premium pour cet utilisateur ?")) return;
+    setBusyId(id);
+    try {
+      await api.revokePremium(id);
+      await load();
+    } catch (err) {
+      alert(userFacingError(err, "Impossible de révoquer Premium."));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
     <>
       <header className="page-header">
         <h2>Utilisateurs</h2>
-        <p>Gestion des rôles et secteurs</p>
+        <p>Gestion des rôles, secteurs et Premium</p>
       </header>
 
       {error && <div className="form-error">{error}</div>}
@@ -102,54 +139,89 @@ export default function UsersPage() {
                     <th>Téléphone</th>
                     <th>Rôle</th>
                     <th>Secteur</th>
+                    <th>Premium</th>
                     <th>Inscription</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="empty">
+                      <td colSpan={6} className="empty">
                         Aucun utilisateur
                       </td>
                     </tr>
                   ) : (
-                    users.map((u) => (
-                      <tr key={u.id}>
-                        <td>{u.pseudo}</td>
-                        <td>{u.phone}</td>
-                        <td>
-                          <select
-                            value={u.role}
-                            onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
-                          >
-                            {ROLES.map((r) => (
-                              <option key={r} value={r}>
-                                {ROLE_LABELS[r]}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            className="inline-input"
-                            value={sectors[u.id] ?? ""}
-                            onChange={(e) =>
-                              setSectors((s) => ({ ...s, [u.id]: e.target.value }))
-                            }
-                            placeholder="Secteur"
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            style={{ marginLeft: 4, padding: "0.35rem 0.5rem" }}
-                            onClick={() => handleSectorSave(u.id)}
-                          >
-                            ✓
-                          </button>
-                        </td>
-                        <td>{new Date(u.created_at).toLocaleDateString("fr-FR")}</td>
-                      </tr>
-                    ))
+                    users.map((u) => {
+                      const active =
+                        u.premium_until &&
+                        new Date(u.premium_until).getTime() > Date.now();
+                      return (
+                        <tr key={u.id}>
+                          <td>{u.pseudo}</td>
+                          <td>{u.phone}</td>
+                          <td>
+                            <select
+                              value={u.role}
+                              onChange={(e) =>
+                                handleRoleChange(u.id, e.target.value as UserRole)
+                              }
+                            >
+                              {ROLES.map((r) => (
+                                <option key={r} value={r}>
+                                  {ROLE_LABELS[r]}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <input
+                              className="inline-input"
+                              value={sectors[u.id] ?? ""}
+                              onChange={(e) =>
+                                setSectors((s) => ({ ...s, [u.id]: e.target.value }))
+                              }
+                              placeholder="Secteur"
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ marginLeft: 4, padding: "0.35rem 0.5rem" }}
+                              onClick={() => handleSectorSave(u.id)}
+                            >
+                              ✓
+                            </button>
+                          </td>
+                          <td>
+                            <div style={{ fontSize: "0.85rem", marginBottom: 4 }}>
+                              {active ? (
+                                <strong>jusqu&apos;au {premiumLabel(u.premium_until)}</strong>
+                              ) : (
+                                premiumLabel(u.premium_until)
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: "0.25rem 0.45rem", marginRight: 4 }}
+                              disabled={busyId === u.id}
+                              onClick={() => handleGrantPremium(u.id)}
+                            >
+                              Accorder
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: "0.25rem 0.45rem" }}
+                              disabled={busyId === u.id || !u.premium_until}
+                              onClick={() => handleRevokePremium(u.id)}
+                            >
+                              Révoquer
+                            </button>
+                          </td>
+                          <td>{new Date(u.created_at).toLocaleDateString("fr-FR")}</td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

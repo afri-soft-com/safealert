@@ -409,7 +409,8 @@ describe("Contacts", () => {
       .get("/api/contacts")
       .set("Authorization", `Bearer ${validToken}`);
     expect(res.status).toBe(200);
-    expect(res.body[0].contact_name).toBe("Marie");
+    expect(res.body.data[0].contact_name).toBe("Marie");
+    expect(res.body.contacts_max).toBeDefined();
   });
 });
 
@@ -644,8 +645,9 @@ describe("History", () => {
       .get("/api/history")
       .set("Authorization", `Bearer ${validToken}`);
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body[0].incident_type).toBe("sos");
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data[0].incident_type).toBe("sos");
+    expect(res.body.history_limit).toBeDefined();
   });
 });
 

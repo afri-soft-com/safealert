@@ -8,6 +8,7 @@ const getOpsQueue = async (req, res) => {
     const queue = await pool.query(`
       SELECT i.id, i.incident_type, i.severity, i.status, i.lat, i.lng, i.zone_name,
              i.created_at, i.acknowledged_at, i.assigned_to, i.assignment_eta,
+             COALESCE(i.priority_boost, false) as priority_boost,
              COALESCE(u.pseudo, 'Anonyme') as reporter,
              a.pseudo as assignee_pseudo,
              EXTRACT(EPOCH FROM (NOW() - i.created_at))::int as age_seconds,
@@ -22,6 +23,7 @@ const getOpsQueue = async (req, res) => {
       WHERE i.status IN ('active','verified','acknowledged','in_progress')
         AND i.severity IN ('alert','danger')
       ORDER BY
+        CASE WHEN COALESCE(i.priority_boost, false) THEN 0 ELSE 1 END,
         CASE i.status WHEN 'active' THEN 0 WHEN 'verified' THEN 1 ELSE 2 END,
         i.created_at ASC
       LIMIT 100

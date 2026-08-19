@@ -28,7 +28,7 @@ export default function HelpPage() {
             <strong>Ops temps réel</strong> — file SOS, délais de prise en charge, export CSV/PDF.
           </li>
           <li>
-            <strong>Utilisateurs</strong> — recherche, attribution de rôle et de secteur.
+            <strong>Utilisateurs</strong> — recherche, attribution de rôle / secteur, accorder ou révoquer Premium.
           </li>
           <li>
             <strong>Partenaires API</strong> — création / révocation de clés API.

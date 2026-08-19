@@ -41,6 +41,7 @@ import 'screens/heatmap_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/admin_screen.dart';
 import 'screens/privacy_screen.dart';
+import 'screens/premium_screen.dart';
 import 'screens/calculator_screen.dart';
 import 'screens/help_manual_screen.dart';
 import 'screens/trip_screen.dart';
@@ -457,6 +458,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         );
       case 'privacy':
         screen = PrivacyScreen(onBack: _goBack);
+      case 'premium':
+        screen = PremiumScreen(onBack: _goBack);
       case 'dashboard':
         screen = DashboardScreen(onNavigate: _navigate, onBack: _onBack);
       case 'history':

@@ -352,6 +352,7 @@ const migrate = async () => {
       ALTER TABLE incidents ADD COLUMN IF NOT EXISTS agent_en_route_at TIMESTAMP WITH TIME ZONE;
       ALTER TABLE incidents ADD COLUMN IF NOT EXISTS agent_last_lat DOUBLE PRECISION;
       ALTER TABLE incidents ADD COLUMN IF NOT EXISTS agent_last_lng DOUBLE PRECISION;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS priority_boost BOOLEAN DEFAULT false;
 
       CREATE TABLE IF NOT EXISTS circle_invites (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

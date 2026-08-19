@@ -21,7 +21,7 @@ Variables `FEATURE_*=true|1|yes` — voir `backend/src/config/features.js`.
 | `FEATURE_OPS_DASHBOARD` | on | File SOS / SLA / busy map |
 | `FEATURE_AUTO_REPORTS` | on | Export PDF/CSV secteur |
 | `FEATURE_PARTNER_WEBHOOKS` | on | Webhooks partenaires |
-| `FEATURE_PREMIUM` | **off** | Stub abonnement (illimité trajets/contacts) |
+| `FEATURE_PREMIUM` | **off** | Free vs Premium (contacts, trajets, historique, priorité SOS) — voir `docs/ECONOMIE.md` |
 | `FEATURE_CONTACT_BACKUP` | on | Backup contacts chiffré côté client |
 | `FEATURE_OFFLINE_QUEUE` | on | File hors-ligne étendue |
 | `FEATURE_CIRCLE_INVITE` | on | Invitation cercle (code / QR / deep link) |
@@ -68,7 +68,7 @@ Après déploiement : `npm run migrate` dans `backend/`.
 
 17. **Webhooks** — `sos` / `incident` / `cancel` + HMAC `X-SafeAlert-Signature`.
 18. **Portail** — admin-web `/portail-partenaire` (clé API).
-19. **Premium stub** — `GET/POST /api/premium/*` ; activer `FEATURE_PREMIUM=true` (pas de Stripe).
+19. **Premium** — entitlements Free/Premium + paywall Flutter + grant admin/test ; Stripe stub optionnel (`STRIPE_*`). Activer `FEATURE_PREMIUM=true`.
 
 ## Tech
 

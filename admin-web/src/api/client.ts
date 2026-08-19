@@ -169,6 +169,18 @@ export const api = {
       body: JSON.stringify({ sector_name }),
     }),
 
+  grantPremium: (user_id: string, days = 30) =>
+    request<{ message: string; user: { id: string; premium_until: string } }>(
+      "/premium/grant",
+      { method: "POST", body: JSON.stringify({ user_id, days }) }
+    ),
+
+  revokePremium: (user_id: string) =>
+    request<{ message: string; user: { id: string; premium_until: string | null } }>(
+      "/premium/revoke",
+      { method: "POST", body: JSON.stringify({ user_id }) }
+    ),
+
   getPartners: () =>
     request<{ data: PartnerRow[] }>("/admin/partners"),
 
@@ -264,6 +276,7 @@ export interface UserRow {
   pseudo: string;
   role: UserRole;
   sector_name: string | null;
+  premium_until?: string | null;
   created_at: string;
   last_seen_at: string | null;
 }

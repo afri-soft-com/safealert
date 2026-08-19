@@ -8,6 +8,7 @@ const { notifyLeadersForSOS } = require("../services/sectorNotify");
 const { findMatchingZones } = require("./trustZoneController");
 const { sendPush } = require("../config/firebase");
 const { sosEnabled, maintenanceMode } = require("../config/features");
+const { getEntitlementsForUser } = require("../services/premiumEntitlements");
 
 const CANCEL_WINDOW_MS = 2 * 60 * 1000;
 
@@ -62,11 +63,13 @@ const triggerSOS = async (req, res) => {
 
   try {
     const zoneName = await resolveZoneName(lat, lng);
+    const ents = await getEntitlementsForUser(req.userId);
+    const priorityBoost = !!ents.sos_priority;
     const result = await pool.query(
-      `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name)
-       VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, 'alert', $8)
+      `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name, priority_boost)
+       VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, 'alert', $8, $9)
        RETURNING *`,
-      [req.userId, incident_type || "sos", lat, lng, lng, lat, description, zoneName]
+      [req.userId, incident_type || "sos", lat, lng, lng, lat, description, zoneName, priorityBoost]
     );
     const incident = result.rows[0];
 

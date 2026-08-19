@@ -12,6 +12,14 @@ type PartnerMe = {
   rate_limit: number;
 };
 
+function partnerPlanLabel(rateLimit: number): string {
+  const n = Math.max(1, Number(rateLimit) || 1000);
+  if (n <= 500) return "Essai (0 USD)";
+  if (n <= 1000) return "Standard (50 USD/mois)";
+  if (n <= 5000) return "Pro (100 USD/mois)";
+  return "Entreprise (sur devis)";
+}
+
 type Delivery = {
   id: string;
   event_type: string;
@@ -123,9 +131,15 @@ export default function PartnerPortalPage() {
                 </div>
               </div>
               <div className="stat-card">
-                <div className="label">Limite de requêtes</div>
+                <div className="label">Plan</div>
+                <div className="value" style={{ fontSize: 16 }}>
+                  {partnerPlanLabel(me.rate_limit)}
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="label">Limite (15 min)</div>
                 <div className="value" style={{ fontSize: 18 }}>
-                  {me.rate_limit}/min
+                  {me.rate_limit}
                 </div>
               </div>
             </div>
