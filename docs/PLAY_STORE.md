@@ -102,3 +102,17 @@ Sur push `main` si `frontend/**` change :
 2. Artifact Actions
 3. Release prerelease `aab-main`
 4. Upload Play **internal** (`status: completed`) si `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` est défini — la version est immédiatement disponible pour les testeurs internes (pas de draft)
+
+L’AAB est aussi toujours sur la release GitHub **`aab-main`**, même si Play refuse le commit.
+
+### Foreground Service (obligatoire après suivi GPS trajet)
+
+Le trajet sécurisé utilise un service Android `location` au premier plan (`FOREGROUND_SERVICE_LOCATION`). Play bloque l’API tant que la déclaration n’est pas faite **une fois** :
+
+1. Play Console → SafeAlert → **Surveillance et amélioration** → **Contenu de l’application** (Policy → App content)
+2. Si le formulaire n’apparaît pas : **Tester → Tests internes → Créer une version**, uploader manuellement l’AAB `aab-main`, enregistrer — le formulaire se débloque
+3. Déclarer : **oui**, type **Location**
+4. Justification (exemple) : *« Suivi GPS d’un trajet sécurisé pour que les contacts d’escorte voient la position en direct. Notification persistante tant que le trajet est actif. »*
+5. Vidéo démo (souvent exigée) : démarrer un trajet, quitter l’écran, montrer la notification « Trajet sécurisé SafeAlert »
+
+Ensuite les uploads CI Play Internal redeviennent automatiques.

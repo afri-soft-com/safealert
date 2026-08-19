@@ -503,6 +503,7 @@ jobs:
 
       - name: Upload to Google Play internal track (optional)
         if: ${{ env.PLAY_JSON != '' }}
+        continue-on-error: true
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
@@ -510,3 +511,6 @@ jobs:
           releaseFiles: frontend/build/app/outputs/bundle/release/app-release.aab
           tracks: internal
           status: completed
+          # Play refuse le commit tant que la déclaration Foreground Service
+          # n'est pas remplie dans la Console (Policy → App content).
+          changesNotSentForReview: true
