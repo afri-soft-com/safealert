@@ -78,7 +78,8 @@ class HelpManualScreen extends StatelessWidget {
                   title: 'Contacts de confiance',
                   children: const [
                     _P('Onglet Confiance → « + Ajouter un contact » : nom et numéro du proche à alerter.'),
-                    _P('Ces personnes reçoivent une notification (avec lieu et coordonnées) lorsque vous déclenchez un SOS.'),
+                    _P('Ces personnes reçoivent une notification sonore (avec lieu et coordonnées) lorsque vous déclenchez un SOS.'),
+                    _P('Alertes SOS (cercle, proximité, groupe, secteur) : son via notification et sirène in-app si l\'app est ouverte — toujours audibles, même en camouflage.'),
                   ],
                 ),
                 _section(
@@ -127,6 +128,7 @@ class HelpManualScreen extends StatelessWidget {
                     _P('Déverrouillage : tapez 1234= sur la calculatrice (appui long sur l\'afficheur pour le rappel).'),
                     _P('Pour désactiver : Paramètres → désactivez le commutateur Camouflage.'),
                     _P('Code de contrainte (optionnel) : envoie une alerte sans ouvrir l\'application.'),
+                    _P('En mode discret, aucune sirène in-app pour les alertes reçues (camouflage). Le SOS discret reste silencieux sur votre appareil.'),
                   ],
                 ),
                 if (_isOps)

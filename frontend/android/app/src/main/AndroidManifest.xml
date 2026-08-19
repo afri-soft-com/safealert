@@ -3,6 +3,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Android 13+ : affichage des notifications push FCM -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- CAMERA: prise de photo optionnelle (preuves témoin). Pas de READ_MEDIA_* :
          image_picker / file_picker utilisent le sélecteur système (politique Play Photo & Video). -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -55,6 +56,10 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/sos_widget_info"/>
         </receiver>
+        <!-- Canal FCM par défaut ; les SOS passent par sos_alerts (sendPush serveur). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="safealert_default" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

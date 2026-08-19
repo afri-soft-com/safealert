@@ -83,7 +83,9 @@ Vous arrivez sur l'**écran d'accueil**.
 - Si la position précise est indisponible, un message indique une **position approximative** — activez le GPS pour plus de précision.
 - Activez la localisation et gardez une batterie suffisante pendant une alerte.
 
-**Notifications** : vos contacts, voisins proches, groupes (si activé) et responsables de secteur voient le **nom du lieu** et les **coordonnées** dans le message d'alerte.
+**Notifications** : vos contacts, voisins proches, groupes (si activé) et responsables de secteur voient le **nom du lieu** et les **coordonnées** dans le message d'alerte. Les alertes SOS (cercle, proximité, groupe, secteur, zone de confiance) sont **toujours sonores** (canal Android haute priorité + sirène in-app si l'application est ouverte).
+
+**Mode discret et son** : le camouflage calculatrice ne mute **pas** les SOS reçus (urgence prioritaire). Seul le SOS discret que **vous** déclenchez (volume / secousse / code contrainte) reste silencieux sur **votre** téléphone.
 
 ### 3.2 Cercle de confiance (contacts)
 
@@ -134,6 +136,8 @@ Pour masquer l'application derrière une calculatrice :
 **Si la calculatrice s'affiche au démarrage** (préférence restée active) : tapez **1234=**, puis désactivez le commutateur dans Paramètres. Appui long sur l'écran de la calculatrice rappelle aussi le code.
 
 **Code de contrainte** (optionnel) : dans Paramètres, configurez un code à 4–8 chiffres **différent** du déverrouillage. Sur la calculatrice, ce code envoie une alerte **sans ouvrir** l'application.
+
+En mode discret, les alertes **reçues** ne jouent pas de sirène dans l'application (voir aussi §3.1 Notifications).
 
 > [À capturer] Écran calculatrice (mode discret)
 

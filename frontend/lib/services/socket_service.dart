@@ -12,12 +12,17 @@ class SocketService {
 
   io.Socket? _socket;
   SosAlertCallback? _onSosAlert;
+  SosAlertCallback? _onSosLive;
   TripEventCallback? _onTripPing;
   TripEventCallback? _onEscortTrip;
   String? _userId;
 
   void setSosAlertHandler(SosAlertCallback? handler) {
     _onSosAlert = handler;
+  }
+
+  void setSosLiveHandler(SosAlertCallback? handler) {
+    _onSosLive = handler;
   }
 
   void setTripHandlers({
@@ -56,7 +61,9 @@ class SocketService {
     });
     _socket!.on('sos_live', (data) {
       if (data is Map) {
-        _onSosAlert?.call(Map<String, dynamic>.from(data));
+        final map = Map<String, dynamic>.from(data);
+        // Live updates must not re-trigger audible SOS
+        (_onSosLive ?? _onSosAlert)?.call(map);
       }
     });
     _socket!.on('trip_ping', (data) {

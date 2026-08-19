@@ -1,7 +1,7 @@
 name: safealert
 description: "SafeAlert - Application de Sécurité Citoyenne"
 publish_to: 'none'
-version: 1.0.2+20
+version: 1.0.3+21
 
 environment:
   sdk: ^3.8.1
@@ -31,6 +31,8 @@ dependencies:
   firebase_core: ^2.24.2
   firebase_messaging: ^14.7.10
   firebase_crashlytics: ^3.4.9
+  flutter_local_notifications: ^20.1.0
+  audioplayers: ^6.6.0
   socket_io_client: ^3.1.2
   url_launcher: ^6.3.0
   sensors_plus: ^6.0.0
@@ -93,6 +95,7 @@ flutter:
     - assets/branding/splash.png
     - assets/branding/logo.png
     - assets/branding/app-icon.png
+    - assets/sounds/sos_alert.wav
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

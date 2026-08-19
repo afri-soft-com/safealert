@@ -209,6 +209,20 @@ Il n’y a **pas** d’endpoint HTTP dédié « test push » : l’envoi passe p
 | Erreur « legacy server key » | Ne pas utiliser la Server key ; utiliser le compte de service Admin |
 | Token null (émulateur) | Utiliser un appareil physique avec Play Services |
 | Push iOS non reçues | Clé APNs (.p8) téléversée dans Firebase → Cloud Messaging |
+| SOS sans son | Vérifier canal Android `sos_alerts` + asset `res/raw/sos_alert.wav` ; réinstaller l’app après création du canal |
+
+---
+
+## Canaux Android (sons)
+
+| Canal | Usage | Son |
+|-------|--------|-----|
+| `sos_alerts` | `sos_alert`, `nearby_alert`, `group_sos`, `sector_sos`, `trust_zone_alert`, `safety_ping_*` | `sos_alert` (raw) + importance max |
+| `safealert_default` | Autres push | son système par défaut |
+
+Créés au démarrage Flutter (`AlertSoundService`). Le backend envoie `android.notification.channelId` via `sendPush`.
+
+**Mode camouflage** : avec le mode discret actif, **pas de sirène in-app** pour les alertes reçues (ni son sur la notif locale en avant-plan). Le SOS discret **émis** (volume/secousse/contrainte) reste silencieux sur l’émetteur. Les bannières FCM système en arrière-plan peuvent encore utiliser le canal `sos_alerts` selon les réglages Android.
 
 ---
 
@@ -219,8 +233,11 @@ Il n’y a **pas** d’endpoint HTTP dédié « test push » : l’envoi passe p
 | `frontend/android/app/google-services.json` | Config Android Firebase |
 | `frontend/ios/Runner/GoogleService-Info.plist` | Config iOS Firebase |
 | `frontend/lib/firebase_options.dart` | Options Flutter |
-| `frontend/lib/services/fcm_service.dart` | Init FCM + upload token |
-| `backend/src/config/firebase.js` | Admin SDK + `sendPush` |
+| `frontend/lib/services/fcm_service.dart` | Init FCM + upload token + son SOS |
+| `frontend/lib/services/alert_sound_service.dart` | Player + canaux locaux |
+| `frontend/assets/sounds/sos_alert.wav` | Sirène in-app |
+| `frontend/android/app/src/main/res/raw/sos_alert.wav` | Son canal Android |
+| `backend/src/config/firebase.js` | Admin SDK + `sendPush` (canal SOS) |
 | `backend/.env.example` / `.env.production.example` | Variables |
 | `render.yaml` | Déclare `FCM_*` (valeurs dans le dashboard) |
 

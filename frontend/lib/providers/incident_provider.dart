@@ -1,6 +1,7 @@
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/alert_sound_service.dart';
 import '../services/api_service.dart';
 import '../services/app_config_service.dart';
 import '../services/local_database.dart';
@@ -17,6 +18,7 @@ class IncidentProvider extends ChangeNotifier {
       : _api = apiService ?? ApiService(),
         _cache = localDatabase ?? LocalDatabase() {
     SocketService().setSosAlertHandler(handleSosAlert);
+    SocketService().setSosLiveHandler(handleSosLive);
   }
   List<Map<String, dynamic>> _incidents = [];
   Map<String, dynamic>? _stats;
@@ -34,7 +36,15 @@ class IncidentProvider extends ChangeNotifier {
 
   void handleSosAlert(Map<String, dynamic> alert) {
     _lastSosAlert = alert;
+    // SOS entrant (cercle / carte) : toujours audible
+    AlertSoundService().playSosAlert();
     fetchIncidents();
+  }
+
+  /// Mises à jour live (batterie / position) — pas de sirène.
+  void handleSosLive(Map<String, dynamic> alert) {
+    _lastSosAlert = alert;
+    notifyListeners();
   }
 
   Future<void> fetchIncidents({
@@ -207,6 +217,7 @@ class IncidentProvider extends ChangeNotifier {
       if (description != null) 'description': description,
       if (battery != null) 'battery': battery,
     };
+    final isDiscrete = (type ?? 'sos') == 'sos_discret';
     try {
       if (pos != null) {
         await LocationService().updatePosition(useLat, useLng);
@@ -218,6 +229,12 @@ class IncidentProvider extends ChangeNotifier {
       } else if (resolved.source == 'none') {
         res['positionNote'] =
             'GPS indisponible — le serveur a utilisé votre dernière position enregistrée si elle existe.';
+      }
+      // SOS in-app : sirène sauf déclenchement discret (émetteur silencieux)
+      if (isDiscrete) {
+        await AlertSoundService().feedbackDiscreteSosTrigger();
+      } else {
+        await AlertSoundService().playSosAlert();
       }
       return res;
     } catch (e) {
@@ -236,6 +253,11 @@ class IncidentProvider extends ChangeNotifier {
       notifyListeners();
       // Optional SMS fallback if we have trust contacts cached
       await _trySmsFallback(payload);
+      if (isDiscrete) {
+        await AlertSoundService().feedbackDiscreteSosTrigger();
+      } else {
+        await AlertSoundService().playSosAlert();
+      }
       return {
         'queued': true,
         'message': 'Alerte enregistrée hors ligne — envoi automatique dès que le réseau revient',
