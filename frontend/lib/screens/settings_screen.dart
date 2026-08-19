@@ -408,7 +408,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               children: [
                                 const Text('Camouflage calculatrice', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bleuFonce)),
                                 Text(
-                                  'Désactivé par défaut. Code : $kDiscreetUnlockCode. Les SOS entrants restent toujours sonores.',
+                                  'Désactivé par défaut. Code : $kDiscreetUnlockCode. En mode discret : pas de sirène in-app pour les alertes reçues.',
                                   style: const TextStyle(fontSize: 10, color: AppColors.gris),
                                 ),
                               ],

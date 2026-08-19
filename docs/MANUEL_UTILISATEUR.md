@@ -83,9 +83,9 @@ Vous arrivez sur l'**écran d'accueil**.
 - Si la position précise est indisponible, un message indique une **position approximative** — activez le GPS pour plus de précision.
 - Activez la localisation et gardez une batterie suffisante pendant une alerte.
 
-**Notifications** : vos contacts, voisins proches, groupes (si activé) et responsables de secteur voient le **nom du lieu** et les **coordonnées** dans le message d'alerte. Les alertes SOS (cercle, proximité, groupe, secteur, zone de confiance) sont **toujours sonores** (canal Android haute priorité + sirène in-app si l'application est ouverte).
+**Notifications** : vos contacts, voisins proches, groupes (si activé) et responsables de secteur voient le **nom du lieu** et les **coordonnées** dans le message d'alerte. Les alertes critiques (SOS, proximité, groupe, secteur, contrôle « Tu es OK ? ») sont **sonores** (canal Android haute priorité + son in-app si l'application est ouverte).
 
-**Mode discret et son** : le camouflage calculatrice ne mute **pas** les SOS reçus (urgence prioritaire). Seul le SOS discret que **vous** déclenchez (volume / secousse / code contrainte) reste silencieux sur **votre** téléphone.
+**Mode discret et son** : avec le **camouflage calculatrice** actif, SafeAlert **n'émet pas** de sirène in-app pour les alertes entrantes (pour ne pas attirer l'attention). Le SOS discret (volume / secousse / code contrainte) reste silencieux sur **votre** téléphone. Les bannières système en arrière-plan peuvent encore sonner selon les réglages Android du canal d'alerte.
 
 ### 3.2 Cercle de confiance (contacts)
 
