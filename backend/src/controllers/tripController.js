@@ -16,11 +16,6 @@ const PUBLIC_BASE =
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const PUBLIC_BASE =
-  process.env.PUBLIC_APP_URL ||
-  process.env.API_PUBLIC_URL ||
-  "https://safealert-api.onrender.com";
-
 const assertTripEnabled = (res) => {
   if (!safeTrip()) {
     res.status(503).json({ error: "Trajet sécurisé désactivé" });

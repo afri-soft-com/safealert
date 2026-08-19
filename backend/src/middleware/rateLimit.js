@@ -116,7 +116,7 @@ const sosLimiter = rateLimit({
   legacyHeaders: false,
   skip: skipInTest,
   keyGenerator: (req) => String(req.userId || req.ip || "anon"),
-  validate: { keyGeneratorIpFallback: false },
+  validate: { ip: false },
   store: new RedisRateLimitStore({ prefix: "rl:sos:", windowMs: WINDOW_15M }),
 });
 
