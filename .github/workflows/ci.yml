@@ -511,6 +511,3 @@ jobs:
           releaseFiles: frontend/build/app/outputs/bundle/release/app-release.aab
           tracks: internal
           status: completed
-          # Play refuse le commit tant que la déclaration Foreground Service
-          # n'est pas remplie dans la Console (Policy → App content).
-          changesNotSentForReview: true
