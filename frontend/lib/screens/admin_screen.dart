@@ -113,6 +113,8 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           TopBar(title: 'Administration', onBackTap: widget.onBack),
           TabBar(
             controller: _tabs,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
             labelColor: AppColors.bleuFonce,
             unselectedLabelColor: AppColors.gris,
             indicatorColor: AppColors.bleuFonce,

@@ -109,6 +109,18 @@ void main() {
           },
         ],
       });
+      fakeApi.onGet('/admin/premium?page=1&limit=20&status=all', () => {
+        'data': [
+          {
+            'id': 'u2',
+            'pseudo': 'Abonné avec un nom très long pour tester le débordement',
+            'phone': '+243811234567',
+            'premium_until': DateTime.now().add(const Duration(days: 20)).toIso8601String(),
+          },
+        ],
+        'total': 1,
+        'page': 1,
+      });
 
       // Seed admin session without checkAuth() (avoids socket/location timers in tests).
       final auth = AuthProvider(apiService: fakeApi);
@@ -139,8 +151,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(tester.takeException(), isNull);
 
-      // Partners tab also has long names — switch and re-check.
-      await tester.tap(find.text('Partenaires API'));
+      // Other tabs also have long names — switch and re-check.
+      await tester.tap(find.text('Abonnements'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Partenaires'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });
