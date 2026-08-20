@@ -43,12 +43,17 @@ const KNOWN: Record<string, string> = {
   "invalid api key": "Clé API invalide ou expirée.",
   "invalid or inactive api key": "Clé API invalide ou expirée.",
   "partner not found": "Partenaire introuvable.",
+  "erreur serveur": "Une erreur est survenue. Réessayez.",
+  feature_premium: "Cette fonction n'est pas encore disponible.",
+  feature_: "Cette fonction n'est pas encore disponible.",
+  "internal server": "Une erreur est survenue. Réessayez.",
 };
 
 export function looksTechnical(message: string): boolean {
   const m = message.trim();
   if (!m) return true;
   if (TECHNICAL.test(m)) return true;
+  if (/FEATURE_[A-Z0-9_]+/.test(m)) return true;
   if (/^erreur\s+\d{3}$/i.test(m)) return true;
   return false;
 }

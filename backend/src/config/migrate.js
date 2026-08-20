@@ -151,7 +151,7 @@ const migrate = async () => {
         CHECK (status IN ('active','verified','resolved','false_alarm','acknowledged','in_progress'));
       ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
       ALTER TABLE users ADD CONSTRAINT users_role_check
-        CHECK (role IN ('citizen','leader','agent','platform_admin'));
+        CHECK (role IN ('citizen','leader','agent','admin','platform_admin'));
       ALTER TABLE neighborhood_groups ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT true;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS sos_notify_groups BOOLEAN DEFAULT true;
     `);
@@ -456,6 +456,18 @@ const migrate = async () => {
             ST_SetSRID(ST_MakePoint(15.340, -4.380), 4326)::geography, 'Limete', 'Axe fréquenté')
       `);
     }
+
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+      ALTER TABLE users ADD CONSTRAINT users_role_check
+        CHECK (role IN ('citizen','leader','agent','admin','platform_admin'));
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key VARCHAR(80) PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT '',
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
 
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;
     if (adminPhone) {

@@ -47,7 +47,7 @@ class _LeaderScreenState extends State<LeaderScreen> {
         Uri.parse(url),
         headers: {'Authorization': 'Bearer $token'},
       );
-      if (res.statusCode != 200) throw Exception('Erreur serveur');
+      if (res.statusCode != 200) throw Exception('Impossible de télécharger le rapport.');
 
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/rapport-incidents-${DateTime.now().toIso8601String().split('T')[0]}.pdf');

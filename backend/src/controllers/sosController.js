@@ -198,7 +198,7 @@ const cancelSOS = async (req, res) => {
     });
   } catch (err) {
     console.error("cancelSOS error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -252,7 +252,7 @@ const cancelLatestSOS = async (req, res) => {
     });
   } catch (err) {
     console.error("cancelLatestSOS error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -265,7 +265,7 @@ const getMyAlerts = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("getMyAlerts error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

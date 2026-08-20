@@ -20,16 +20,18 @@ class AdminScreen extends StatefulWidget {
 class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStateMixin {
   late TabController _tabs;
   final _partnerNameCtrl = TextEditingController();
+  final _grantQueryCtrl = TextEditingController();
   final Map<String, TextEditingController> _sectorCtrls = {};
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final p = context.read<AdminProvider>();
       p.fetchUsers();
       p.fetchPartners();
+      p.fetchSubscriptions();
     });
   }
 
@@ -37,6 +39,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   void dispose() {
     _tabs.dispose();
     _partnerNameCtrl.dispose();
+    _grantQueryCtrl.dispose();
     for (final c in _sectorCtrls.values) {
       c.dispose();
     }
@@ -96,7 +99,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     if (!auth.canAccessAdmin) {
       return AccessDeniedView(
         title: 'Accès réservé',
-        message: 'Cette zone est réservée aux administrateurs plateforme.',
+        message: 'Cette zone est réservée aux administrateurs.',
         onBack: widget.onBack,
       );
     }
@@ -118,7 +121,8 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             labelPadding: const EdgeInsets.symmetric(horizontal: 8),
             tabs: const [
               Tab(text: 'Utilisateurs'),
-              Tab(text: 'Partenaires API'),
+              Tab(text: 'Abonnements'),
+              Tab(text: 'Partenaires'),
             ],
           ),
           if (p.error != null)
@@ -132,8 +136,9 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             child: TabBarView(
               controller: _tabs,
               children: [
-                _buildUsersTab(p),
-                _buildPartnersTab(p),
+                _buildUsersTab(p, auth),
+                _buildSubscriptionsTab(p),
+                _buildPartnersTab(p, auth.isPlatformAdmin),
               ],
             ),
           ),
@@ -143,7 +148,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildUsersTab(AdminProvider p) {
+  Widget _buildUsersTab(AdminProvider p, AuthProvider auth) {
     if (p.loadingUsers) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -155,16 +160,25 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       child: ListView.builder(
         padding: const EdgeInsets.all(12),
         itemCount: p.users.length,
-        itemBuilder: (ctx, i) => _userTile(p, p.users[i]),
+        itemBuilder: (ctx, i) => _userTile(p, auth, p.users[i]),
       ),
     );
   }
 
-  Widget _userTile(AdminProvider p, Map<String, dynamic> user) {
+  Widget _userTile(AdminProvider p, AuthProvider auth, Map<String, dynamic> user) {
     final id = user['id'] as String;
     final role = user['role'] as String? ?? 'citizen';
     final sector = user['sector_name'] as String? ?? '';
     final sectorCtrl = _sectorController(id, sector);
+    final isActive = user['is_active'] != false;
+    final roleChoices = auth.isPlatformAdmin
+        ? AdminProvider.roleLabels
+        : {
+            UserRoles.citizen: UserRoles.labels[UserRoles.citizen]!,
+            UserRoles.leader: UserRoles.labels[UserRoles.leader]!,
+            UserRoles.agent: UserRoles.labels[UserRoles.agent]!,
+            if (AdminProvider.roleLabels.containsKey(role)) role: AdminProvider.roleLabels[role]!,
+          };
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -190,8 +204,8 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                   child: DropdownButton<String>(
                     isExpanded: true,
                     isDense: true,
-                    value: AdminProvider.roleLabels.containsKey(role) ? role : 'citizen',
-                    items: AdminProvider.roleLabels.entries
+                    value: roleChoices.containsKey(role) ? role : 'citizen',
+                    items: roleChoices.entries
                         .map((e) => DropdownMenuItem(
                               value: e.key,
                               child: Text(
@@ -202,7 +216,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                               ),
                             ))
                         .toList(),
-                    selectedItemBuilder: (ctx) => AdminProvider.roleLabels.entries
+                    selectedItemBuilder: (ctx) => roleChoices.entries
                         .map((e) => Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
@@ -272,12 +286,164 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
               ),
             ],
           ),
+          if (auth.isPlatformAdmin) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (dlg) => AlertDialog(
+                      title: Text(isActive ? 'Désactiver ce compte ?' : 'Réactiver ce compte ?',
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                      content: Text(
+                        isActive
+                            ? 'La personne ne pourra plus se connecter.'
+                            : 'Le compte pourra à nouveau se connecter.',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(dlg, false), child: const Text('Annuler')),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(dlg, true),
+                          child: Text(isActive ? 'Désactiver' : 'Activer'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (ok == true && mounted) {
+                    await p.setUserActive(id, !isActive);
+                  }
+                },
+                child: Text(
+                  isActive ? 'Désactiver le compte' : 'Activer le compte',
+                  style: TextStyle(fontSize: 11, color: isActive ? AppColors.rouge : AppColors.vert),
+                ),
+              ),
+            ),
+          ] else if (!isActive)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text('Compte inactif', style: TextStyle(fontSize: 11, color: AppColors.rouge)),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildPartnersTab(AdminProvider p) {
+  Widget _buildSubscriptionsTab(AdminProvider p) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _grantQueryCtrl,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    labelText: 'Téléphone ou pseudo',
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () async {
+                  final q = _grantQueryCtrl.text.trim();
+                  if (q.isEmpty) return;
+                  final ok = await p.grantPremiumByQuery(q);
+                  if (!mounted) return;
+                  if (ok) {
+                    _grantQueryCtrl.clear();
+                    showAppSnackBar(context, 'Abonnement accordé (30 jours).');
+                  } else {
+                    showAppSnackBar(
+                      context,
+                      p.error ?? "Impossible d'accorder l'abonnement.",
+                      isError: true,
+                      fallback: "Impossible d'accorder l'abonnement.",
+                    );
+                  }
+                },
+                child: const Text('Accorder 30 j', style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: p.loadingSubs
+              ? const Center(child: CircularProgressIndicator())
+              : p.subscriptions.isEmpty
+                  ? const Center(
+                      child: Text('Aucun abonnement', style: TextStyle(fontSize: 12, color: AppColors.gris)))
+                  : RefreshIndicator(
+                      onRefresh: () => p.fetchSubscriptions(page: p.subsPage),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: p.subscriptions.length,
+                        itemBuilder: (ctx, i) {
+                          final row = p.subscriptions[i];
+                          final until = row['premium_until'] as String?;
+                          DateTime? d;
+                          if (until != null) d = DateTime.tryParse(until);
+                          final active = d != null && d.isAfter(DateTime.now());
+                          final id = row['id'] as String? ?? '';
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.blanc,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFEEEEEE)),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(row['pseudo'] as String? ?? '—',
+                                          style: const TextStyle(
+                                              fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
+                                      Text(row['phone'] as String? ?? '',
+                                          style: const TextStyle(fontSize: 10, color: AppColors.gris)),
+                                      Text(
+                                        d == null
+                                            ? '—'
+                                            : (active
+                                                ? 'Actif jusqu\'au ${d.day}/${d.month}/${d.year}'
+                                                : 'Expiré le ${d.day}/${d.month}/${d.year}'),
+                                        style: TextStyle(
+                                            fontSize: 11, color: active ? AppColors.vert : AppColors.gris),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () => p.grantPremium(id),
+                                  child: const Text('Prolonger', style: TextStyle(fontSize: 11)),
+                                ),
+                                TextButton(
+                                  onPressed: () => p.revokePremium(id),
+                                  child: const Text('Révoquer',
+                                      style: TextStyle(fontSize: 11, color: AppColors.rouge)),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPartnersTab(AdminProvider p, bool canManagePartners) {
     return Column(
       children: [
         Padding(
@@ -301,7 +467,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _showNewPartnerDialog,
+              onPressed: canManagePartners ? _showNewPartnerDialog : null,
               icon: const Icon(Icons.add, size: 16),
               label: const Text(
                 'Créer une clé partenaire',
@@ -366,7 +532,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
                                     ),
                                   ),
                                   const SizedBox(width: 4),
-                                  if (active)
+                                  if (active && canManagePartners)
                                     TextButton(
                                       onPressed: () async {
                                         final name = partner['partner_name'] as String? ?? 'ce partenaire';

@@ -147,7 +147,7 @@ const requestCode = async (req, res) => {
     return res.json(payload);
   } catch (err) {
     console.error("requestCode error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -226,7 +226,7 @@ const verifyCode = async (req, res) => {
     });
   } catch (err) {
     console.error("verifyCode error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -242,7 +242,7 @@ const getProfile = async (req, res) => {
     return res.json(result.rows[0]);
   } catch (err) {
     console.error("getProfile error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -263,7 +263,7 @@ const updateProfile = async (req, res) => {
     return res.json(result.rows[0]);
   } catch (err) {
     console.error("updateProfile error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -289,7 +289,7 @@ const updatePosition = async (req, res) => {
     return res.json({ message: "Position mise à jour" });
   } catch (err) {
     console.error("updatePosition error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -322,7 +322,7 @@ const updateFCMToken = async (req, res) => {
     return res.json({ message: "Token mis à jour", deviceId });
   } catch (err) {
     console.error("updateFCMToken error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -339,7 +339,7 @@ const listDevices = async (req, res) => {
     return res.json({ data: result.rows });
   } catch (err) {
     console.error("listDevices error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -378,7 +378,7 @@ const revokeAllSessions = async (req, res) => {
     });
   } catch (err) {
     console.error("revokeAllSessions error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -397,7 +397,7 @@ const revokeDevice = async (req, res) => {
     return res.json({ message: "Appareil déconnecté" });
   } catch (err) {
     console.error("revokeDevice error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -411,7 +411,7 @@ const deleteAccount = async (req, res) => {
     return res.json({ message: "Compte supprimé" });
   } catch (err) {
     console.error("deleteAccount error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

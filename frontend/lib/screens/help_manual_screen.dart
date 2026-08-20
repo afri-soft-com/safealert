@@ -14,8 +14,12 @@ class HelpManualScreen extends StatelessWidget {
   });
 
   bool get _isOps =>
-      role == UserRoles.leader || role == UserRoles.agent || role == UserRoles.platformAdmin;
-  bool get _isAdmin => role == UserRoles.platformAdmin;
+      role == UserRoles.leader ||
+      role == UserRoles.agent ||
+      role == UserRoles.admin ||
+      role == UserRoles.platformAdmin;
+  bool get _isAdmin =>
+      role == UserRoles.admin || role == UserRoles.platformAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -147,13 +151,13 @@ class HelpManualScreen extends StatelessWidget {
                 if (_isAdmin)
                   _section(
                     icon: Icons.admin_panel_settings_outlined,
-                    title: 'Administration plateforme',
+                    title: 'Administration',
                     children: const [
                       _P('Accueil ou Paramètres → Administration.'),
-                      _P('Utilisateurs : changer le rôle (citoyen, responsable, agent, admin) et attribuer un secteur.'),
-                      _P('Partenaires API : créer une clé pour une organisation externe, puis la révoquer si besoin.'),
-                      _P('Conservez les clés API hors de l\'application mobile ; ne les partagez pas publiquement.'),
-                      _P('Console web : tableau de bord, ops temps réel, annuaire d\'urgence, incidents et groupes.'),
+                      _P('Utilisateurs : changer le rôle et attribuer un secteur. Super administrateur : nommer un admin et activer ou désactiver un compte.'),
+                      _P('Abonnements : accorder, prolonger ou révoquer Premium.'),
+                      _P('Partenaires API (super administrateur) : créer ou révoquer une clé pour une organisation externe.'),
+                      _P('Console web : tableau de bord, abonnements, ops, annuaire, incidents, groupes et mode maintenance.'),
                     ],
                   ),
                 _section(
@@ -163,7 +167,7 @@ class HelpManualScreen extends StatelessWidget {
                     const _P('Citoyen : SOS, contacts, carte, groupes, trajets, signalements.'),
                     const _P('Responsable : en plus, Mode responsable pour gérer les incidents du secteur.'),
                     const _P('Agent : même accès responsable, filtré par secteur assigné.'),
-                    const _P('Administrateur plateforme : gestion des utilisateurs, rôles et partenaires.'),
+                    const _P('Administrateur et super administrateur : utilisateurs, abonnements et rôles. Super administrateur : partenaires API, activation des comptes et mode maintenance.'),
                     _P('Votre profil actuel : $roleLabel.'),
                   ],
                 ),

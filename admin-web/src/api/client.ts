@@ -4,7 +4,15 @@ export const API_BASE =
 const TOKEN_KEY = "safealert_admin_token";
 const USER_KEY = "safealert_admin_user";
 
-export type UserRole = "citizen" | "leader" | "agent" | "platform_admin";
+export type UserRole = "citizen" | "leader" | "agent" | "admin" | "platform_admin";
+
+export function isStaffRole(role?: string | null): boolean {
+  return role === "admin" || role === "platform_admin";
+}
+
+export function isSuperAdmin(role?: string | null): boolean {
+  return role === "platform_admin";
+}
 
 export interface AuthUser {
   id: string;
@@ -146,6 +154,26 @@ export const api = {
 
   getProfile: () => request<AuthUser>("/auth/profile"),
 
+  getAppConfig: () =>
+    request<{
+      maintenance: boolean;
+      sosEnabled: boolean;
+      maintenanceBanner: string;
+    }>("/app/config"),
+
+  getSettings: () =>
+    request<{
+      maintenance: boolean;
+      maintenance_message: string;
+      is_super_admin: boolean;
+    }>("/admin/settings"),
+
+  setMaintenance: (enabled: boolean, message?: string) =>
+    request<{ maintenance: boolean; maintenance_message: string }>(
+      "/admin/settings/maintenance",
+      { method: "PUT", body: JSON.stringify({ enabled, message }) }
+    ),
+
   getUsers: (page = 1, limit = 20, q = "") => {
     const params = new URLSearchParams({
       page: String(page),
@@ -167,6 +195,12 @@ export const api = {
     request<UserRow>(`/admin/users/${id}/sector`, {
       method: "PATCH",
       body: JSON.stringify({ sector_name }),
+    }),
+
+  setUserActive: (id: string, is_active: boolean) =>
+    request<UserRow>(`/admin/users/${id}/active`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active }),
     }),
 
   grantPremium: (user_id: string, days = 30) =>
@@ -308,6 +342,7 @@ export interface UserRow {
   premium_until?: string | null;
   created_at: string;
   last_seen_at: string | null;
+  is_active?: boolean;
 }
 
 export interface PartnerRow {
@@ -386,7 +421,8 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   citizen: "Citoyen",
   leader: "Responsable",
   agent: "Agent",
-  platform_admin: "Admin plateforme",
+  admin: "Administrateur",
+  platform_admin: "Super administrateur",
 };
 
 export const INCIDENT_STATUS_LABELS: Record<string, string> = {

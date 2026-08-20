@@ -28,7 +28,7 @@ const authenticatePartner = async (req, res, next) => {
     return enforcePartnerRateLimit(req, res, next);
   } catch (err) {
     console.error("partnerAuth error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

@@ -75,7 +75,7 @@ const createCheckIn = async (req, res) => {
     return res.status(201).json({ check_in: result.rows[0], notification: notify });
   } catch (err) {
     console.error("createCheckIn error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -88,7 +88,7 @@ const listMyCheckIns = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("listMyCheckIns error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

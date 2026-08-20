@@ -3,8 +3,15 @@ const { generateApiKey } = require("../middleware/partnerAuth");
 const { writeAudit } = require("../services/audit");
 const { premium } = require("../config/features");
 const { PRICING } = require("../services/premiumEntitlements");
+const { fail } = require("../utils/httpError");
+const {
+  getMaintenance,
+  setMaintenance,
+  isSuperAdmin,
+} = require("../services/appSettings");
 
-const VALID_ROLES = ["citizen", "leader", "agent", "platform_admin"];
+const VALID_ROLES = ["citizen", "leader", "agent", "admin", "platform_admin"];
+const STAFF_ASSIGNABLE = ["citizen", "leader", "agent", "admin"];
 
 const clientIp = (req) =>
   req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || req.ip;
@@ -30,7 +37,8 @@ const listUsers = async (req, res) => {
     const limitIdx = params.length - 1;
     const offsetIdx = params.length;
     const result = await pool.query(
-      `SELECT id, phone, pseudo, role, sector_name, premium_until, created_at, last_seen_at
+      `SELECT id, phone, pseudo, role, sector_name, premium_until, created_at, last_seen_at,
+              COALESCE(is_active, true) AS is_active
        FROM users ${where}
        ORDER BY created_at DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -43,8 +51,7 @@ const listUsers = async (req, res) => {
       total: countRes.rows[0].total,
     });
   } catch (err) {
-    console.error("listUsers error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return fail(res, err, "Impossible de charger les utilisateurs.");
   }
 };
 
@@ -54,17 +61,33 @@ const updateUserRole = async (req, res) => {
   if (!role || !VALID_ROLES.includes(role)) {
     return res.status(400).json({ error: "Rôle invalide" });
   }
-  if (id === req.userId && role !== "platform_admin") {
-    return res.status(400).json({ error: "Vous ne pouvez pas retirer votre propre rôle admin" });
+  if (id === req.userId && role !== req.userRole) {
+    return res.status(400).json({ error: "Vous ne pouvez pas modifier votre propre rôle." });
+  }
+
+  const superAdmin = isSuperAdmin(req.userRole);
+  if (!superAdmin) {
+    if (!STAFF_ASSIGNABLE.slice(0, 3).includes(role)) {
+      return res.status(403).json({ error: "Seul le super administrateur peut nommer un admin." });
+    }
+  }
+  if (role === "platform_admin" && !superAdmin) {
+    return res.status(403).json({ error: "Accès non autorisé pour votre profil." });
   }
 
   try {
+    if (!superAdmin) {
+      const target = await pool.query(`SELECT role FROM users WHERE id = $1`, [id]);
+      if (target.rows[0] && ["admin", "platform_admin"].includes(target.rows[0].role)) {
+        return res.status(403).json({ error: "Vous ne pouvez pas modifier ce compte." });
+      }
+    }
     const result = await pool.query(
       `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2
-       RETURNING id, phone, pseudo, role, sector_name`,
+       RETURNING id, phone, pseudo, role, sector_name, COALESCE(is_active, true) AS is_active`,
       [role, id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur non trouvé" });
+    if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable." });
     await writeAudit({
       actorId: req.userId,
       action: "user.role.update",
@@ -75,8 +98,33 @@ const updateUserRole = async (req, res) => {
     });
     return res.json(result.rows[0]);
   } catch (err) {
-    console.error("updateUserRole error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return fail(res, err, "Impossible de modifier le rôle.");
+  }
+};
+
+const setUserActive = async (req, res) => {
+  const { id } = req.params;
+  const active = req.body.is_active !== false && req.body.active !== false;
+  if (id === req.userId && !active) {
+    return res.status(400).json({ error: "Vous ne pouvez pas désactiver votre propre compte." });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2
+       RETURNING id, phone, pseudo, role, COALESCE(is_active, true) AS is_active`,
+      [active, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable." });
+    await writeAudit({
+      actorId: req.userId,
+      action: active ? "user.activate" : "user.deactivate",
+      entityType: "user",
+      entityId: id,
+      ip: clientIp(req),
+    });
+    return res.json(result.rows[0]);
+  } catch (err) {
+    return fail(res, err, "Impossible de mettre à jour le compte.");
   }
 };
 
@@ -91,7 +139,7 @@ const updateUserSector = async (req, res) => {
        RETURNING id, phone, pseudo, role, sector_name`,
       [value, id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur non trouvé" });
+    if (result.rows.length === 0) return res.status(404).json({ error: "Utilisateur introuvable." });
     await writeAudit({
       actorId: req.userId,
       action: "user.sector.update",
@@ -102,8 +150,41 @@ const updateUserSector = async (req, res) => {
     });
     return res.json(result.rows[0]);
   } catch (err) {
-    console.error("updateUserSector error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return fail(res, err, "Impossible de mettre à jour le secteur.");
+  }
+};
+
+const getSettings = async (req, res) => {
+  try {
+    const maintenance = await getMaintenance();
+    return res.json({
+      maintenance: maintenance.maintenance,
+      maintenance_message: maintenance.message,
+      is_super_admin: isSuperAdmin(req.userRole),
+    });
+  } catch (err) {
+    return fail(res, err, "Impossible de charger les réglages.");
+  }
+};
+
+const setMaintenanceSetting = async (req, res) => {
+  const enabled = req.body.enabled === true || req.body.maintenance === true;
+  const message = typeof req.body.message === "string" ? req.body.message : undefined;
+  try {
+    const maintenance = await setMaintenance({ enabled, message });
+    await writeAudit({
+      actorId: req.userId,
+      action: enabled ? "settings.maintenance.on" : "settings.maintenance.off",
+      entityType: "app_settings",
+      entityId: "maintenance_mode",
+      ip: clientIp(req),
+    });
+    return res.json({
+      maintenance: maintenance.maintenance,
+      maintenance_message: maintenance.message,
+    });
+  } catch (err) {
+    return fail(res, err, "Impossible de modifier le mode maintenance.");
   }
 };
 
@@ -116,7 +197,7 @@ const listPartners = async (req, res) => {
     return res.json({ data: result.rows });
   } catch (err) {
     console.error("listPartners error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -147,7 +228,7 @@ const createPartner = async (req, res) => {
     });
   } catch (err) {
     console.error("createPartner error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -169,7 +250,7 @@ const revokePartner = async (req, res) => {
     return res.json({ message: "Clé révoquée", partner: result.rows[0] });
   } catch (err) {
     console.error("revokePartner error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -194,7 +275,7 @@ const getStats = async (req, res) => {
     });
   } catch (err) {
     console.error("getStats error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -254,7 +335,7 @@ const listPremiumSubscriptions = async (req, res) => {
     });
   } catch (err) {
     console.error("listPremiumSubscriptions error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -266,7 +347,7 @@ const listEmergencyNumbers = async (req, res) => {
     return res.json({ data: result.rows });
   } catch (err) {
     console.error("listEmergencyNumbers error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -300,7 +381,7 @@ const createEmergencyNumber = async (req, res) => {
     return res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("createEmergencyNumber error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -339,7 +420,7 @@ const updateEmergencyNumber = async (req, res) => {
     return res.json(result.rows[0]);
   } catch (err) {
     console.error("updateEmergencyNumber error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -360,7 +441,7 @@ const deleteEmergencyNumber = async (req, res) => {
     return res.json({ message: "Numéro supprimé", id: result.rows[0].id });
   } catch (err) {
     console.error("deleteEmergencyNumber error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -420,7 +501,7 @@ const listIncidents = async (req, res) => {
     });
   } catch (err) {
     console.error("listIncidents error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -448,7 +529,7 @@ const listGroups = async (req, res) => {
     });
   } catch (err) {
     console.error("listGroups error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -502,14 +583,17 @@ const listAuditLogs = async (req, res) => {
     });
   } catch (err) {
     console.error("listAuditLogs error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
 module.exports = {
   listUsers,
   updateUserRole,
+  setUserActive,
   updateUserSector,
+  getSettings,
+  setMaintenanceSetting,
   listPartners,
   createPartner,
   revokePartner,

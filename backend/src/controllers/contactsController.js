@@ -21,7 +21,7 @@ const getContacts = async (req, res) => {
     });
   } catch (err) {
     console.error("getContacts error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -61,7 +61,7 @@ const addContact = async (req, res) => {
     return res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("addContact error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -76,7 +76,7 @@ const deleteContact = async (req, res) => {
     return res.json({ message: "Contact supprimé" });
   } catch (err) {
     console.error("deleteContact error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

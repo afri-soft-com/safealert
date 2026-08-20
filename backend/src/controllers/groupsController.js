@@ -101,7 +101,7 @@ const getMyGroups = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("getMyGroups error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -124,7 +124,7 @@ const createGroup = async (req, res) => {
     return res.status(201).json(group.rows[0]);
   } catch (err) {
     console.error("createGroup error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -147,7 +147,7 @@ const joinGroup = async (req, res) => {
     return res.status(result.status).json(result.body);
   } catch (err) {
     console.error("joinGroup error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -170,7 +170,7 @@ const joinGroupById = async (req, res) => {
     return res.status(result.status).json(result.body);
   } catch (err) {
     console.error("joinGroupById error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -191,7 +191,7 @@ const getJoinRequests = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("getJoinRequests error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -247,7 +247,7 @@ const approveJoinRequest = async (req, res) => {
     return res.json({ message: "Demande approuvée", status: "approved", group_id: row.group_id });
   } catch (err) {
     console.error("approveJoinRequest error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -273,7 +273,7 @@ const rejectJoinRequest = async (req, res) => {
     return res.json({ message: "Demande refusée", status: "rejected" });
   } catch (err) {
     console.error("rejectJoinRequest error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -291,7 +291,7 @@ const leaveGroup = async (req, res) => {
     return res.json({ message: "Quitté le groupe" });
   } catch (err) {
     console.error("leaveGroup error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -316,7 +316,7 @@ const getGroupMembers = async (req, res) => {
     return res.json(rows);
   } catch (err) {
     console.error("getGroupMembers error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -355,7 +355,7 @@ const getGroupMessages = async (req, res) => {
     });
   } catch (err) {
     console.error("getGroupMessages error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -409,7 +409,7 @@ const postGroupMessage = async (req, res) => {
     return res.status(201).json(message);
   } catch (err) {
     console.error("postGroupMessage error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -437,7 +437,7 @@ const getGroupAlerts = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("getGroupAlerts error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -514,7 +514,7 @@ const postGroupAlert = async (req, res) => {
     });
   } catch (err) {
     console.error("postGroupAlert error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -538,7 +538,7 @@ const discoverGroups = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("discoverGroups error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

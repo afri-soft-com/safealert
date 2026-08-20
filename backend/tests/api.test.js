@@ -25,6 +25,7 @@ const validToken = jwt.sign({ userId: "user-1", role: "citizen" }, process.env.J
 const user2Token = jwt.sign({ userId: "user-2", role: "citizen" }, process.env.JWT_SECRET);
 const leaderToken = jwt.sign({ userId: "leader-1", role: "leader" }, process.env.JWT_SECRET);
 const adminToken = jwt.sign({ userId: "admin-1", role: "platform_admin" }, process.env.JWT_SECRET);
+const staffToken = jwt.sign({ userId: "admin-2", role: "admin" }, process.env.JWT_SECRET);
 
 let validOtpHash;
 
@@ -276,6 +277,17 @@ describe("Admin", () => {
     expect(res.status).toBe(403);
   });
 
+  it("GET /api/admin/users allows admin", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total: 0 }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .get("/api/admin/users")
+      .set("Authorization", `Bearer ${staffToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual([]);
+  });
+
   it("GET /api/admin/users allows platform_admin", async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [{ total: 1 }] })
@@ -285,6 +297,56 @@ describe("Admin", () => {
       .set("Authorization", `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
+  });
+
+  it("GET /api/admin/premium lists subscriptions for staff", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ active: 1, expired: 0, expiring_7d: 0 }] })
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "u1",
+          phone: "+243811234567",
+          pseudo: "A",
+          role: "citizen",
+          premium_until: new Date().toISOString(),
+        }],
+      });
+    const res = await request(app)
+      .get("/api/admin/premium")
+      .set("Authorization", `Bearer ${staffToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+  });
+
+  it("GET /api/admin/settings returns maintenance flag", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .get("/api/admin/settings")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("maintenance");
+    expect(res.body.is_super_admin).toBe(true);
+  });
+
+  it("PATCH /api/admin/users/:id/active updates is_active", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "u2", phone: "+243811234568", pseudo: "Leader", role: "leader", is_active: false }],
+    });
+    const res = await request(app)
+      .patch("/api/admin/users/u2/active")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ is_active: false });
+    expect(res.status).toBe(200);
+    expect(res.body.is_active).toBe(false);
+  });
+
+  it("PATCH /api/admin/users/:id/active rejects admin role", async () => {
+    const res = await request(app)
+      .patch("/api/admin/users/u2/active")
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ is_active: false });
+    expect(res.status).toBe(403);
   });
 
   it("PATCH /api/admin/users/:id/role updates role", async () => {
@@ -751,7 +813,7 @@ describe("App version", () => {
     const res = await request(app).get("/api/app/version");
     expect(res.status).toBe(200);
     expect(res.body.latestVersion).toBe("1.0.7");
-    expect(res.body.adminWebVersion).toBe("1.0.1");
+    expect(res.body.adminWebVersion).toBe("1.0.2");
     expect(res.body.adminWebUrl).toContain("safealert-admin");
   });
 

@@ -251,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (auth.canAccessAdmin)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
-                    child: _buildCard('⚙️', 'Administration', 'Utilisateurs, rôles et partenaires API',
+                    child: _buildCard('⚙️', 'Administration', 'Utilisateurs, abonnements et rôles',
                         () => widget.onNavigate('admin'), AppColors.gris),
                   ),
               ],

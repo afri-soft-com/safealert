@@ -14,7 +14,7 @@ const getNumbers = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("getNumbers error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

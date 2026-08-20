@@ -1,4 +1,5 @@
 import { Navigate, Outlet } from "react-router-dom";
+import { isStaffRole } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 export default function ProtectedRoute() {
@@ -8,7 +9,7 @@ export default function ProtectedRoute() {
     return <div className="loading">Vérification de la session…</div>;
   }
 
-  if (!isAuthenticated || user?.role !== "platform_admin") {
+  if (!isAuthenticated || !isStaffRole(user?.role)) {
     return <Navigate to="/connexion" replace />;
   }
 

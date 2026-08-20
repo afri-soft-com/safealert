@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ROLE_LABELS, type UserRole, type UserRow } from "../api/client";
+import { api, isSuperAdmin, ROLE_LABELS, type UserRole, type UserRow } from "../api/client";
 import { userFacingError } from "../utils/userFacingError";
+import { useAuth } from "../context/AuthContext";
 
-const ROLES: UserRole[] = ["citizen", "leader", "agent", "platform_admin"];
+const BASE_ROLES: UserRole[] = ["citizen", "leader", "agent"];
+const SUPER_ROLES: UserRole[] = [...BASE_ROLES, "admin", "platform_admin"];
 
 function premiumLabel(until?: string | null): string {
   if (!until) return "—";
@@ -13,6 +15,9 @@ function premiumLabel(until?: string | null): string {
 }
 
 export default function UsersPage() {
+  const { user: me } = useAuth();
+  const superAdmin = isSuperAdmin(me?.role);
+  const roleOptions = superAdmin ? SUPER_ROLES : BASE_ROLES;
   const [users, setUsers] = useState<UserRow[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -86,7 +91,7 @@ export default function UsersPage() {
       await api.grantPremium(id, days);
       await load();
     } catch (err) {
-      alert(userFacingError(err, "Impossible d'accorder Premium (FEATURE_PREMIUM ?)."));
+      alert(userFacingError(err, "Impossible d'accorder Premium."));
     } finally {
       setBusyId(null);
     }
@@ -105,13 +110,27 @@ export default function UsersPage() {
     }
   };
 
+  const handleToggleActive = async (id: string, next: boolean) => {
+    const label = next ? "réactiver" : "désactiver";
+    if (!window.confirm(`Voulez-vous ${label} ce compte ?`)) return;
+    setBusyId(id);
+    try {
+      await api.setUserActive(id, next);
+      await load();
+    } catch (err) {
+      alert(userFacingError(err, "Impossible de mettre à jour le compte."));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
     <>
       <header className="page-header">
         <h2>Utilisateurs</h2>
-        <p>Gestion des rôles, secteurs et Premium</p>
+        <p>Gestion des rôles, comptes et Premium</p>
       </header>
 
       {error && <div className="form-error">{error}</div>}
@@ -138,6 +157,7 @@ export default function UsersPage() {
                     <th>Pseudo</th>
                     <th>Téléphone</th>
                     <th>Rôle</th>
+                    <th>Compte</th>
                     <th>Secteur</th>
                     <th>Premium</th>
                     <th>Inscription</th>
@@ -146,7 +166,7 @@ export default function UsersPage() {
                 <tbody>
                   {users.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="empty">
+                      <td colSpan={7} className="empty">
                         Aucun utilisateur
                       </td>
                     </tr>
@@ -166,12 +186,34 @@ export default function UsersPage() {
                                 handleRoleChange(u.id, e.target.value as UserRole)
                               }
                             >
-                              {ROLES.map((r) => (
+                              {(roleOptions.includes(u.role)
+                                ? roleOptions
+                                : [...roleOptions, u.role]
+                              ).map((r) => (
                                 <option key={r} value={r}>
-                                  {ROLE_LABELS[r]}
+                                  {ROLE_LABELS[r] ?? r}
                                 </option>
                               ))}
                             </select>
+                          </td>
+                          <td>
+                            {superAdmin ? (
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: "0.25rem 0.45rem" }}
+                                disabled={busyId === u.id || u.id === me?.id}
+                                onClick={() =>
+                                  handleToggleActive(u.id, u.is_active === false)
+                                }
+                              >
+                                {u.is_active === false ? "Activer" : "Désactiver"}
+                              </button>
+                            ) : u.is_active === false ? (
+                              "Inactif"
+                            ) : (
+                              "Actif"
+                            )}
                           </td>
                           <td>
                             <input

@@ -25,7 +25,7 @@ const subscribe = async (req, res) => {
     return res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("neighborhood subscribe error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -41,7 +41,7 @@ const unsubscribe = async (req, res) => {
     return res.json({ message: "Désabonnement effectué" });
   } catch (err) {
     console.error("neighborhood unsubscribe error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -54,7 +54,7 @@ const listSubscriptions = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("listSubscriptions error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

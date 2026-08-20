@@ -68,6 +68,7 @@ bool looksTechnical(String message) {
   final m = message.trim();
   if (m.isEmpty) return true;
   if (_technicalPatterns.hasMatch(m)) return true;
+  if (RegExp(r'FEATURE_[A-Z0-9_]+').hasMatch(m)) return true;
   if (RegExp(r'^erreur\s+\d{3}$', caseSensitive: false).hasMatch(m)) return true;
   if (m.contains('\n') && m.length > 120) return true;
   return false;
@@ -89,6 +90,10 @@ String? mapKnownApiMessage(String message) {
     'rate limit exceeded': 'Trop de demandes. Réessayez plus tard.',
     'partner not found': 'Partenaire introuvable.',
     'already exists': 'Cet élément existe déjà.',
+    'erreur serveur': 'Une erreur est survenue. Réessayez.',
+    'feature_premium': 'Cette fonction n\'est pas encore disponible.',
+    'internal server': 'Une erreur est survenue. Réessayez.',
+    'impossible de démarrer': 'Impossible de démarrer le trajet. Réessayez.',
   };
   for (final entry in known.entries) {
     if (lower.contains(entry.key)) return entry.value;

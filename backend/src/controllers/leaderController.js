@@ -32,7 +32,7 @@ const getSectorIncidents = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("getSectorIncidents error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -72,7 +72,7 @@ const acknowledgeIncident = async (req, res) => {
     return res.json({ message: "Prise en charge enregistrée", incident: result.rows[0] });
   } catch (err) {
     console.error("acknowledgeIncident error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -110,7 +110,7 @@ const resolveIncident = async (req, res) => {
     return res.json({ message: "Incident résolu", incident: result.rows[0] });
   } catch (err) {
     console.error("resolveIncident error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -140,7 +140,7 @@ const getSectorStats = async (req, res) => {
     return res.json({ ...result.rows[0], sector_name: sectorName });
   } catch (err) {
     console.error("getSectorStats error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

@@ -30,7 +30,7 @@ const registerPartner = async (req, res) => {
     });
   } catch (err) {
     console.error("registerPartner error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -47,7 +47,7 @@ const getPartnerMe = async (req, res) => {
     return res.json(result.rows[0]);
   } catch (err) {
     console.error("getPartnerMe error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -86,7 +86,7 @@ const updateWebhook = async (req, res) => {
     });
   } catch (err) {
     console.error("updateWebhook error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -102,7 +102,7 @@ const listWebhookDeliveries = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("listWebhookDeliveries error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -121,7 +121,7 @@ const getPublicStats = async (req, res) => {
     return res.json(result.rows[0]);
   } catch (err) {
     console.error("getPublicStats error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -143,7 +143,7 @@ const getPublicIncidents = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("getPublicIncidents error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -162,7 +162,7 @@ const getPublicHeatmap = async (req, res) => {
     return res.json({ zones: zones.rows, period: days, generated_at: new Date().toISOString() });
   } catch (err) {
     console.error("getPublicHeatmap error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

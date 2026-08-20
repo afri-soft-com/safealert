@@ -52,7 +52,7 @@ const upsertLiveStatus = async (req, res) => {
     return res.json({ status: result.rows[0], ttl_seconds: TTL_SECONDS });
   } catch (err) {
     console.error("upsertLiveStatus error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -90,7 +90,7 @@ const getLiveStatus = async (req, res) => {
     return res.json(row);
   } catch (err) {
     console.error("getLiveStatus error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

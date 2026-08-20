@@ -67,7 +67,7 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <h1>SafeAlert Admin</h1>
-        <p className="subtitle">Connexion réservée aux administrateurs plateforme</p>
+        <p className="subtitle">Connexion réservée aux administrateurs</p>
 
         {error && <div className="form-error">{error}</div>}
 

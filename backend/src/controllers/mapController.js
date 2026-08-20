@@ -144,7 +144,7 @@ const getIncidents = async (req, res) => {
     return res.json(rows);
   } catch (err) {
     console.error("getIncidents error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -216,7 +216,7 @@ const reportIncident = async (req, res) => {
     );
   } catch (err) {
     console.error("reportIncident error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -278,7 +278,7 @@ const verifyIncident = async (req, res) => {
       return res.status(409).json({ error: "Vous avez déjà confirmé cet incident" });
     }
     console.error("verifyIncident error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -340,7 +340,7 @@ const getStats = async (req, res) => {
     });
   } catch (err) {
     console.error("getStats error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -395,7 +395,7 @@ const getHeatmap = async (req, res) => {
     });
   } catch (err) {
     console.error("getHeatmap error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

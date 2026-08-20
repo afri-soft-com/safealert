@@ -40,7 +40,7 @@ const listNearby = async (req, res) => {
     return res.json({ landmarks: result.rows });
   } catch (err) {
     console.error("listNearby landmarks error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -104,7 +104,7 @@ const suggestRoutes = async (req, res) => {
     });
   } catch (err) {
     console.error("suggestRoutes error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

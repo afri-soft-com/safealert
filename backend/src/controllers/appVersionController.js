@@ -1,9 +1,10 @@
 const features = require("../config/features");
+const { getMaintenance } = require("../services/appSettings");
 
 /** Keep in sync with frontend/pubspec.yaml (version name, before +build). */
 const DEFAULT_MOBILE_VERSION = "1.0.7";
 /** Keep in sync with admin-web/package.json. */
-const DEFAULT_ADMIN_WEB_VERSION = "1.0.1";
+const DEFAULT_ADMIN_WEB_VERSION = "1.0.2";
 
 /**
  * Public app version policy for soft / force update prompts.
@@ -35,18 +36,16 @@ function versionPayload() {
   };
 }
 
-function configPayload() {
-  const maintenance = features.maintenanceMode();
-  const sosEnabled = features.sosEnabled() && !maintenance;
-  const banner =
-    (process.env.APP_MAINTENANCE_BANNER || "").trim() ||
-    (maintenance
-      ? "Maintenance en cours. Certaines fonctions peuvent être temporairement indisponibles."
-      : "");
+async function configPayload() {
+  const m = await getMaintenance();
+  const sosEnabled = features.sosEnabled();
+  const banner = m.maintenance
+    ? m.message
+    : ((process.env.APP_MAINTENANCE_BANNER || "").trim() || "");
 
   return {
     ...versionPayload(),
-    maintenance,
+    maintenance: m.maintenance,
     sosEnabled,
     maintenanceBanner: banner,
     features: {
@@ -69,8 +68,8 @@ function getAppVersion(req, res) {
   return res.json(versionPayload());
 }
 
-function getAppConfig(req, res) {
-  return res.json(configPayload());
+async function getAppConfig(req, res) {
+  return res.json(await configPayload());
 }
 
 module.exports = {

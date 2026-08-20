@@ -5,44 +5,41 @@ const {
   allowTestPurchase,
   stripeConfigured,
 } = require("../services/premiumEntitlements");
+const { isStaffRole } = require("../services/appSettings");
+const { fail } = require("../utils/httpError");
 
-/**
- * Premium — entitlements + grant/revoke + Stripe Checkout stub.
- * See docs/ECONOMIE.md. No fake Stripe secrets.
- */
 const getStatus = async (req, res) => {
   try {
     const payload = await getStatusPayload(req.userId);
     return res.json(payload);
   } catch (err) {
-    console.error("premium getStatus error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return fail(res, err, "Impossible de charger l'abonnement.");
   }
 };
 
 const assertPremiumFeature = (res) => {
   if (!premium()) {
-    res.status(503).json({ error: "Premium désactivé (FEATURE_PREMIUM)" });
+    res.status(503).json({ error: "Cette fonction n'est pas encore disponible." });
     return false;
   }
   return true;
 };
 
 const canSelfGrant = (req) => {
-  if (req.userRole === "platform_admin") return true;
+  if (isStaffRole(req.userRole)) return true;
   return allowTestPurchase();
 };
 
-/** Grant premium days (admin any user; self only if test purchase allowed). */
+/** Grant premium days (staff any user; self only if test purchase allowed). */
 const grantPremium = async (req, res) => {
   const days = Math.min(Math.max(parseInt(req.body.days, 10) || 30, 1), 365);
   const targetId = req.body.user_id || req.userId;
 
-  if (targetId !== req.userId && req.userRole !== "platform_admin") {
-    return res.status(403).json({ error: "Admin requis pour attribuer à un tiers" });
+  if (targetId !== req.userId && !isStaffRole(req.userRole)) {
+    return res.status(403).json({ error: "Accès non autorisé pour votre profil." });
   }
 
-  if (targetId === req.userId && req.userRole !== "platform_admin") {
+  if (targetId === req.userId && !isStaffRole(req.userRole)) {
     if (!assertPremiumFeature(res)) return;
     if (!canSelfGrant(req)) {
       return res.status(403).json({
@@ -62,27 +59,25 @@ const grantPremium = async (req, res) => {
       [targetId, days]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Utilisateur non trouvé" });
+      return res.status(404).json({ error: "Utilisateur introuvable." });
     }
     return res.json({
       message: `Premium accordé pour ${days} jours`,
       user: result.rows[0],
     });
   } catch (err) {
-    console.error("grantPremium error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return fail(res, err, "Impossible d'accorder l'abonnement.");
   }
 };
 
-/** Revoke premium (platform_admin only). */
 const revokePremium = async (req, res) => {
-  if (req.userRole !== "platform_admin") {
-    return res.status(403).json({ error: "Admin requis" });
+  if (!isStaffRole(req.userRole)) {
+    return res.status(403).json({ error: "Accès non autorisé pour votre profil." });
   }
 
   const targetId = req.body.user_id || req.params.userId;
   if (!targetId) {
-    return res.status(400).json({ error: "user_id requis" });
+    return res.status(400).json({ error: "Utilisateur requis." });
   }
 
   try {
@@ -93,15 +88,14 @@ const revokePremium = async (req, res) => {
       [targetId]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Utilisateur non trouvé" });
+      return res.status(404).json({ error: "Utilisateur introuvable." });
     }
     return res.json({
-      message: "Premium révoqué",
+      message: "Abonnement révoqué",
       user: result.rows[0],
     });
   } catch (err) {
-    console.error("revokePremium error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return fail(res, err, "Impossible de révoquer l'abonnement.");
   }
 };
 

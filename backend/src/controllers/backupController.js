@@ -37,7 +37,7 @@ const upsertBackup = async (req, res) => {
     return res.json({ backup: result.rows[0] });
   } catch (err) {
     console.error("upsertBackup error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -57,7 +57,7 @@ const getBackup = async (req, res) => {
     return res.json(result.rows[0]);
   } catch (err) {
     console.error("getBackup error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -70,7 +70,7 @@ const deleteBackup = async (req, res) => {
     return res.json({ message: "Sauvegarde supprimée" });
   } catch (err) {
     console.error("deleteBackup error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

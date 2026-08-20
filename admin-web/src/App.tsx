@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import MaintenanceGate from "./components/MaintenanceGate";
 import UpdateBanner from "./components/UpdateBanner";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -15,32 +16,35 @@ import OpsPage from "./pages/OpsPage";
 import PartnerPortalPage from "./pages/PartnerPortalPage";
 import HelpPage from "./pages/HelpPage";
 import AuditPage from "./pages/AuditPage";
+import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
   return (
     <AuthProvider>
       <UpdateBanner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/connexion" element={<LoginPage />} />
-          {/* Portail partenaire : authentification par clé API, hors console admin */}
-          <Route path="/portail-partenaire" element={<PartnerPortalPage />} />
-          <Route element={<ProtectedRoute />}>
-            <Route element={<Layout />}>
-              <Route index element={<DashboardPage />} />
-              <Route path="ops" element={<OpsPage />} />
-              <Route path="utilisateurs" element={<UsersPage />} />
-              <Route path="abonnements" element={<SubscriptionsPage />} />
-              <Route path="partenaires" element={<PartnersPage />} />
-              <Route path="annuaire" element={<EmergencyPage />} />
-              <Route path="incidents" element={<IncidentsPage />} />
-              <Route path="groupes" element={<GroupsPage />} />
-              <Route path="audit" element={<AuditPage />} />
-              <Route path="aide" element={<HelpPage />} />
+        <MaintenanceGate>
+          <Routes>
+            <Route path="/connexion" element={<LoginPage />} />
+            <Route path="/portail-partenaire" element={<PartnerPortalPage />} />
+            <Route element={<ProtectedRoute />}>
+              <Route element={<Layout />}>
+                <Route index element={<DashboardPage />} />
+                <Route path="ops" element={<OpsPage />} />
+                <Route path="utilisateurs" element={<UsersPage />} />
+                <Route path="abonnements" element={<SubscriptionsPage />} />
+                <Route path="partenaires" element={<PartnersPage />} />
+                <Route path="annuaire" element={<EmergencyPage />} />
+                <Route path="incidents" element={<IncidentsPage />} />
+                <Route path="groupes" element={<GroupsPage />} />
+                <Route path="audit" element={<AuditPage />} />
+                <Route path="reglages" element={<SettingsPage />} />
+                <Route path="aide" element={<HelpPage />} />
+              </Route>
             </Route>
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </MaintenanceGate>
       </BrowserRouter>
     </AuthProvider>
   );

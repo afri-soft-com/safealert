@@ -7,6 +7,7 @@ const helmet = require("helmet");
 const http = require("http");
 const { Server } = require("socket.io");
 const { apiLimiter } = require("./middleware/rateLimit");
+const { maintenanceGate } = require("./middleware/maintenance");
 const { pool } = require("./config/database");
 const { initFCM } = require("./config/firebase");
 const { initSMS } = require("./services/sms");
@@ -139,9 +140,11 @@ app.get("/health/ready", async (req, res) => {
     });
   } catch (err) {
     console.error("Readiness check failed:", err.message);
-    return res.status(503).json({ status: "not_ready", db: "error" });
+    return res.status(503).json({ status: "not_ready" });
   }
 });
+
+app.use(maintenanceGate);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/sos", sosRoutes);
@@ -200,13 +203,16 @@ if (adminWebDist) {
 }
 
 app.use((req, res) => {
-  res.status(404).json({ error: "Route non trouvée", path: req.path });
+  res.status(404).json({ error: "Page introuvable." });
 });
 
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   const status = err.status || err.statusCode || 500;
-  const message = status < 500 && err.message ? err.message : "Erreur interne du serveur";
+  const message =
+    status < 500 && err.message && err.message.length < 160
+      ? err.message
+      : "Une erreur est survenue. Réessayez.";
   res.status(status).json({ error: message });
 });
 

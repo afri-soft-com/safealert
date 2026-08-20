@@ -40,6 +40,7 @@ import 'screens/safety_screen.dart';
 import 'screens/heatmap_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/admin_screen.dart';
+import 'screens/maintenance_screen.dart';
 import 'screens/privacy_screen.dart';
 import 'screens/premium_screen.dart';
 import 'screens/calculator_screen.dart';
@@ -387,8 +388,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
 
     final auth = context.watch<AuthProvider>();
+    final cfg = AppConfigService();
+    final staffBypass = auth.canAccessAdmin;
+    final maintenanceBlocks = cfg.maintenance &&
+        !staffBypass &&
+        _currentScreen != 'login' &&
+        _currentScreen != 'sos' &&
+        _currentScreen != 'annuaire' &&
+        _currentScreen != 'calculator';
 
-    if (_currentScreen == 'splash' && auth.isAuthenticated) {
+    if (_currentScreen == 'splash' && auth.isAuthenticated && !maintenanceBlocks) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _navStack.last == 'splash') {
           setState(() {
@@ -396,6 +405,27 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           });
         }
       });
+    }
+
+    if (maintenanceBlocks) {
+      return MaintenanceScreen(
+        message: cfg.maintenanceBanner,
+        onSuperAdminLogin: () {
+          setState(() {
+            if (_navStack.last != 'login') _navStack.add('login');
+          });
+        },
+        onAnnuaire: () {
+          setState(() {
+            if (_navStack.last != 'annuaire') _navStack.add('annuaire');
+          });
+        },
+        onSos: () {
+          setState(() {
+            if (_navStack.last != 'sos') _navStack.add('sos');
+          });
+        },
+      );
     }
 
     Widget screen;
@@ -489,8 +519,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         screen = HomeScreen(onNavigate: _navigate);
     }
 
-    final cfg = AppConfigService();
-    final showMaintenance = cfg.maintenance || !cfg.sosEnabled;
     final showSoftBanner = _appUpdates.updateAvailable &&
         !_appUpdates.forceUpdate &&
         !_softUpdateDismissed &&
@@ -505,7 +533,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       },
       child: Column(
         children: [
-          if (showMaintenance)
+          if (!cfg.sosEnabled && !cfg.maintenance)
             Material(
               color: const Color(0xFF7A4F00),
               child: SafeArea(
@@ -515,7 +543,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   child: Text(
                     cfg.maintenanceBanner.isNotEmpty
                         ? cfg.maintenanceBanner
-                        : 'Certaines fonctions sont temporairement limitées. L\'annuaire d\'urgence reste disponible.',
+                        : 'Le SOS est temporairement indisponible. L\'annuaire d\'urgence reste disponible.',
                     style: const TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ),

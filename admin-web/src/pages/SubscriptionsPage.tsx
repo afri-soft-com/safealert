@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type UserRow } from "../api/client";
+import { api, ROLE_LABELS, type UserRow } from "../api/client";
 import { userFacingError } from "../utils/userFacingError";
 
 function untilLabel(until?: string | null): string {
@@ -135,14 +135,13 @@ export default function SubscriptionsPage() {
     <>
       <header className="page-header">
         <h2>Abonnements Premium</h2>
-        <p>Gestion économique B2C — accorder, prolonger ou révoquer Premium</p>
+        <p>Accorder, prolonger ou révoquer un abonnement</p>
       </header>
 
       {!featureEnabled && (
         <div className="form-error" style={{ marginBottom: 16 }}>
-          Le flag <code>FEATURE_PREMIUM</code> est désactivé : les limites Free/Premium
-          ne s&apos;appliquent pas encore dans l&apos;app, mais vous pouvez déjà attribuer
-          des dates <code>premium_until</code>.
+          Les limites d&apos;abonnement ne sont pas encore appliquées dans l&apos;application
+          mobile, mais vous pouvez déjà accorder ou révoquer Premium ici.
         </div>
       )}
 
@@ -279,7 +278,7 @@ export default function SubscriptionsPage() {
                         <tr key={u.id}>
                           <td>{u.pseudo}</td>
                           <td>{u.phone}</td>
-                          <td>{u.role}</td>
+                          <td>{ROLE_LABELS[u.role] ?? u.role}</td>
                           <td>
                             {active ? (
                               <strong>{untilLabel(u.premium_until)}</strong>

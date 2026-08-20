@@ -5,8 +5,9 @@ const { sendSMS } = require("../services/sms");
 const { sendAlert } = require("../services/alert");
 const { safeTrip, escortMode, publicShare } = require("../config/features");
 const { notifyTrustCircle } = require("./checkInController");
-const { getEntitlementsForUser } = require("../services/premiumEntitlements");
+const { getEntitlementsForUser, LEGACY } = require("../services/premiumEntitlements");
 const { estimateEtaMinutes, normalizeTransportMode, haversineKm } = require("../utils/geo");
+const { fail } = require("../utils/httpError");
 
 const PUBLIC_BASE =
   process.env.PUBLIC_APP_URL ||
@@ -18,7 +19,7 @@ const UUID_RE =
 
 const assertTripEnabled = (res) => {
   if (!safeTrip()) {
-    res.status(503).json({ error: "Trajet sécurisé désactivé" });
+    res.status(503).json({ error: "Le trajet sécurisé est temporairement indisponible." });
     return false;
   }
   return true;
@@ -45,9 +46,9 @@ const startTrip = async (req, res) => {
   }
 
   const distanceKm = haversineKm(originLat, originLng, destLat, destLng);
-  if (!Number.isFinite(distanceKm) || distanceKm < 0.025) {
+  if (!Number.isFinite(distanceKm) || distanceKm < 0.01) {
     return res.status(400).json({
-      error: "Destination trop proche du départ (moins de 25 m). Choisissez un autre point d'arrivée.",
+      error: "Choisissez un point d'arrivée distinct du départ.",
     });
   }
 
@@ -63,7 +64,12 @@ const startTrip = async (req, res) => {
       });
     }
 
-    const ents = await getEntitlementsForUser(req.userId);
+    let ents = LEGACY;
+    try {
+      ents = await getEntitlementsForUser(req.userId);
+    } catch (entErr) {
+      console.error("startTrip entitlements:", entErr.message);
+    }
     if (ents.trips_per_week != null) {
       const weekCount = await pool.query(
         `SELECT COUNT(*)::int AS c FROM safe_trips
@@ -105,9 +111,8 @@ const startTrip = async (req, res) => {
       dest_label || null, minutes, escorts, notify_on_delay !== false,
       shareToken, shareHours, mode,
     ];
-    let result;
-    try {
-      result = await pool.query(
+    const insertFull = () =>
+      pool.query(
         `INSERT INTO safe_trips
            (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
             eta_at, last_lat, last_lng, last_ping_at, escort_contact_ids, notify_on_delay,
@@ -118,9 +123,8 @@ const startTrip = async (req, res) => {
          RETURNING *`,
         insertParams
       );
-    } catch (insertErr) {
-      if (insertErr.code !== "42703") throw insertErr;
-      result = await pool.query(
+    const insertNoMode = () =>
+      pool.query(
         `INSERT INTO safe_trips
            (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
             eta_at, last_lat, last_lng, last_ping_at, escort_contact_ids, notify_on_delay,
@@ -130,6 +134,27 @@ const startTrip = async (req, res) => {
          RETURNING *`,
         insertParams.slice(0, 11)
       );
+    const insertMinimal = () =>
+      pool.query(
+        `INSERT INTO safe_trips
+           (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
+            eta_at, last_lat, last_lng, last_ping_at)
+         VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 * INTERVAL '1 minute'), $2,$3, NOW())
+         RETURNING *`,
+        [req.userId, originLat, originLng, destLat, destLng, dest_label || null, minutes]
+      );
+
+    let result;
+    try {
+      result = await insertFull();
+    } catch (insertErr) {
+      if (insertErr.code !== "42703") throw insertErr;
+      try {
+        result = await insertNoMode();
+      } catch (insertErr2) {
+        if (insertErr2.code !== "42703") throw insertErr2;
+        result = await insertMinimal();
+      }
     }
     const trip = result.rows[0];
     const shareUrl = shareToken
@@ -148,12 +173,16 @@ const startTrip = async (req, res) => {
       console.error("startTrip notify skipped:", notifyErr.message);
     }
 
-    const io = req.app.get("io");
-    if (io) {
-      io.emit("trip_started", { trip_id: trip.id, user_id: req.userId });
-      for (const cid of escorts) {
-        io.to(`user:${cid}`).emit("escort_trip", { trip });
+    try {
+      const io = req.app.get("io");
+      if (io) {
+        io.emit("trip_started", { trip_id: trip.id, user_id: req.userId });
+        for (const cid of escorts) {
+          io.to(`user:${cid}`).emit("escort_trip", { trip });
+        }
       }
+    } catch (ioErr) {
+      console.error("startTrip socket skipped:", ioErr.message);
     }
 
     return res.status(201).json({
@@ -164,21 +193,16 @@ const startTrip = async (req, res) => {
         : null,
     });
   } catch (err) {
-    console.error("startTrip error:", err);
+    console.error("startTrip error:", err.code || "", err.message);
     if (err.code === "22P02") {
       return res.status(400).json({ error: "Contact d'escorte invalide." });
-    }
-    if (err.code === "42703") {
-      return res.status(500).json({
-        error: "Base trajets incomplète — relancez les migrations serveur.",
-      });
     }
     if (err.code === "23505") {
       return res.status(409).json({
         error: "Un trajet est déjà en cours. Terminez-le ou annulez-le.",
       });
     }
-    return res.status(500).json({ error: "Impossible de démarrer le trajet. Réessayez." });
+    return fail(res, err, "Impossible de démarrer le trajet. Réessayez.");
   }
 };
 
@@ -283,7 +307,7 @@ const pingTrip = async (req, res) => {
     return res.json({ trip: updated.rows[0] });
   } catch (err) {
     console.error("pingTrip error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -309,7 +333,7 @@ const arriveTrip = async (req, res) => {
     return res.json({ trip: result.rows[0] });
   } catch (err) {
     console.error("arriveTrip error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -328,7 +352,7 @@ const cancelTrip = async (req, res) => {
     return res.json({ trip: result.rows[0] });
   } catch (err) {
     console.error("cancelTrip error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -342,7 +366,7 @@ const getActiveTrip = async (req, res) => {
     return res.json(result.rows[0] || {});
   } catch (err) {
     console.error("getActiveTrip error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -367,7 +391,7 @@ const getTrip = async (req, res) => {
     return res.json(trip);
   } catch (err) {
     console.error("getTrip error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -448,7 +472,7 @@ const createShareLink = async (req, res) => {
     });
   } catch (err) {
     console.error("createShareLink error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

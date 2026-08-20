@@ -19,7 +19,7 @@ const getHistory = async (req, res) => {
     });
   } catch (err) {
     console.error("getHistory error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

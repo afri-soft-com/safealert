@@ -25,13 +25,15 @@ abstract final class UserRoles {
   static const citizen = 'citizen';
   static const leader = 'leader';
   static const agent = 'agent';
+  static const admin = 'admin';
   static const platformAdmin = 'platform_admin';
 
   static const labels = {
     citizen: 'Citoyen',
     leader: 'Responsable',
     agent: 'Agent',
-    platformAdmin: 'Administrateur',
+    admin: 'Administrateur',
+    platformAdmin: 'Super administrateur',
   };
 }
 
@@ -62,8 +64,9 @@ class AuthProvider extends ChangeNotifier {
   bool get isLeader => role == UserRoles.leader;
   bool get isAgent => role == UserRoles.agent;
   bool get isPlatformAdmin => role == UserRoles.platformAdmin;
-  bool get canAccessOps => isLeader || isAgent || isPlatformAdmin;
-  bool get canAccessAdmin => isPlatformAdmin;
+  bool get isAdmin => role == UserRoles.admin;
+  bool get canAccessOps => isLeader || isAgent || isAdmin || isPlatformAdmin;
+  bool get canAccessAdmin => isAdmin || isPlatformAdmin;
 
   Future<void> checkAuth() async {
     await _api.init();

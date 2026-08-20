@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const { pool } = require("../config/database");
+const { isStaffRole, isSuperAdmin } = require("../services/appSettings");
 
 const authenticate = async (req, res, next) => {
   const header = req.headers.authorization;
@@ -15,7 +16,26 @@ const authenticate = async (req, res, next) => {
     req.sessionJti = decoded.jti || null;
     req.deviceId = decoded.deviceId || null;
 
-    // Sessions with jti can be revoked (« Déconnecter partout »)
+    const skipLive = process.env.VITEST || process.env.NODE_ENV === "test";
+    if (!skipLive) {
+      try {
+        const live = await pool.query(
+          `SELECT role, COALESCE(is_active, true) AS is_active FROM users WHERE id = $1`,
+          [decoded.userId]
+        );
+        if (live.rows.length > 0) {
+          if (live.rows[0].is_active === false) {
+            return res.status(403).json({ error: "Ce compte a été désactivé." });
+          }
+          req.userRole = live.rows[0].role || decoded.role;
+        }
+      } catch (err) {
+        if (err.code !== "42703") {
+          console.error("auth live role:", err.message);
+        }
+      }
+    }
+
     if (decoded.jti) {
       try {
         const check = await pool.query(
@@ -27,7 +47,6 @@ const authenticate = async (req, res, next) => {
           return res.status(401).json({ error: "Session expirée. Reconnectez-vous." });
         }
       } catch (err) {
-        // Table may not exist yet during rolling deploy — allow legacy tokens
         if (err.code !== "42P01") {
           console.error("session check error:", err.message);
         }
@@ -36,17 +55,27 @@ const authenticate = async (req, res, next) => {
 
     return next();
   } catch (err) {
-    return res.status(401).json({ error: "Token invalide ou expiré" });
+    return res.status(401).json({ error: "Session expirée. Reconnectez-vous." });
   }
 };
 
 const requireRole = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.userRole)) {
-      return res.status(403).json({ error: "Accès non autorisé" });
+      return res.status(403).json({ error: "Accès non autorisé pour votre profil." });
     }
     next();
   };
 };
 
-module.exports = { authenticate, requireRole };
+const requireStaff = requireRole("admin", "platform_admin");
+const requireSuperAdmin = requireRole("platform_admin");
+
+module.exports = {
+  authenticate,
+  requireRole,
+  requireStaff,
+  requireSuperAdmin,
+  isStaffRole,
+  isSuperAdmin,
+};

@@ -35,7 +35,7 @@ const createCircleInvite = async (req, res) => {
     });
   } catch (err) {
     console.error("createCircleInvite error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -119,7 +119,7 @@ const acceptCircleInvite = async (req, res) => {
     });
   } catch (err) {
     console.error("acceptCircleInvite error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -140,7 +140,7 @@ const peekInvite = async (req, res) => {
     return res.json(result.rows[0]);
   } catch (err) {
     console.error("peekInvite error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

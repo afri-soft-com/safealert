@@ -12,6 +12,7 @@ import {
   clearSession,
   getStoredUser,
   getToken,
+  isStaffRole,
   saveSession,
   type AuthUser,
 } from "../api/client";
@@ -30,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
     const token = getToken();
     const stored = getStoredUser();
-    return token && stored?.role === "platform_admin" ? stored : null;
+    return token && stored && isStaffRole(stored.role) ? stored : null;
   });
   const [ready, setReady] = useState(false);
 
@@ -48,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const profile = await api.getProfile();
         if (cancelled) return;
-        if (profile.role !== "platform_admin") {
+        if (!isStaffRole(profile.role)) {
           clearSession();
           setUser(null);
         } else {
@@ -71,9 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (phone: string, code: string, pseudo?: string) => {
     const { token, user: authUser } = await api.verifyCode(phone, code, pseudo);
-    if (authUser.role !== "platform_admin") {
+    if (!isStaffRole(authUser.role)) {
       clearSession();
-      throw new Error("Accès réservé aux administrateurs plateforme");
+      throw new Error("Accès réservé aux administrateurs");
     }
     saveSession(token, authUser);
     setUser(authUser);
@@ -87,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       user,
-      isAuthenticated: !!user && user.role === "platform_admin",
+      isAuthenticated: !!user && isStaffRole(user.role),
       ready,
       login,
       logout,

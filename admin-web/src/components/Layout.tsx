@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
+import { isSuperAdmin, ROLE_LABELS } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
-/** Navigation console — réservée aux platform_admin (garde ProtectedRoute). */
 const NAV = [
   { to: "/", label: "Tableau de bord", end: true },
   { to: "/ops", label: "Ops temps réel" },
@@ -17,6 +17,10 @@ const NAV = [
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const superAdmin = isSuperAdmin(user?.role);
+  const items = superAdmin
+    ? [...NAV, { to: "/reglages", label: "Réglages" }]
+    : NAV;
 
   return (
     <div className="app-layout">
@@ -26,7 +30,7 @@ export default function Layout() {
           <p>Console d'administration</p>
         </div>
         <nav className="sidebar-nav">
-          {NAV.map((item) => (
+          {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -40,6 +44,9 @@ export default function Layout() {
         <div className="sidebar-footer">
           <div>{user?.pseudo}</div>
           <div>{user?.phone}</div>
+          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>
+            {user?.role ? ROLE_LABELS[user.role] : ""}
+          </div>
           <a
             href="/portail-partenaire"
             target="_blank"

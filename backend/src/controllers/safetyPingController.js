@@ -37,7 +37,7 @@ const schedulePing = async (req, res) => {
     return res.status(201).json({ ping: result.rows[0] });
   } catch (err) {
     console.error("schedulePing error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -66,7 +66,7 @@ const respondOk = async (req, res) => {
     return res.json({ ping: result.rows[0] });
   } catch (err) {
     console.error("respondOk error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -85,7 +85,7 @@ const cancelPing = async (req, res) => {
     return res.json({ ping: result.rows[0] });
   } catch (err) {
     console.error("cancelPing error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -99,7 +99,7 @@ const listMyPings = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("listMyPings error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -114,7 +114,7 @@ const getActivePing = async (req, res) => {
     return res.json(result.rows[0] || {});
   } catch (err) {
     console.error("getActivePing error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

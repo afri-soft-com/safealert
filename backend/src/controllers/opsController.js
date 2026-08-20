@@ -63,7 +63,7 @@ const getOpsQueue = async (req, res) => {
     });
   } catch (err) {
     console.error("getOpsQueue error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -132,7 +132,7 @@ const exportSectorReport = async (req, res) => {
     doc.end();
   } catch (err) {
     console.error("exportSectorReport error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

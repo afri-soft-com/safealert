@@ -719,7 +719,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: OutlinedButton.icon(
                             onPressed: widget.onAdmin,
                             icon: const Icon(Icons.admin_panel_settings, size: 16),
-                            label: const Text('Administration plateforme', style: TextStyle(fontSize: 13)),
+                            label: const Text('Administration', style: TextStyle(fontSize: 13)),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AppColors.bleuFonce,
                               side: const BorderSide(color: AppColors.bleuFonce),

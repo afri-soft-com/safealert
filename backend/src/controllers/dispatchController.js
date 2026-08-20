@@ -95,7 +95,7 @@ const assignAgent = async (req, res) => {
     });
   } catch (err) {
     console.error("assignAgent error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -128,7 +128,7 @@ const closeWithReason = async (req, res) => {
     return res.json({ incident: result.rows[0] });
   } catch (err) {
     console.error("closeWithReason error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -158,7 +158,7 @@ const postChat = async (req, res) => {
     return res.status(201).json(msg);
   } catch (err) {
     console.error("postChat error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -175,7 +175,7 @@ const getChat = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("getChat error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -206,7 +206,7 @@ const upsertSectorGeofence = async (req, res) => {
     return res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("upsertSectorGeofence error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -220,7 +220,7 @@ const listMySectors = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("listMySectors error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -282,7 +282,7 @@ const markEnRoute = async (req, res) => {
     return res.json({ incident, agent_pseudo: agentPseudo });
   } catch (err) {
     console.error("markEnRoute error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -311,7 +311,7 @@ const getCitizenDispatch = async (req, res) => {
     });
   } catch (err) {
     console.error("getCitizenDispatch error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 

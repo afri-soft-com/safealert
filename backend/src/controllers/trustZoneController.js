@@ -11,7 +11,7 @@ const listZones = async (req, res) => {
     return res.json(result.rows);
   } catch (err) {
     console.error("listZones error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -45,7 +45,7 @@ const createZone = async (req, res) => {
     return res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("createZone error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -60,7 +60,7 @@ const deleteZone = async (req, res) => {
     return res.json({ message: "Zone supprimée" });
   } catch (err) {
     console.error("deleteZone error:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
