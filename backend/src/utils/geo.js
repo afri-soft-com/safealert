@@ -28,8 +28,11 @@ const normalizeTransportMode = (raw) => {
 const estimateEtaMinutes = (lat1, lng1, lat2, lng2, mode) => {
   const speed = TRANSPORT_SPEEDS_KMH[normalizeTransportMode(mode)] || TRANSPORT_SPEEDS_KMH.moto;
   const km = haversineKm(Number(lat1), Number(lng1), Number(lat2), Number(lng2));
-  if (!Number.isFinite(km) || km <= 0) return 5;
-  return Math.max(5, Math.ceil((km / speed) * 60));
+  if (!Number.isFinite(km) || km <= 0) return 1;
+  const minutes = Math.ceil((km / speed) * 60);
+  if (minutes < 1) return 1;
+  if (minutes > 24 * 60) return 24 * 60;
+  return minutes;
 };
 
 module.exports = {

@@ -88,7 +88,7 @@ services:
       - key: FCM_CLIENT_EMAIL
         sync: false
       - key: APP_LATEST_VERSION
-        value: "1.0.6"
+        value: "1.0.7"
       - key: ADMIN_WEB_VERSION
         value: "1.0.1"
       - key: ADMIN_WEB_URL

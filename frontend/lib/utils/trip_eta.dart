@@ -52,9 +52,9 @@ int estimateTripEtaMinutes({
     LatLng(originLat, originLng),
     LatLng(destLat, destLng),
   );
-  if (km <= 0) return 5;
+  if (km <= 0) return 1;
   final minutes = (km / mode.kmPerHour * 60).ceil();
-  if (minutes < 5) return 5;
+  if (minutes < 1) return 1;
   if (minutes > 24 * 60) return 24 * 60;
   return minutes;
 }

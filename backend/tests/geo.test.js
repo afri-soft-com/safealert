@@ -11,6 +11,12 @@ describe("trip ETA", () => {
     const walk = estimateEtaMinutes(-4.3276, 15.3136, -4.35, 15.35, "walk");
     const moto = estimateEtaMinutes(-4.3276, 15.3136, -4.35, 15.35, "moto");
     expect(walk).toBeGreaterThan(moto);
-    expect(moto).toBeGreaterThanOrEqual(5);
+    expect(moto).toBeGreaterThanOrEqual(1);
+  });
+
+  it("short urban hop still returns a positive ETA", () => {
+    const eta = estimateEtaMinutes(-4.3276, 15.3136, -4.3280, 15.3140, "moto");
+    expect(eta).toBeGreaterThanOrEqual(1);
+    expect(eta).toBeLessThan(5);
   });
 });

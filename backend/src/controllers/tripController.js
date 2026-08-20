@@ -6,7 +6,7 @@ const { sendAlert } = require("../services/alert");
 const { safeTrip, escortMode, publicShare } = require("../config/features");
 const { notifyTrustCircle } = require("./checkInController");
 const { getEntitlementsForUser } = require("../services/premiumEntitlements");
-const { estimateEtaMinutes, normalizeTransportMode } = require("../utils/geo");
+const { estimateEtaMinutes, normalizeTransportMode, haversineKm } = require("../utils/geo");
 
 const PUBLIC_BASE =
   process.env.PUBLIC_APP_URL ||
@@ -44,7 +44,25 @@ const startTrip = async (req, res) => {
     return res.status(400).json({ error: "Origine et destination requises" });
   }
 
+  const distanceKm = haversineKm(originLat, originLng, destLat, destLng);
+  if (!Number.isFinite(distanceKm) || distanceKm < 0.025) {
+    return res.status(400).json({
+      error: "Destination trop proche du départ (moins de 25 m). Choisissez un autre point d'arrivée.",
+    });
+  }
+
   try {
+    const active = await pool.query(
+      `SELECT * FROM safe_trips WHERE user_id = $1 AND status = 'active' ORDER BY created_at DESC LIMIT 1`,
+      [req.userId]
+    );
+    if (active.rows.length > 0) {
+      return res.status(409).json({
+        error: "Un trajet est déjà en cours. Terminez-le ou annulez-le avant d'en démarrer un autre.",
+        trip: active.rows[0],
+      });
+    }
+
     const ents = await getEntitlementsForUser(req.userId);
     if (ents.trips_per_week != null) {
       const weekCount = await pool.query(
@@ -65,7 +83,7 @@ const startTrip = async (req, res) => {
     const requestedRaw = eta_minutes == null || eta_minutes === ""
       ? suggested
       : parseInt(eta_minutes, 10);
-    const requested = Math.max(Number.isFinite(requestedRaw) ? requestedRaw : suggested, 5);
+    const requested = Math.max(Number.isFinite(requestedRaw) ? requestedRaw : suggested, 1);
     if (requested > ents.trip_eta_max_minutes) {
       return res.status(403).json({
         error: `ETA max ${ents.trip_eta_max_minutes} min en gratuit. Premium jusqu'à ${12 * 60} min.`,
@@ -155,7 +173,12 @@ const startTrip = async (req, res) => {
         error: "Base trajets incomplète — relancez les migrations serveur.",
       });
     }
-    return res.status(500).json({ error: "Erreur serveur" });
+    if (err.code === "23505") {
+      return res.status(409).json({
+        error: "Un trajet est déjà en cours. Terminez-le ou annulez-le.",
+      });
+    }
+    return res.status(500).json({ error: "Impossible de démarrer le trajet. Réessayez." });
   }
 };
 
@@ -196,7 +219,12 @@ const pingTrip = async (req, res) => {
       }
     }
 
-    // Arrival: within 80m of destination
+    // Arrival: within 80m of destination — skipped for short trips
+    // (origin already inside the 80m radius, which looked like an instant failure).
+    const originDestM = haversineKm(
+      Number(trip.origin_lat), Number(trip.origin_lng),
+      Number(trip.dest_lat), Number(trip.dest_lng)
+    ) * 1000;
     const arrivalRes = await pool.query(
       `SELECT ST_Distance(
          ST_SetSRID(ST_MakePoint($1,$2),4326)::geography,
@@ -205,10 +233,13 @@ const pingTrip = async (req, res) => {
       [trip.dest_lng, trip.dest_lat, lng, lat]
     );
     const nearDest = arrivalRes.rows[0].meters < 80;
+    const startedAt = trip.created_at ? new Date(trip.created_at).getTime() : 0;
+    const elapsedMs = Date.now() - startedAt;
+    const autoArriveOk = originDestM >= 150 && elapsedMs > 60 * 1000;
 
     let status = "active";
     let arrivedAt = null;
-    if (nearDest) {
+    if (autoArriveOk && nearDest) {
       status = "arrived";
       arrivedAt = new Date();
     }
@@ -236,13 +267,17 @@ const pingTrip = async (req, res) => {
     }
 
     if (status === "arrived") {
-      await notifyTrustCircle(
-        req.userId,
-        "✅ Arrivée SafeAlert",
-        "{pseudo} est arrivé(e) à destination.",
-        "safe_trip_arrived",
-        "✅ SafeAlert — {pseudo} est arrivé(e) à destination."
-      );
+      try {
+        await notifyTrustCircle(
+          req.userId,
+          "✅ Arrivée SafeAlert",
+          "{pseudo} est arrivé(e) à destination.",
+          "safe_trip_arrived",
+          "✅ SafeAlert — {pseudo} est arrivé(e) à destination."
+        );
+      } catch (notifyErr) {
+        console.error("pingTrip notify skipped:", notifyErr.message);
+      }
     }
 
     return res.json({ trip: updated.rows[0] });

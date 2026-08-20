@@ -866,16 +866,25 @@ class _TripScreenState extends State<TripScreen> {
                               : 'Activez le GPS pour le suivi en direct.',
                           style: const TextStyle(fontSize: 12, color: AppColors.bleuFonce),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          'Code à donner aux proches :\n${trip['id']}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.bleuFonce,
+                            height: 1.35,
+                          ),
+                        ),
+                        if (context.watch<TripProvider>().shareUrl != null) ...[
+                          const SizedBox(height: 6),
+                          SelectableText(
+                            'Lien de suivi : ${context.watch<TripProvider>().shareUrl}',
+                            style: const TextStyle(fontSize: 11, color: AppColors.gris, height: 1.3),
+                          ),
+                        ],
                         Row(
                           children: [
-                            Expanded(
-                              child: Text(
-                                'Code à donner aux proches : ${trip['id']}',
-                                style: const TextStyle(fontSize: 11, color: AppColors.gris),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
                             IconButton(
                               tooltip: 'Copier le code trajet',
                               onPressed: () {
@@ -886,6 +895,7 @@ class _TripScreenState extends State<TripScreen> {
                               },
                               icon: const Icon(Icons.copy, size: 18),
                             ),
+                            const Text('Copier le code', style: TextStyle(fontSize: 11, color: AppColors.gris)),
                           ],
                         ),
                         const SizedBox(height: 8),

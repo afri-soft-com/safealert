@@ -183,6 +183,15 @@ class TripProvider extends ChangeNotifier {
       await _syncTracking();
       return _activeTrip;
     } catch (e) {
+      if (e is ApiException && e.statusCode == 409) {
+        await fetchActive();
+        _loading = false;
+        if (_activeTrip != null) {
+          _error = null;
+          notifyListeners();
+          return _activeTrip;
+        }
+      }
       _error = userFacingError(e, fallback: 'Impossible de démarrer le trajet.');
       _loading = false;
       notifyListeners();
