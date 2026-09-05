@@ -201,6 +201,18 @@ const verifyCode = async (req, res) => {
     } else {
       await pool.query("UPDATE otp_codes SET used_at = NOW() WHERE id = $1", [otpRow.id]);
       user = user.rows[0];
+      const adminPhone = (process.env.PLATFORM_ADMIN_PHONE || "").trim();
+      if (
+        adminPhone &&
+        phone === normalizePhone(adminPhone) &&
+        user.role !== "platform_admin"
+      ) {
+        const promoted = await pool.query(
+          "UPDATE users SET role = 'platform_admin', updated_at = NOW() WHERE id = $1 RETURNING *",
+          [user.id]
+        );
+        if (promoted.rows[0]) user = promoted.rows[0];
+      }
     }
 
     const { device_id, device_label, fcm_token } = req.body || {};

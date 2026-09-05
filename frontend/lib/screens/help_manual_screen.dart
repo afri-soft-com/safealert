@@ -63,6 +63,7 @@ class HelpManualScreen extends StatelessWidget {
                     _P('1. Saisissez votre numéro (ex. 0812… — l\'indicatif +243 est ajouté si besoin).'),
                     _P('2. Appuyez sur « Envoyer le code » et consultez le SMS.'),
                     _P('3. Saisissez les 6 chiffres. Première utilisation : cochez « Nouveau compte » et choisissez un pseudo.'),
+                    _P('4. Créez un code PIN local. Aux prochaines ouvertures, le PIN déverrouille l’app sans renvoyer de SMS.'),
                   ],
                 ),
                 _section(
@@ -201,6 +202,7 @@ class HelpManualScreen extends StatelessWidget {
                     _P('Serveur inaccessible ? Vérifiez votre connexion Internet et réessayez.'),
                     _P('Mode invité : carte et annuaire sans compte. Connexion requise pour SOS, contacts et signalements.'),
                     _P('Suppression de compte : Paramètres → Supprimer le compte (irréversible).'),
+                    _P('CGU : Paramètres → Conditions générales d’utilisation, ou depuis l’écran de connexion.'),
                   ],
                 ),
                 const SizedBox(height: 8),

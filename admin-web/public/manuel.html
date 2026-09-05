@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Manuel utilisateur — SafeAlert</title>
+  <style>
+    :root {
+      --bg: #0b6e6e;
+      --ink: #14201f;
+      --muted: #4a5c5a;
+      --card: #ffffff;
+      --line: #d7e5e3;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(11, 110, 110, 0.18), transparent 40%),
+        linear-gradient(180deg, #f3faf9 0%, #eef6f5 100%);
+      line-height: 1.65;
+    }
+    header {
+      background: linear-gradient(135deg, #0b6e6e, #063d3d);
+      color: #fff;
+      padding: 48px 20px 40px;
+    }
+    header .wrap, main {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.8rem, 4vw, 2.4rem);
+      letter-spacing: 0.02em;
+    }
+    .subtitle { opacity: 0.9; margin: 0; font-family: system-ui, sans-serif; font-size: 0.95rem; }
+    main {
+      background: var(--card);
+      margin-top: -24px;
+      margin-bottom: 48px;
+      padding: 32px 24px 48px;
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(6, 61, 61, 0.08);
+      border: 1px solid var(--line);
+    }
+    h2 {
+      margin-top: 2rem;
+      font-size: 1.25rem;
+      color: var(--bg);
+    }
+    p, li { font-family: system-ui, -apple-system, Segoe UI, sans-serif; color: var(--muted); }
+    ul { padding-left: 1.2rem; }
+    a { color: var(--bg); }
+    .meta {
+      font-family: system-ui, sans-serif;
+      font-size: 0.85rem;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      margin-top: 2.5rem;
+      padding-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Manuel utilisateur</h1>
+      <p class="subtitle">SafeAlert — Guide citoyen (application mobile)</p>
+    </div>
+  </header>
+  <main>
+    <p>
+      SafeAlert est l’application de <strong>sécurité citoyenne</strong> d’AfriSoft :
+      alerte SOS, contacts de confiance, carte des incidents et entraide de quartier.
+    </p>
+    <p><strong>Dernière mise à jour :</strong> 5 septembre 2026</p>
+
+    <h2>1. Connexion</h2>
+    <ol>
+      <li>Saisissez votre numéro (ex. 0812… — l’indicatif +243 est ajouté si besoin).</li>
+      <li>Appuyez sur « Envoyer le code » et consultez le SMS.</li>
+      <li>Saisissez les 6 chiffres. Première utilisation : cochez « Nouveau compte » et choisissez un pseudo.</li>
+      <li>Créez un code PIN local pour les prochaines ouvertures (plus de SMS à chaque fois).</li>
+    </ol>
+
+    <h2>2. Alerte SOS</h2>
+    <ul>
+      <li>Depuis l’accueil, ouvrez le bouton rouge SOS, puis <strong>maintenez environ 2 secondes</strong>.</li>
+      <li>Votre position est envoyée ; vos contacts de confiance sont alertés.</li>
+      <li>Annulation : « Fausse alerte — annuler » dans les minutes suivant l’envoi.</li>
+      <li>SOS discret (Android) : 3× Volume bas avec l’app ouverte, ou secouer le téléphone.</li>
+    </ul>
+
+    <h2>3. Autres fonctions</h2>
+    <ul>
+      <li><strong>Contacts de confiance</strong> — proches alertés par SMS et notification.</li>
+      <li><strong>Carte</strong> — incidents à proximité ; mode invité possible sans compte.</li>
+      <li><strong>Groupes voisins</strong> — entraide de quartier (électricité, inondation, rue bloquée…).</li>
+      <li><strong>Trajet sécurisé</strong> — partagez un code pour qu’un proche suive votre trajet.</li>
+      <li><strong>Mises à jour</strong> — une bannière peut apparaître pendant l’usage si une nouvelle version est disponible.</li>
+    </ul>
+
+    <h2>4. Où trouver ce guide dans l’app</h2>
+    <p>Accueil → <strong>Aide / Manuel</strong>, ou Paramètres → Aide / Manuel d’utilisation.</p>
+
+    <h2>5. Console d’administration</h2>
+    <p>
+      Réservée aux administrateurs plateforme. Après connexion, le menu
+      <strong>Aide</strong> décrit les pages de la console.
+    </p>
+
+    <div class="meta">
+      <p>SafeAlert — AfriSoft. En cas d’urgence vitale, contactez aussi les services publics.</p>
+      <p>
+        <a href="/cgu.html">CGU</a> ·
+        <a href="/privacy.html">Confidentialité</a> ·
+        <a href="/">Console</a>
+      </p>
+    </div>
+  </main>
+</body>
+</html>

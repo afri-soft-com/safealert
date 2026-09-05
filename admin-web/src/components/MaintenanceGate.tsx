@@ -1,8 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { api, isStaffRole } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import MaintenancePage from "../pages/MaintenancePage";
+
+const POLL_MS = 10 * 60 * 1000;
 
 export default function MaintenanceGate({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, ready } = useAuth();
@@ -11,24 +13,33 @@ export default function MaintenanceGate({ children }: { children: ReactNode }) {
   const [message, setMessage] = useState("");
   const [cfgReady, setCfgReady] = useState(false);
 
+  const refresh = useCallback(async () => {
+    try {
+      const cfg = await api.getAppConfig();
+      setMaintenance(cfg.maintenance === true);
+      setMessage(cfg.maintenanceBanner || "");
+    } catch {
+      /* offline — keep last known state */
+    } finally {
+      setCfgReady(true);
+    }
+  }, []);
+
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const cfg = await api.getAppConfig();
-        if (cancelled) return;
-        setMaintenance(cfg.maintenance === true);
-        setMessage(cfg.maintenanceBanner || "");
-      } catch {
-        if (!cancelled) setMaintenance(false);
-      } finally {
-        if (!cancelled) setCfgReady(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
+    void refresh();
+    const id = window.setInterval(() => void refresh(), POLL_MS);
+    const onFocus = () => void refresh();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refresh();
     };
-  }, [isAuthenticated, location.pathname]);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [refresh, isAuthenticated, location.pathname]);
 
   if (!ready || !cfgReady) {
     return <div className="loading">Chargement…</div>;

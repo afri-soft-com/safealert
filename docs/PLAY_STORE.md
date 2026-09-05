@@ -80,7 +80,7 @@ Ou télécharger la release GitHub **`aab-main`** (CI, si `frontend/**` a chang�
 
 Deux mécanismes complémentaires :
 
-1. **Google Play In-App Updates** (`in_app_update`) — sur les builds installés via Play (piste Internal incluse). Au démarrage / reprise / toutes les ~45 min, l’app vérifie une mise à jour et privilégie le mode **flexible** (téléchargement en arrière-plan, puis redémarrage).
+1. **Google Play In-App Updates** (`in_app_update`) — sur les builds installés via Play (piste Internal incluse). Au démarrage / reprise / toutes les ~10 min, l’app vérifie une mise à jour et privilégie le mode **flexible** (téléchargement en arrière-plan, puis redémarrage).
 2. **API `GET /api/app/version`** — fallback soft / force avant propagation Play. Réponse : `{ minVersion, latestVersion, forceUpdate, storeUrl }`.
 
 Configurer sur Render (ou `.env`) :

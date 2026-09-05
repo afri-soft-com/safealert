@@ -54,6 +54,7 @@ SafeAlert utilise votre **numéro de téléphone** et un **code à 6 chiffres** 
 2. Saisissez les **6 chiffres** du code.
 3. Si c'est votre **première utilisation**, cochez **Nouveau compte** et choisissez un **pseudo**.
 4. Appuyez sur **Vérifier**.
+5. À la première connexion, créez un **code PIN local**. Aux ouvertures suivantes, le PIN déverrouille l’application sans renvoyer de SMS.
 
 Vous arrivez sur l'**écran d'accueil**.
 
@@ -348,6 +349,10 @@ Pour toute question, contactez l'administrateur de votre instance SafeAlert.
 
 Dans l'application : **Accueil → Aide / Manuel** ou **Paramètres → Aide**.
 
+Conditions générales : **Paramètres → CGU**, écran de connexion, ou [cgu.html](https://safealert-admin.onrender.com/cgu.html).
+
+Version web du manuel : [manuel.html](https://safealert-admin.onrender.com/manuel.html).
+
 ---
 
-*Dernière mise à jour : août 2026*
+*Dernière mise à jour : septembre 2026*

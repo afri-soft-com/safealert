@@ -148,6 +148,13 @@ export default function LoginPage() {
           Partenaire API ?{" "}
           <a href="/portail-partenaire">Accéder au portail partenaire</a>
         </p>
+        <p className="form-hint">
+          <a href="/manuel.html">Manuel utilisateur</a>
+          {" · "}
+          <a href="/cgu.html">CGU</a>
+          {" · "}
+          <a href="/privacy.html">Confidentialité</a>
+        </p>
       </div>
     </div>
   );

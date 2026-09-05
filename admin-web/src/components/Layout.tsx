@@ -55,6 +55,12 @@ export default function Layout() {
           >
             Portail partenaire ↗
           </a>
+          <a href="/manuel.html" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+            Manuel utilisateur
+          </a>
+          <a href="/cgu.html" style={{ fontSize: 12, display: "block", marginBottom: 8 }}>
+            CGU
+          </a>
           <button type="button" onClick={logout}>
             Déconnexion
           </button>

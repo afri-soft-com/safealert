@@ -11,6 +11,7 @@ import 'package:safealert/screens/dashboard_screen.dart';
 import 'package:safealert/screens/help_manual_screen.dart';
 import 'package:safealert/screens/home_screen.dart';
 import 'package:safealert/screens/privacy_screen.dart';
+import 'package:safealert/screens/terms_screen.dart';
 import 'package:safealert/screens/safety_screen.dart';
 import 'package:safealert/screens/settings_screen.dart';
 import 'package:safealert/screens/sos_screen.dart';
@@ -72,6 +73,14 @@ void main() {
       await _pumpNarrow(tester, size, MaterialApp(
         theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: AppColors.rouge)),
         home: PrivacyScreen(onBack: () {}),
+      ));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('TermsScreen fits on $label', (tester) async {
+      await _pumpNarrow(tester, size, MaterialApp(
+        theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: AppColors.rouge)),
+        home: TermsScreen(onBack: () {}),
       ));
       expect(tester.takeException(), isNull);
     });

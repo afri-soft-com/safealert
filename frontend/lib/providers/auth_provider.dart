@@ -12,7 +12,7 @@ import '../services/trip_tracking_service.dart';
 /// Routes nécessitant une authentification (US-14 mode invité).
 const kAuthRequiredScreens = {
   'home', 'sos', 'contacts', 'dashboard', 'settings', 'leader', 'groups',
-  'history', 'privacy', 'admin', 'help', 'trip', 'escort_map', 'trust_zones', 'neighborhood',
+  'history', 'privacy', 'admin', 'trip', 'escort_map', 'trust_zones', 'neighborhood',
   'offline_queue', 'safety_ping', 'premium',
 };
 

@@ -9,7 +9,15 @@ enum _LoginStep { phone, otp, pinUnlock, pinCreate }
 class LoginScreen extends StatefulWidget {
   final VoidCallback onSuccess;
   final VoidCallback? onBack;
-  const LoginScreen({super.key, required this.onSuccess, this.onBack});
+  final VoidCallback? onHelp;
+  final VoidCallback? onTerms;
+  const LoginScreen({
+    super.key,
+    required this.onSuccess,
+    this.onBack,
+    this.onHelp,
+    this.onTerms,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -195,6 +203,32 @@ class _LoginScreenState extends State<LoginScreen> {
                               maxLines: 3,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(color: AppColors.rouge, fontSize: 12),
+                            ),
+                          ],
+                          if (widget.onHelp != null || widget.onTerms != null) ...[
+                            const SizedBox(height: 20),
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              spacing: 12,
+                              runSpacing: 4,
+                              children: [
+                                if (widget.onHelp != null)
+                                  TextButton(
+                                    onPressed: widget.onHelp,
+                                    child: const Text(
+                                      'Manuel',
+                                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                                    ),
+                                  ),
+                                if (widget.onTerms != null)
+                                  TextButton(
+                                    onPressed: widget.onTerms,
+                                    child: const Text(
+                                      'CGU',
+                                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ],
                         ],
