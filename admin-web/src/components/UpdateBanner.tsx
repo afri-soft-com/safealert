@@ -67,10 +67,15 @@ export default function UpdateBanner() {
     void check();
     const id = window.setInterval(() => void check(), POLL_MS);
     const onFocus = () => void check();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void check();
+    };
     window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.clearInterval(id);
       window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [check]);
 

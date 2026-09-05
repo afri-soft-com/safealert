@@ -18,7 +18,8 @@ class AppUpdateService {
   static final AppUpdateService instance = AppUpdateService._();
   factory AppUpdateService() => instance;
 
-  static const Duration pollInterval = Duration(minutes: 45);
+  /// Mid-session poll so the banner can appear without a cold start.
+  static const Duration pollInterval = Duration(minutes: 10);
   static const Duration minCheckGap = Duration(minutes: 2);
 
   final ApiService _api = ApiService();
@@ -160,9 +161,9 @@ class AppUpdateService {
     final info = await PackageInfo.fromPlatform();
     final current = info.version;
 
-    final belowMin = min.isNotEmpty && _compareVersions(current, min) < 0;
+    final belowMin = min.isNotEmpty && compareVersions(current, min) < 0;
     final belowLatest =
-        latest.isNotEmpty && _compareVersions(current, latest) < 0;
+        latest.isNotEmpty && compareVersions(current, latest) < 0;
 
     if (!belowMin && !belowLatest && !forceFlag) {
       if (_updateAvailable) {
@@ -247,7 +248,7 @@ class AppUpdateService {
   }
 
   /// Returns negative if [a] < [b], 0 if equal, positive if [a] > [b].
-  static int _compareVersions(String a, String b) {
+  static int compareVersions(String a, String b) {
     List<int> parts(String v) =>
         v.split(RegExp(r'[.+-]')).map((e) => int.tryParse(e) ?? 0).toList();
     final pa = parts(a);

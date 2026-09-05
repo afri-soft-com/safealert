@@ -2,7 +2,7 @@ const features = require("../config/features");
 const { getMaintenance } = require("../services/appSettings");
 
 /** Keep in sync with frontend/pubspec.yaml (version name, before +build). */
-const DEFAULT_MOBILE_VERSION = "1.0.7";
+const DEFAULT_MOBILE_VERSION = "1.0.8";
 /** Keep in sync with admin-web/package.json. */
 const DEFAULT_ADMIN_WEB_VERSION = "1.0.2";
 
