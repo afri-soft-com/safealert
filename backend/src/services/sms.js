@@ -1,20 +1,40 @@
+const crypto = require("crypto");
 const { log, warn, error: logError } = require("../utils/logger");
 
 let twilioClient = null;
 let africasTalkingConfigured = false;
 let serdipayConfigured = false;
+let afrisoftHubConfigured = false;
 
 /**
  * Priorité d'envoi SMS :
- * 1. SerdiPay (si SERDIPAY_API_KEY + SERDIPAY_SMS_URL) — OTP RDC cible
- * 2. Twilio
- * 3. Africa's Talking
- * 4. Simulation console (dev uniquement utile)
- *
- * L'API SMS SerdiPay n'est pas encore publique ; l'URL et le format
- * se configurent via env dès réception des clés / doc partenaire.
+ * 1. Hub AfriSoft (AFRISOFT_HUB_API_KEY + AFRISOFT_HUB_APP_ID) — OTP RDC
+ * 2. SerdiPay direct
+ * 3. Twilio
+ * 4. Africa's Talking
+ * 5. Simulation console
  */
+const hubBaseUrl = () =>
+  (process.env.AFRISOFT_SMS_HUB_URL || process.env.SMS_HUB_URL || "https://sms.afri-soft.com")
+    .trim()
+    .replace(/\/$/, "");
+
+const hubAppId = () => (process.env.AFRISOFT_HUB_APP_ID || "").trim();
+const hubApiKey = () => (process.env.AFRISOFT_HUB_API_KEY || "").trim();
+
+const normalizeHubPhone = (to) => {
+  let p = String(to || "").replace(/\s/g, "");
+  if (p.startsWith("+")) p = p.slice(1);
+  if (/^0\d{9}$/.test(p)) p = `243${p.slice(1)}`;
+  return p;
+};
+
 const initSMS = () => {
+  afrisoftHubConfigured = Boolean(hubAppId() && hubApiKey());
+  if (afrisoftHubConfigured) {
+    log("AfriSoft SMS hub initialized");
+  }
+
   if (process.env.SERDIPAY_API_KEY && process.env.SERDIPAY_SMS_URL) {
     serdipayConfigured = true;
     log("SerdiPay SMS initialized");
@@ -35,8 +55,57 @@ const initSMS = () => {
     log("Africa's Talking SMS initialized");
   }
 
-  if (!serdipayConfigured && !twilioClient && !africasTalkingConfigured) {
+  if (!afrisoftHubConfigured && !serdipayConfigured && !twilioClient && !africasTalkingConfigured) {
     warn("Aucun fournisseur SMS configuré — fallback simulation console");
+  }
+};
+
+const sendViaAfriSoftHub = async (to, body) => {
+  if (!afrisoftHubConfigured) return null;
+  const appId = hubAppId();
+  const apiKey = hubApiKey();
+  const path = "/v1/sms/send";
+  const phone = normalizeHubPhone(to);
+  const text = String(body || "").slice(0, 640);
+  const purpose = /\b\d{6}\b/.test(text) ? "otp" : "notify";
+  const rawBody = JSON.stringify({
+    app_id: appId,
+    phone,
+    text,
+    reference: `${appId}_${purpose}_${crypto.randomUUID()}`,
+    idempotency_key: `${appId}:${purpose}:${phone}:${crypto
+      .createHash("sha256")
+      .update(text)
+      .digest("hex")
+      .slice(0, 16)}`,
+  });
+  const ts = String(Math.floor(Date.now() / 1000));
+  const sig = crypto
+    .createHmac("sha256", apiKey)
+    .update(`${ts}.POST.${path}.${rawBody}`)
+    .digest("hex");
+
+  try {
+    const res = await fetch(`${hubBaseUrl()}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-AfriSoft-App-Id": appId,
+        "X-AfriSoft-Api-Key": apiKey,
+        "X-AfriSoft-Timestamp": ts,
+        "X-AfriSoft-Signature": sig,
+      },
+      body: rawBody,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      logError("AfriSoft SMS hub error:", res.status, data.code || data.message || "");
+      return null;
+    }
+    return { transport: "afrisoft", ...data };
+  } catch (err) {
+    logError("AfriSoft SMS hub error:", err.message);
+    return null;
   }
 };
 
@@ -134,11 +203,15 @@ const sendViaAfricasTalking = async (to, body) => {
 const sendSMS = async (to, body) => {
   const preferred = (process.env.SMS_PROVIDER || "auto").toLowerCase();
 
+  const tryHub = async () => sendViaAfriSoftHub(to, body);
   const trySerdi = async () => sendViaSerdiPay(to, body);
   const tryTwilio = async () => sendViaTwilio(to, body);
   const tryAt = async () => sendViaAfricasTalking(to, body);
 
-  if (preferred === "serdipay") {
+  if (preferred === "afrisoft" || preferred === "afrisofthub") {
+    const r = await tryHub();
+    if (r) return r;
+  } else if (preferred === "serdipay") {
     const r = await trySerdi();
     if (r) return r;
   } else if (preferred === "twilio") {
@@ -148,7 +221,8 @@ const sendSMS = async (to, body) => {
     const r = await tryAt();
     if (r) return r;
   } else {
-    // auto : SerdiPay → Twilio → Africa's Talking
+    const hub = await tryHub();
+    if (hub) return hub;
     const serdi = await trySerdi();
     if (serdi) return serdi;
     const twilioResult = await tryTwilio();
@@ -162,13 +236,15 @@ const sendSMS = async (to, body) => {
 };
 
 const isSMSConfigured = () =>
-  Boolean(serdipayConfigured || twilioClient || africasTalkingConfigured);
+  Boolean(afrisoftHubConfigured || serdipayConfigured || twilioClient || africasTalkingConfigured);
 
 module.exports = {
   initSMS,
   sendSMS,
   isSMSConfigured,
+  sendViaAfriSoftHub,
   sendViaSerdiPay,
   sendViaTwilio,
   sendViaAfricasTalking,
+  normalizeHubPhone,
 };

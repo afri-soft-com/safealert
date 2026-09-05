@@ -65,6 +65,12 @@ services:
           property: connectionString
       - key: SMS_PROVIDER
         value: auto
+      - key: AFRISOFT_SMS_HUB_URL
+        value: https://sms.afri-soft.com
+      - key: AFRISOFT_HUB_APP_ID
+        value: afrisoft-partenaire
+      - key: AFRISOFT_HUB_API_KEY
+        sync: false
       - key: SERDIPAY_API_KEY
         sync: false
       - key: SERDIPAY_SMS_URL

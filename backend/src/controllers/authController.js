@@ -45,7 +45,7 @@ const OTP_PHONE_MAX = Number(process.env.OTP_PHONE_MAX_PER_WINDOW || 5);
  * SECURITY: never enable by default. Only when ALLOW_DEV_OTP=true
  * (or OTP_BYPASS_ENABLED=true). When set, ALWAYS return/log `devCode`
  * even if SMS providers are also configured (SMS may still be attempted).
- * DISABLE as soon as Twilio/SerdiPay delivery works — otherwise OTP leaks
+ * DISABLE as soon as AfriSoft hub SMS delivery works — otherwise OTP leaks
  * in API responses + logs.
  */
 const isDevOtpBypassEnabled = () =>

@@ -46,7 +46,7 @@ Variables d’environnement à définir via MCP `update_environment_variables` o
 
 - `NODE_ENV=production`, `HOST=0.0.0.0`, `JWT_EXPIRES_IN=30d`
 - `DATABASE_URL` / `DATABASE_URL_DIRECT` — injectés depuis Postgres **`safealert-db`** (Blueprint) ; sinon coller l’URL Internal depuis Connect
-- `JWT_SECRET`, `TWILIO_*`, `FCM_*`
+- `JWT_SECRET`, `AFRISOFT_HUB_API_KEY`, `TWILIO_*`, `FCM_*`
 - `REDIS_URL` (copier depuis le dashboard Key Value `safealert-redis`)
 - `NOMINATIM_USER_AGENT` (ex. `SafeAlert/1.0 (safealert-api.onrender.com)`)
 - `CORS_ORIGIN` (URL admin-web une fois déployée)

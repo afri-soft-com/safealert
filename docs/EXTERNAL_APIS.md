@@ -42,24 +42,31 @@ DATABASE_URL_DIRECT=postgresql://USER:PASS@ep-xxx.region.aws.neon.tech/safealert
 
 ---
 
-## 2. SerdiPay (SMS / OTP — cible RDC)
+## 2. Hub AfriSoft SMS (OTP / alertes — cible RDC)
 
 | | |
 |--|--|
-| **Objectif** | Envoi OTP (et alertes SMS) via partenaire SerdiPay |
-| **Variables** | `SERDIPAY_API_KEY`, `SERDIPAY_SMS_URL`, `SERDIPAY_SENDER_ID` (optionnel), `SERDIPAY_API_KEY_HEADER` (`Bearer` \| `apiKey`), `SMS_PROVIDER=serdipay\|auto` |
-| **Statut** | Connecteur prêt dans `backend/src/services/sms.js` — **en attente des clés API et de l’URL SMS** |
+| **Objectif** | Envoi OTP et SMS d’alerte via `https://sms.afri-soft.com` |
+| **Variables** | `AFRISOFT_SMS_HUB_URL`, `AFRISOFT_HUB_APP_ID`, `AFRISOFT_HUB_API_KEY`, `SMS_PROVIDER=auto\|afrisoft` |
+| **Endpoint** | `POST /v1/sms/send` (HMAC `X-AfriSoft-*`) — SafeAlert génère, hashe et vérifie l’OTP |
+| **Statut** | Connecteur dans `backend/src/services/sms.js` — coller `AFRISOFT_HUB_API_KEY` sur Render (jamais Git) |
 
 ### Checklist prod OTP (ne pas inventer de secrets)
 
-1. Obtenir auprès de SerdiPay : URL SMS, clé API, format d’auth, sender ID.
-2. Sur Render (ou `.env` local) : `SERDIPAY_API_KEY`, `SERDIPAY_SMS_URL`, éventuellement `SERDIPAY_SENDER_ID=SafeAlert`.
-3. Si l’auth n’est pas Bearer : `SERDIPAY_API_KEY_HEADER=apiKey`.
-4. Fallback recommandé : configurer aussi Twilio (`TWILIO_*`) pour secours.
-5. Vérifier : `POST /api/auth/request-code` → SMS reçu. Avec SMS fiable en prod, **ne pas** laisser `ALLOW_DEV_OTP` (sinon `devCode` reste renvoyé).
-6. Sans aucun fournisseur : simulation console (dev) ou bypass explicite ci-dessous.
+1. Sur Render (`safealert-api`) : `AFRISOFT_HUB_API_KEY` (fichier Word handoff). `AFRISOFT_SMS_HUB_URL` et `AFRISOFT_HUB_APP_ID` sont déjà dans `render.yaml`.
+2. Vérifier `GET https://sms.afri-soft.com/health` puis `POST /api/auth/request-code` → SMS reçu sur un vrai `+243`.
+3. Avec SMS fiable en prod, **retirer** `ALLOW_DEV_OTP` (sinon `devCode` reste renvoyé).
+4. Fallback optionnel : SerdiPay direct, Twilio, Africa’s Talking.
 
-Priorité automatique (`SMS_PROVIDER=auto`) : **SerdiPay → Twilio → Africa’s Talking → simulation**.
+Priorité automatique (`SMS_PROVIDER=auto`) : **hub AfriSoft → SerdiPay → Twilio → Africa’s Talking → simulation**.
+
+## 2b. SerdiPay (SMS direct — secours)
+
+| | |
+|--|--|
+| **Objectif** | Envoi SMS direct si le hub AfriSoft n’est pas configuré |
+| **Variables** | `SERDIPAY_API_KEY`, `SERDIPAY_SMS_URL`, `SERDIPAY_SENDER_ID` (optionnel), `SERDIPAY_API_KEY_HEADER` (`Bearer` \| `apiKey`), `SMS_PROVIDER=serdipay` |
+| **Statut** | Connecteur prêt — préférer le hub AfriSoft (§2) |
 
 ### Bypass temporaire sans clés SMS (tests admin prod)
 
@@ -69,7 +76,7 @@ Priorité automatique (`SMS_PROVIDER=auto`) : **SerdiPay → Twilio → Africa�
 | `OTP_BYPASS_CODE` | Optionnel — code fixe à 6 chiffres ; sinon OTP aléatoire + `devCode` dans la réponse |
 
 - Logs : `[DEV OTP]` via `console.warn` (visible sur Render).
-- **Désactiver** (`ALLOW_DEV_OTP` / `OTP_BYPASS_CODE`) dès que Twilio ou SerdiPay livre réellement les SMS.
+- **Désactiver** (`ALLOW_DEV_OTP` / `OTP_BYPASS_CODE`) dès que le hub AfriSoft livre réellement les SMS.
 - Voir [TESTING_WEB.md](./TESTING_WEB.md) et [ADMIN_WEB.md](./ADMIN_WEB.md).
 
 ## 3. Twilio (SMS — OTP et alertes, secours)
@@ -85,7 +92,7 @@ Priorité automatique (`SMS_PROVIDER=auto`) : **SerdiPay → Twilio → Africa�
 
 **Sans Twilio / avec bypass :**
 - **Dev** (`NODE_ENV=development`, SMS vide) : code dans le terminal (`[DEV OTP]`) + champ `devCode` dans `POST /api/auth/request-code`.
-- **Prod temporaire** : `ALLOW_DEV_OTP=true` → toujours `devCode` + logs, **même si** des clés SMS sont présentes (SMS tenté en parallèle). Optionnel : `OTP_BYPASS_CODE=123456` pour un code fixe. À retirer dès que Twilio/SerdiPay livre réellement.
+- **Prod temporaire** : `ALLOW_DEV_OTP=true` → toujours `devCode` + logs, **même si** des clés SMS sont présentes (SMS tenté en parallèle). Optionnel : `OTP_BYPASS_CODE=123456` pour un code fixe. À retirer dès que le hub AfriSoft livre réellement.
 
 ---
 
@@ -262,7 +269,7 @@ Retries : 12 tentatives, intervalle 10 s. Secret requis : `PRODUCTION_URL`.
 - [ ] `DATABASE_URL` / `DATABASE_URL_DIRECT` (Neon) ou Postgres Docker local
 - [ ] `REDIS_URL=redis://redis:6379` (Redis sur VPS) ou Upstash si managé
 - [ ] `API_IMAGE=ghcr.io/afri-soft-com/safealert-api:latest` sur le VPS
-- [ ] SMS / OTP : SerdiPay (clés) **ou** Twilio **ou** Africa's Talking
+- [ ] SMS / OTP : hub AfriSoft (`AFRISOFT_HUB_API_KEY` sur Render) **ou** SerdiPay / Twilio / Africa's Talking
 - [ ] Firebase : `google-services.json` + clés FCM backend
 - [ ] DNS `DOMAIN` → IP du VPS
 - [ ] `API_BASE_URL` dans le build APK/IPA
