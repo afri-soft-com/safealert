@@ -15,6 +15,7 @@ export default function ManuelPage() {
         <ol>
           <li>Saisissez votre numéro (l’indicatif +243 est ajouté si besoin).</li>
           <li>Recevez le code SMS à 6 chiffres, puis créez un PIN local.</li>
+          <li>Après déconnexion, entrez le PIN (pas de SMS). « Changer de numéro » recommence avec le téléphone.</li>
         </ol>
         <h2>2. Alerte SOS</h2>
         <ul>

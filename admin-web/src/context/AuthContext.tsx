@@ -21,6 +21,7 @@ import { adminPin } from "../utils/localPin";
 interface AuthContextValue {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  canEnterConsole: boolean;
   ready: boolean;
   hasLocalPin: boolean;
   pinUnlocked: boolean;
@@ -197,11 +198,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAuthenticated =
     !!user && isStaffRole(user.role) && pinUnlocked && !needsPinSetup;
+  const canEnterConsole = isAuthenticated;
 
   const value = useMemo(
     () => ({
       user,
       isAuthenticated,
+      canEnterConsole,
       ready,
       hasLocalPin,
       pinUnlocked,
@@ -217,6 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [
       user,
       isAuthenticated,
+      canEnterConsole,
       ready,
       hasLocalPin,
       pinUnlocked,

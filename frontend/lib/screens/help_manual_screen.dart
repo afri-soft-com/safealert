@@ -62,10 +62,9 @@ class HelpManualScreen extends StatelessWidget {
                   icon: Icons.phone_android,
                   title: 'Connexion',
                   children: const [
-                    _P('SafeAlert utilise votre numéro de téléphone et un code à 6 chiffres envoyé par SMS.'),
-                    _P('1. Saisissez votre numéro (ex. 0812… — l\'indicatif +243 est ajouté si besoin).'),
-                    _P('2. Appuyez sur « Envoyer le code » et consultez le SMS.'),
-                    _P('3. Saisissez les 6 chiffres. Première utilisation : cochez « Nouveau compte » et choisissez un pseudo.'),
+                    _P('Première connexion : numéro, code SMS à 6 chiffres, puis création d\'un PIN local (4 à 6 chiffres).'),
+                    _P('Ensuite, y compris après « Déconnexion », l\'écran PIN s\'affiche — pas de SMS. « Changer de numéro » efface le PIN et redemande le téléphone.'),
+                    _P('« Code PIN oublié » envoie un SMS pour définir un nouveau PIN.'),
                   ],
                 ),
                 _section(

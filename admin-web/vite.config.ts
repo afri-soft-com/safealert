@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 const pkg = JSON.parse(
@@ -22,5 +22,8 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
+  },
+  test: {
+    environment: "node",
   },
 });

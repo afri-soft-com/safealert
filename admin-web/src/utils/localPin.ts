@@ -49,8 +49,15 @@ export function isValidPin(pin: string): boolean {
   return cleaned.length >= PIN_MIN && cleaned.length <= PIN_MAX;
 }
 
+function defaultStore(): PinStore {
+  if (typeof window !== "undefined" && window.localStorage) {
+    return window.localStorage;
+  }
+  return new MemoryPinStore();
+}
+
 export class LocalPinService {
-  constructor(private store: PinStore = window.localStorage) {}
+  constructor(private store: PinStore = defaultStore()) {}
 
   hasPin(): boolean {
     const h = this.store.getItem(HASH_KEY);
