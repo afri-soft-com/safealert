@@ -98,7 +98,7 @@ Après chaque upload Play, mettez `APP_LATEST_VERSION` **exactement** à la vers
 
 Le message Play « Vous êtes un testeur interne… SafeAlert (Internal Beta) » vient du canal **Tests internes**, pas de la fiche Production.
 
-1. **Publier en Production** (la CI n’uploade que `internal` — ne pas forcer un upload production via l’API si l’accès Production n’est pas encore accordé) :
+1. **Publier en Production** (la CI uploade `internal` puis tente `production` ; si Play refuse l’accès Production, l’erreur API est dans les logs du job) :
    - Play Console → l’application SafeAlert → **Tester** → **Tests internes** → la version concernée
    - **Promouvoir la version** → **Production**
    - **Examiner** → **Lancer le déploiement en production**
@@ -117,7 +117,7 @@ Sur push `main` si `frontend/**` change :
 1. Build AAB
 2. Artifact Actions
 3. Release prerelease `aab-main`
-4. Upload Play **internal** (`status: completed`) si `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` est défini — la version est immédiatement disponible pour les testeurs internes (pas de draft). Ne pas passer `changesNotSentForReview` : Play le refuse si les changements partent automatiquement en revue.
+4. Upload Play **internal** puis **production** (`status: completed`) si `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` est défini. Internal reste disponible pour les testeurs même si Production est refusée par Play. Ne pas passer `changesNotSentForReview` : Play le refuse si les changements partent automatiquement en revue.
 
 L’AAB est aussi toujours sur la release GitHub **`aab-main`**, même si Play refuse le commit.
 

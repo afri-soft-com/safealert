@@ -402,6 +402,22 @@ jobs:
               build_failed|update_failed|canceled|deactivated)
                 echo "Deploy Render en échec: $status"
                 echo "$body" | jq . || true
+                owner_id=$(curl -fsS \
+                  -H "Authorization: Bearer ${RENDER_API_KEY}" \
+                  -H "Accept: application/json" \
+                  "https://api.render.com/v1/services/${SERVICE_ID}" \
+                  | jq -r '.ownerId // empty')
+                if [ -n "${owner_id}" ]; then
+                  echo "Derniers logs Render (secrets masqués) :"
+                  curl -fsS \
+                    -H "Authorization: Bearer ${RENDER_API_KEY}" \
+                    -H "Accept: application/json" \
+                    "https://api.render.com/v1/logs?ownerId=${owner_id}&resource=${SERVICE_ID}&limit=40" \
+                    | jq -r '.logs[]?.message // empty' \
+                    | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' \
+                    | sed -E 's/(JWT_SECRET|password|Bearer |postgres(ql)?:\/\/)[^[:space:]]+/\1[redacted]/Ig' \
+                    || true
+                fi
                 exit 1
                 ;;
             esac
@@ -445,11 +461,18 @@ jobs:
     timeout-minutes: 40
     env:
       PLAY_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+      GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.vfs.watch=false
     defaults:
       run:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
 
       - uses: subosito/flutter-action@v2
         with:
@@ -475,10 +498,14 @@ jobs:
           fi
 
       - name: Build App Bundle
+        timeout-minutes: 30
         env:
           API_BASE_URL: ${{ vars.API_BASE_URL }}
         run: |
           set -euo pipefail
+          # GitHub-hosted runners have ~7 GB RAM; frontend/android/gradle.properties asks for 8G+4G.
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx2G -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8/' android/gradle.properties
+          printf '\norg.gradle.daemon=false\norg.gradle.vfs.watch=false\n' >> android/gradle.properties
           BASE="${API_BASE_URL:-https://safealert-api.onrender.com/api}"
           flutter build appbundle --release --dart-define=API_BASE_URL="$BASE"
 
@@ -513,4 +540,15 @@ jobs:
           packageName: com.safealert.safealert
           releaseFiles: frontend/build/app/outputs/bundle/release/app-release.aab
           tracks: internal
+          status: completed
+
+      # Production is requested explicitly; do not swallow the Play API error.
+      - name: Upload to Google Play production track
+        if: ${{ env.PLAY_JSON != '' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.safealert.safealert
+          releaseFiles: frontend/build/app/outputs/bundle/release/app-release.aab
+          tracks: production
           status: completed
