@@ -17,6 +17,9 @@ const notifyContacts = async (client, userId, user, messageTitle, messageBody, s
   );
 
   for (const contact of contactsResult.rows) {
+    if (contact.contact_user_id && String(contact.contact_user_id) === String(userId)) {
+      continue;
+    }
     if (contact.contact_user_id && contact.fcm_token) {
       await sendPush(contact.fcm_token, {
         notification: { title: messageTitle, body: messageBody },

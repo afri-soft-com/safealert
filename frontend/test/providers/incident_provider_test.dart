@@ -92,6 +92,7 @@ void main() {
 
       expect(fakeApi.lastBody!['incident_type'], 'vol');
       expect(fakeApi.lastBody!['is_anonymous'], true);
+      expect(fakeSounds.playSosAlertCalls, 0);
     });
   });
 
@@ -158,14 +159,14 @@ void main() {
   });
 
   group('triggerSOS', () {
-    test('triggers SOS and returns response', () async {
+    test('triggers SOS without siren on the sender device', () async {
       fakeApi.onPost('/sos/trigger', () => {'incident': {'id': 1}});
 
       final result = await provider.triggerSOS(-4.3, 15.3);
 
       expect(result, isNotNull);
       expect(result!['incident']['id'], 1);
-      expect(fakeSounds.playSosAlertCalls, 1);
+      expect(fakeSounds.playSosAlertCalls, 0);
       expect(fakeSounds.feedbackDiscreteCalls, 0);
     });
 
@@ -179,15 +180,46 @@ void main() {
       expect(fakeSounds.feedbackDiscreteCalls, 1);
     });
 
-    test('queues SOS offline on failure', () async {
+    test('queues SOS offline on failure without siren', () async {
       final result = await provider.triggerSOS(-4.3, 15.3);
 
       expect(result, isNotNull);
       expect(result!['queued'], true);
       expect(provider.isOffline, true);
-      expect(fakeSounds.playSosAlertCalls, 1);
+      expect(fakeSounds.playSosAlertCalls, 0);
       final pending = await fakeDb.listPendingSos();
       expect(pending, isNotEmpty);
+    });
+  });
+
+  group('handleSosAlert', () {
+    test('plays siren for incoming SOS from another user', () {
+      fakeApi.onGet('/map/incidents?limit=100&hours=24', () => {'data': []});
+      provider.handleSosAlert({'id': 'x', 'user_id': 'other-user'});
+      expect(fakeSounds.playSosAlertCalls, 1);
+    });
+
+    test('does not play siren for own SOS echo', () {
+      provider = IncidentProvider(
+        apiService: fakeApi,
+        localDatabase: fakeDb,
+        alertSoundService: fakeSounds,
+        currentUserId: () => 'me',
+      );
+      fakeApi.onGet('/map/incidents?limit=100&hours=24', () => {'data': []});
+      provider.handleSosAlert({'id': 'x', 'user_id': 'me'});
+      expect(fakeSounds.playSosAlertCalls, 0);
+    });
+
+    test('does not play siren for socket echo of just-sent SOS', () async {
+      fakeApi.onPost('/sos/trigger', () => {'incident': {'id': 42}});
+      fakeApi.onGet('/map/incidents?limit=100&hours=24', () => {'data': []});
+
+      await provider.triggerSOS(-4.3, 15.3);
+      expect(fakeSounds.playSosAlertCalls, 0);
+
+      provider.handleSosAlert({'id': '42'});
+      expect(fakeSounds.playSosAlertCalls, 0);
     });
   });
 

@@ -102,18 +102,24 @@ const triggerSOS = async (req, res) => {
       for (const z of zones) {
         if (z.user_id === req.userId) continue;
         const contacts = await pool.query(
-          `SELECT u.fcm_token FROM trust_contacts tc
+          `SELECT u.id AS uid, u.fcm_token FROM trust_contacts tc
            LEFT JOIN users u ON tc.contact_phone = u.phone
            WHERE tc.user_id = $1 AND u.fcm_token IS NOT NULL`,
           [z.user_id]
         );
         for (const c of contacts.rows) {
+          if (c.uid && String(c.uid) === String(req.userId)) continue;
           await sendPush(c.fcm_token, {
             notification: {
               title: `📍 Alerte près de ${z.label}`,
               body: `SOS signalé dans votre zone ${z.zone_type}`,
             },
-            data: { type: "trust_zone_alert", zoneId: String(z.id), incidentId: String(incident.id) },
+            data: {
+              type: "trust_zone_alert",
+              zoneId: String(z.id),
+              incidentId: String(incident.id),
+              userId: String(req.userId),
+            },
           });
         }
       }
@@ -134,6 +140,7 @@ const triggerSOS = async (req, res) => {
     if (io) {
       io.emit("sos_alert", {
         id: incident.id,
+        user_id: req.userId,
         lat: incident.lat,
         lng: incident.lng,
         zone_name: incident.zone_name,

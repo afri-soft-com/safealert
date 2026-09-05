@@ -47,9 +47,11 @@ const notifyLeadersForSOS = async (incident) => {
 
     const seen = new Set();
     const all = [...geoLeaders.rows, ...nameLeaders.rows];
+    const senderId = incident.user_id != null ? String(incident.user_id) : "";
     for (const leader of all) {
       if (seen.has(leader.id)) continue;
       seen.add(leader.id);
+      if (senderId && String(leader.id) === senderId) continue;
       if (leader.fcm_token) {
         const place =
           typeof zone_name === "string" && zone_name.trim()
@@ -70,6 +72,7 @@ const notifyLeadersForSOS = async (incident) => {
           data: {
             type: "sector_sos",
             incidentId: String(id),
+            userId: senderId,
             lat: String(lat),
             lng: String(lng),
             zone_name: zone_name ? String(zone_name) : "",

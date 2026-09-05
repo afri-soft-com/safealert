@@ -17,6 +17,8 @@ class SocketService {
   TripEventCallback? _onEscortTrip;
   String? _userId;
 
+  String? get currentUserId => _userId;
+
   void setSosAlertHandler(SosAlertCallback? handler) {
     _onSosAlert = handler;
   }

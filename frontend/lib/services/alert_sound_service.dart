@@ -5,13 +5,12 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 /// Sons et canaux de notification pour les alertes SOS.
 ///
-/// **Politique mode discret / camouflage (choix produit)** :
-/// - Les alertes SOS **reçues** (cercle, proximité, groupe, secteur, zone)
-///   sont **toujours** sonores à priorité max — le camouflage calculatrice
-///   ne mute pas une urgence entrante.
-/// - Seul le déclenchement **SOS discret local** (`sos_discret` / volume /
-///   secousse / contrainte) reste silencieux sur l'appareil **émetteur**
-///   (vibration courte uniquement).
+/// **Politique son (choix produit)** :
+/// - Les alertes SOS / signalements **reçus** (cercle, proximité, groupe,
+///   secteur, zone) sont **toujours** sonores à priorité max — le camouflage
+///   calculatrice ne mute pas une urgence entrante.
+/// - L'appareil **émetteur** ne joue jamais la sirène (ni SOS standard, ni
+///   signalement). Le SOS discret local garde une vibration courte uniquement.
 /// - Les autres notifications utilisent le canal `safealert_default`.
 class AlertSoundService {
   static final AlertSoundService _instance = AlertSoundService._();

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../firebase_options.dart';
 import 'alert_sound_service.dart';
 import 'api_service.dart';
@@ -15,10 +16,54 @@ class FCMService extends ChangeNotifier {
   bool _initialized = false;
   bool _available = false;
   String? _token;
+  String? _currentUserId;
   StreamSubscription? _messageSub;
 
   bool get available => _available;
   String? get token => _token;
+
+  static const _userIdPrefsKey = 'safealert_current_user_id';
+
+  void setCurrentUserId(String? id) {
+    _currentUserId = id;
+    SharedPreferences.getInstance().then((prefs) {
+      if (id == null || id.isEmpty) {
+        prefs.remove(_userIdPrefsKey);
+      } else {
+        prefs.setString(_userIdPrefsKey, id);
+      }
+    });
+  }
+
+  bool _isOwnPush(RemoteMessage message) {
+    return isOwnPushData(message.data, currentUserId: _currentUserId);
+  }
+
+  static bool isOwnPushData(
+    Map<String, dynamic> data, {
+    String? currentUserId,
+  }) {
+    final sender = data['userId'] ?? data['user_id'];
+    if (currentUserId == null ||
+        currentUserId.isEmpty ||
+        sender == null ||
+        sender.toString().isEmpty) {
+      return false;
+    }
+    return sender.toString() == currentUserId;
+  }
+
+  static Future<bool> isOwnPushFromPrefs(Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return isOwnPushData(
+        data,
+        currentUserId: prefs.getString(_userIdPrefsKey),
+      );
+    } catch (_) {
+      return false;
+    }
+  }
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -92,7 +137,7 @@ class FCMService extends ChangeNotifier {
     final body = message.notification?.body ?? '';
     debugPrint('FCM foreground: $title type=$type');
 
-    if (AlertSoundService.isSosPayloadType(type)) {
+    if (AlertSoundService.isSosPayloadType(type) && !_isOwnPush(message)) {
       await AlertSoundService().playSosAlert();
       // En avant-plan FCM n'affiche pas la notif système : notif locale canal SOS.
       if (title.isNotEmpty || body.isNotEmpty) {
@@ -120,6 +165,7 @@ Future<void> _handleBackgroundMessage(RemoteMessage message) async {
   final type = message.data['type'] as String?;
   debugPrint('FCM background: ${message.notification?.title} type=$type');
   if (!AlertSoundService.isSosPayloadType(type)) return;
+  if (await FCMService.isOwnPushFromPrefs(message.data)) return;
 
   try {
     if (Firebase.apps.isEmpty) {

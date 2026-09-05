@@ -217,11 +217,14 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _startRealtimeServices() {
-    SocketService().connect(userId: _user?['id']?.toString());
+    final id = _user?['id']?.toString();
+    SocketService().connect(userId: id);
+    FCMService().setCurrentUserId(id);
     LocationService().startPeriodicUpdates();
   }
 
   void _stopRealtimeServices() {
+    FCMService().setCurrentUserId(null);
     SocketService().disconnect();
     LocationService().stopPeriodicUpdates();
     TripTrackingService().stop();

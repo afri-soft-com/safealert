@@ -14,16 +14,24 @@ class IncidentProvider extends ChangeNotifier {
   final ApiService _api;
   final LocalDatabase _cache;
   final AlertSoundService? _injectedSounds;
+  final String? Function()? _resolveUserId;
 
   AlertSoundService get _sounds => _injectedSounds ?? AlertSoundService();
+  String? get _myUserId => _resolveUserId?.call() ?? SocketService().currentUserId;
+
+  /// Last SOS we sent — used to ignore our own socket/FCM echo.
+  DateTime? _ownOutgoingAlertAt;
+  String? _ownOutgoingIncidentId;
 
   IncidentProvider({
     ApiService? apiService,
     LocalDatabase? localDatabase,
     AlertSoundService? alertSoundService,
+    String? Function()? currentUserId,
   })  : _api = apiService ?? ApiService(),
         _cache = localDatabase ?? LocalDatabase(),
-        _injectedSounds = alertSoundService {
+        _injectedSounds = alertSoundService,
+        _resolveUserId = currentUserId {
     SocketService().setSosAlertHandler(handleSosAlert);
     SocketService().setSosLiveHandler(handleSosLive);
   }
@@ -43,9 +51,38 @@ class IncidentProvider extends ChangeNotifier {
 
   void handleSosAlert(Map<String, dynamic> alert) {
     _lastSosAlert = alert;
-    // SOS entrant (cercle / carte) : toujours audible
-    _sounds.playSosAlert();
+    // Destinataires seulement — pas de sirène sur l'appareil émetteur.
+    if (!_isOwnIncomingAlert(alert)) {
+      _sounds.playSosAlert();
+    }
     fetchIncidents();
+  }
+
+  bool _isOwnIncomingAlert(Map<String, dynamic> alert) {
+    final myId = _myUserId;
+    final sender = alert['user_id']?.toString() ?? alert['userId']?.toString();
+    if (myId != null && sender != null && sender.isNotEmpty) {
+      return sender == myId;
+    }
+    final alertId = alert['id']?.toString();
+    if (_ownOutgoingIncidentId != null &&
+        alertId != null &&
+        alertId == _ownOutgoingIncidentId) {
+      return true;
+    }
+    // Écho socket sans user_id (API plus ancienne) juste après notre envoi.
+    if (sender == null &&
+        _ownOutgoingAlertAt != null &&
+        DateTime.now().difference(_ownOutgoingAlertAt!) <
+            const Duration(seconds: 5)) {
+      return true;
+    }
+    return false;
+  }
+
+  void _markOwnOutgoing({String? incidentId}) {
+    _ownOutgoingAlertAt = DateTime.now();
+    _ownOutgoingIncidentId = incidentId;
   }
 
   /// Mises à jour live (batterie / position) — pas de sirène.
@@ -237,11 +274,10 @@ class IncidentProvider extends ChangeNotifier {
         res['positionNote'] =
             'GPS indisponible — le serveur a utilisé votre dernière position enregistrée si elle existe.';
       }
-      // SOS in-app : sirène sauf déclenchement discret (émetteur silencieux)
+      _markOwnOutgoing(incidentId: res['incident']?['id']?.toString());
+      // Émetteur : jamais de sirène. SOS discret = vibration courte seulement.
       if (isDiscrete) {
         await _sounds.feedbackDiscreteSosTrigger();
-      } else {
-        await _sounds.playSosAlert();
       }
       return res;
     } catch (e) {
@@ -260,10 +296,9 @@ class IncidentProvider extends ChangeNotifier {
       notifyListeners();
       // Optional SMS fallback if we have trust contacts cached
       await _trySmsFallback(payload);
+      _markOwnOutgoing();
       if (isDiscrete) {
         await _sounds.feedbackDiscreteSosTrigger();
-      } else {
-        await _sounds.playSosAlert();
       }
       return {
         'queued': true,
