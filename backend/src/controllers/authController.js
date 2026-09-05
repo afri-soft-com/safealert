@@ -9,6 +9,19 @@ const { incrPhoneOtp } = require("../config/redis");
 const { otpPhoneLimit } = require("../config/features");
 const { writeAudit } = require("../services/audit");
 
+const promoteIfPlatformAdminPhone = async (user) => {
+  const adminPhone = (process.env.PLATFORM_ADMIN_PHONE || "").trim();
+  const normalizedAdmin = normalizePhone(adminPhone);
+  if (!user || !normalizedAdmin) return user;
+  if (normalizePhone(user.phone) !== normalizedAdmin) return user;
+  if (user.role === "platform_admin") return user;
+  const promoted = await pool.query(
+    `UPDATE users SET role = 'platform_admin', updated_at = NOW() WHERE id = $1 RETURNING *`,
+    [user.id]
+  );
+  return promoted.rows[0] || { ...user, role: "platform_admin" };
+};
+
 const createSessionToken = async (user, { deviceId, deviceLabel, fcmToken } = {}) => {
   const jti = crypto.randomUUID();
   const resolvedDeviceId = deviceId || crypto.randomUUID();
@@ -201,19 +214,9 @@ const verifyCode = async (req, res) => {
     } else {
       await pool.query("UPDATE otp_codes SET used_at = NOW() WHERE id = $1", [otpRow.id]);
       user = user.rows[0];
-      const adminPhone = (process.env.PLATFORM_ADMIN_PHONE || "").trim();
-      if (
-        adminPhone &&
-        phone === normalizePhone(adminPhone) &&
-        user.role !== "platform_admin"
-      ) {
-        const promoted = await pool.query(
-          "UPDATE users SET role = 'platform_admin', updated_at = NOW() WHERE id = $1 RETURNING *",
-          [user.id]
-        );
-        if (promoted.rows[0]) user = promoted.rows[0];
-      }
     }
+
+    user = await promoteIfPlatformAdminPhone(user);
 
     const { device_id, device_label, fcm_token } = req.body || {};
     const { token, deviceId } = await createSessionToken(user, {

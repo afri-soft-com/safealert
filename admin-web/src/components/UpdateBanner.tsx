@@ -43,12 +43,12 @@ function dismiss(version: string) {
 
 export default function UpdateBanner() {
   const [latest, setLatest] = useState<string | null>(null);
-  const [hidden, setHidden] = useState(false);
+  const [, setDismissTick] = useState(0);
   const local = currentVersion();
 
   const check = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/app/version`, { cache: "no-store" });
+      const res = await fetch(`${API_BASE}/app/version?t=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) return;
       const body = (await res.json()) as { adminWebVersion?: string };
       const remote = (body.adminWebVersion || "").trim();
@@ -79,7 +79,7 @@ export default function UpdateBanner() {
     };
   }, [check]);
 
-  if (!latest || hidden || dismissedFor(latest)) return null;
+  if (!latest || dismissedFor(latest)) return null;
 
   return (
     <UpdateBannerBar
@@ -87,7 +87,7 @@ export default function UpdateBanner() {
       local={local}
       onDismiss={() => {
         dismiss(latest);
-        setHidden(true);
+        setDismissTick((n) => n + 1);
       }}
     />
   );

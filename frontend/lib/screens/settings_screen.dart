@@ -17,8 +17,8 @@ class SettingsScreen extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onLogout;
   final VoidCallback? onPrivacy;
-  final VoidCallback? onTerms;
   final VoidCallback? onHelp;
+  final VoidCallback? onTerms;
   final VoidCallback? onLeader;
   final VoidCallback? onAdmin;
   final ValueChanged<String>? onNavigate;
@@ -27,8 +27,8 @@ class SettingsScreen extends StatefulWidget {
     required this.onBack,
     required this.onLogout,
     this.onPrivacy,
-    this.onTerms,
     this.onHelp,
+    this.onTerms,
     this.onLeader,
     this.onAdmin,
     this.onNavigate,
@@ -666,9 +666,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: widget.onPrivacy,
-                          icon: const Icon(Icons.privacy_tip_outlined, size: 16),
-                          label: const Text('Politique de confidentialité', style: TextStyle(fontSize: 13)),
+                          onPressed: widget.onTerms,
+                          icon: const Icon(Icons.gavel_outlined, size: 16),
+                          label: const Text('Conditions générales (CGU)', style: TextStyle(fontSize: 13)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.bleuFonce,
                             side: const BorderSide(color: Color(0xFFDDDDDD)),
@@ -681,9 +681,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: widget.onTerms,
-                          icon: const Icon(Icons.gavel_outlined, size: 16),
-                          label: const Text('Conditions générales d’utilisation', style: TextStyle(fontSize: 13)),
+                          onPressed: widget.onPrivacy,
+                          icon: const Icon(Icons.privacy_tip_outlined, size: 16),
+                          label: const Text('Politique de confidentialité', style: TextStyle(fontSize: 13)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.bleuFonce,
                             side: const BorderSide(color: Color(0xFFDDDDDD)),

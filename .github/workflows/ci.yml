@@ -334,12 +334,12 @@ jobs:
             -H "Accept: application/json" \
             "https://api.render.com/v1/services/${SERVICE_ID}/routes" \
             | jq . || true
-          echo "Application rewrite SPA /* → /index.html…"
+          echo "Application rewrite SPA + pages légales…"
           curl -fsS -X PUT \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
             -H "Accept: application/json" \
             -H "Content-Type: application/json" \
-            -d '[{"type":"rewrite","source":"/*","destination":"/index.html"}]' \
+            -d '[{"type":"rewrite","source":"/cgu","destination":"/cgu.html"},{"type":"rewrite","source":"/manuel","destination":"/manuel.html"},{"type":"rewrite","source":"/privacy","destination":"/privacy.html"},{"type":"rewrite","source":"/*","destination":"/index.html"}]' \
             "https://api.render.com/v1/services/${SERVICE_ID}/routes" \
             | jq .
           echo "Routes SPA OK"

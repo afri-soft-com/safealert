@@ -15,6 +15,7 @@ void main() {
     expect(AppUpdateService.compareVersions('1.0.7', '1.0.8'), lessThan(0));
     expect(AppUpdateService.compareVersions('1.0.8', '1.0.8'), 0);
     expect(AppUpdateService.compareVersions('1.0.9', '1.0.8'), greaterThan(0));
+    expect(AppUpdateService.compareVersions('1.0.9', '1.0.9'), 0);
   });
 
   testWidgets('AppUpdateBanner shows French copy and version', (tester) async {

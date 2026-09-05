@@ -55,12 +55,11 @@ export default function Layout() {
           >
             Portail partenaire ↗
           </a>
-          <a href="/manuel.html" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
-            Manuel utilisateur
-          </a>
-          <a href="/cgu.html" style={{ fontSize: 12, display: "block", marginBottom: 8 }}>
-            CGU
-          </a>
+          <nav className="legal-nav" aria-label="Mentions légales">
+            <a href="/manuel.html">Manuel</a>
+            <a href="/cgu.html">CGU</a>
+            <a href="/privacy.html">Confidentialité</a>
+          </nav>
           <button type="button" onClick={logout}>
             Déconnexion
           </button>

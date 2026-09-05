@@ -49,17 +49,29 @@ export default function HelpPage() {
 
         <h3 style={{ marginTop: 20 }}>Documentation complète</h3>
         <p>
-          <a href="/manuel.html">Manuel utilisateur (citoyens)</a>
-          {" — "}
-          aussi dans l&apos;application : Accueil → <strong>Aide / Manuel</strong> ou Paramètres → Aide.
+          Manuel citoyen :{" "}
+          <a href="/manuel.html" target="_blank" rel="noreferrer">
+            /manuel.html
+          </a>{" "}
+          (également <a href="/manuel">/manuel</a>).
         </p>
         <p>
-          <a href="/cgu.html">Conditions générales d&apos;utilisation</a>
-          {" · "}
-          <a href="/privacy.html">Politique de confidentialité</a>
+          Conditions générales :{" "}
+          <a href="/cgu.html" target="_blank" rel="noreferrer">
+            /cgu.html
+          </a>{" "}
+          (également <a href="/cgu">/cgu</a>).
         </p>
         <p>
-          Guide console admin : <code>docs/ADMIN_WEB.md</code>.
+          Confidentialité :{" "}
+          <a href="/privacy.html" target="_blank" rel="noreferrer">
+            /privacy.html
+          </a>
+          .
+        </p>
+        <p>
+          Dans l&apos;application mobile : Accueil → <strong>Aide / Manuel</strong> ou Paramètres →
+          Aide / CGU.
         </p>
       </div>
     </>

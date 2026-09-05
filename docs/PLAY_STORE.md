@@ -80,8 +80,8 @@ Ou télécharger la release GitHub **`aab-main`** (CI, si `frontend/**` a chang�
 
 Deux mécanismes complémentaires :
 
-1. **Google Play In-App Updates** (`in_app_update`) — sur les builds installés via Play (piste Internal incluse). Au démarrage / reprise / toutes les ~10 min, l’app vérifie une mise à jour et privilégie le mode **flexible** (téléchargement en arrière-plan, puis redémarrage).
-2. **API `GET /api/app/version`** — fallback soft / force avant propagation Play. Réponse : `{ minVersion, latestVersion, forceUpdate, storeUrl }`.
+1. **Google Play In-App Updates** (`in_app_update`) — sur les builds installés via Play (piste Internal incluse). Au démarrage, à la reprise, et toutes les **~5 min** pendant l’usage, l’app vérifie une mise à jour et privilégie le mode **flexible** (téléchargement en arrière-plan, puis redémarrage).
+2. **API `GET /api/app/version`** — fallback soft / force avant propagation Play. Réponse : `{ minVersion, latestVersion, forceUpdate, storeUrl }`. La bannière **disparaît dès que la version installée ≥ `latestVersion`** (pas de cache, `forceUpdate` ignoré si déjà à jour).
 
 Configurer sur Render (ou `.env`) :
 
@@ -92,7 +92,23 @@ Configurer sur Render (ou `.env`) :
 | `APP_FORCE_UPDATE` | `true` pour forcer la mise à jour même sans `APP_MIN_VERSION` |
 | `APP_STORE_URL` | Lien Play (défaut : fiche `com.safealert.safealert`) |
 
-Après chaque upload Play Internal réussi, mettez à jour `APP_LATEST_VERSION` sur l’API pour les utilisateurs qui n’ont pas encore reçu la propagation Play.
+Après chaque upload Play, mettez `APP_LATEST_VERSION` **exactement** à la version livrée (`pubspec` avant `+build`, ex. `1.0.9`). Si elle reste plus haute que l’app installée, la bannière ne disparaît pas.
+
+### Quitter le canal Internal Beta
+
+Le message Play « Vous êtes un testeur interne… SafeAlert (Internal Beta) » vient du canal **Tests internes**, pas de la fiche Production.
+
+1. **Publier en Production** (la CI n’uploade que `internal` — ne pas forcer un upload production via l’API si l’accès Production n’est pas encore accordé) :
+   - Play Console → l’application SafeAlert → **Tester** → **Tests internes** → la version concernée
+   - **Promouvoir la version** → **Production**
+   - **Examiner** → **Lancer le déploiement en production**
+   - Alternative : **Production** → **Créer une version** → importer le même AAB → Examiner → Lancer
+2. **Côté testeur** (pour voir uniquement la fiche publique) :
+   - Play Console → **Tester** → **Tests internes** → **Testeurs** → retirer leur Gmail de la liste
+   - Puis installer depuis la fiche Production **une fois la version Production publiée** (pas seulement « en attente d’examen »)
+3. Sur le téléphone : Play Store → SafeAlert → si le bandeau Internal Beta reste, quitter le programme de test (lien « Quitter » sur la fiche de test) puis réinstaller depuis la fiche Production.
+
+Sans version Production **publiée**, Play continuera d’afficher Internal Beta même après retrait de la liste.
 
 ### F. CI automatique
 

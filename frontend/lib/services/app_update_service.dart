@@ -18,9 +18,8 @@ class AppUpdateService {
   static final AppUpdateService instance = AppUpdateService._();
   factory AppUpdateService() => instance;
 
-  /// Mid-session poll so the banner can appear without a cold start.
-  static const Duration pollInterval = Duration(minutes: 10);
-  static const Duration minCheckGap = Duration(minutes: 2);
+  static const Duration pollInterval = Duration(minutes: 5);
+  static const Duration minCheckGap = Duration(seconds: 45);
 
   final ApiService _api = ApiService();
 
@@ -146,7 +145,8 @@ class AppUpdateService {
   Future<void> _checkBackendVersion(BuildContext context) async {
     Map<String, dynamic> data;
     try {
-      data = await _api.get('/app/version');
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      data = await _api.get('/app/version?t=$stamp');
     } catch (_) {
       return;
     }
@@ -165,10 +165,13 @@ class AppUpdateService {
     final belowLatest =
         latest.isNotEmpty && compareVersions(current, latest) < 0;
 
-    if (!belowMin && !belowLatest && !forceFlag) {
-      if (_updateAvailable) {
+    // Installed >= latest: hide immediately (ignore stale force flag / cache).
+    if (!belowMin && !belowLatest) {
+      if (_updateAvailable || _latestVersion != null || _forceUpdate) {
         _updateAvailable = false;
         _forceUpdate = false;
+        _latestVersion = null;
+        _bannerVisible = false;
         _onStateChanged?.call();
       }
       return;

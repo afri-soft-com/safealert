@@ -6,6 +6,16 @@ import MaintenancePage from "../pages/MaintenancePage";
 
 const POLL_MS = 10 * 60 * 1000;
 
+const LEGAL_PATHS = new Set([
+  "/connexion",
+  "/portail-partenaire",
+  "/cgu",
+  "/manuel",
+  "/cgu.html",
+  "/manuel.html",
+  "/privacy.html",
+]);
+
 export default function MaintenanceGate({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, ready } = useAuth();
   const location = useLocation();
@@ -46,10 +56,7 @@ export default function MaintenanceGate({ children }: { children: ReactNode }) {
   }
 
   const staff = isAuthenticated && isStaffRole(user?.role);
-  const openPaths =
-    location.pathname === "/connexion" || location.pathname === "/portail-partenaire";
-
-  if (maintenance && !staff && !openPaths) {
+  if (maintenance && !staff && !LEGAL_PATHS.has(location.pathname)) {
     return <MaintenancePage message={message} />;
   }
 

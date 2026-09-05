@@ -193,6 +193,60 @@ button {
   color: var(--gris);
 }
 
+.sidebar-footer .legal-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+  margin: 0.65rem 0 0.25rem;
+  font-size: 0.75rem;
+}
+
+.sidebar-footer .legal-nav a:hover {
+  color: var(--blanc);
+  text-decoration: underline;
+}
+
+.legal-standalone {
+  min-height: 100%;
+  background: #0d1b2a;
+  color: #f0f2f5;
+  padding: 2rem 1.25rem 3rem;
+}
+
+.legal-standalone header,
+.legal-standalone article {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.legal-standalone h1 {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 1.75rem;
+}
+
+.legal-standalone h2 {
+  margin-top: 1.5rem;
+  font-size: 1.1rem;
+}
+
+.legal-brand {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  color: var(--gris-clair);
+}
+
+.legal-links {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--bleu-border);
+}
+
+.legal-links a {
+  color: #9ad4c8;
+  text-decoration: underline;
+}
+
 .sidebar-footer button {
   width: 100%;
   margin-top: 0.5rem;
@@ -649,6 +703,8 @@ tr.row-selected td {
 .toggle-row small {
   color: var(--gris);
 }
+
+@media (max-width: 768px) {
   .sidebar {
     width: 100%;
     position: relative;

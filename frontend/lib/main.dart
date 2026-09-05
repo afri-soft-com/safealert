@@ -42,10 +42,10 @@ import 'screens/history_screen.dart';
 import 'screens/admin_screen.dart';
 import 'screens/maintenance_screen.dart';
 import 'screens/privacy_screen.dart';
-import 'screens/terms_screen.dart';
 import 'screens/premium_screen.dart';
 import 'screens/calculator_screen.dart';
 import 'screens/help_manual_screen.dart';
+import 'screens/terms_screen.dart';
 import 'screens/trip_screen.dart';
 import 'screens/escort_map_screen.dart';
 import 'screens/trust_zones_screen.dart';
@@ -136,7 +136,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final List<String> _navStack = ['splash'];
   bool _discreetLocked = false;
   bool _discreetChecked = false;
-  String? _dismissedSoftUpdateVersion;
+  bool _softUpdateDismissed = false;
+  String? _softUpdateLatestSeen;
   final QuickActions _quickActions = const QuickActions();
   final AppLinks _appLinks = AppLinks();
   final AppUpdateService _appUpdates = AppUpdateService();
@@ -213,7 +214,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _appUpdates.attach(() {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      final latest = _appUpdates.latestVersion;
+      if (_appUpdates.updateAvailable && latest != null && latest != _softUpdateLatestSeen) {
+        _softUpdateLatestSeen = latest;
+        _softUpdateDismissed = false;
+      }
+      if (!_appUpdates.updateAvailable) {
+        _softUpdateDismissed = false;
+        _softUpdateLatestSeen = null;
+      }
+      setState(() {});
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _checkDiscreetMode();
@@ -460,7 +471,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             });
           },
           onHelp: () => _navigate('help'),
-          onTerms: () => _navigate('cgu'),
+          onTerms: () => _navigate('terms'),
         );
       case 'calculator':
         screen = CalculatorScreen(
@@ -503,12 +514,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         screen = SafetyPingScreen(onBack: _goBack);
       case 'help':
         screen = HelpManualScreen(onBack: _goBack, role: auth.role);
+      case 'terms':
+        screen = TermsScreen(onBack: _goBack);
       case 'settings':
         screen = SettingsScreen(
           onBack: _goBack,
           onPrivacy: () => _navigate('privacy'),
-          onTerms: () => _navigate('cgu'),
           onHelp: () => _navigate('help'),
+          onTerms: () => _navigate('terms'),
           onNavigate: _navigate,
           onLeader: auth.canAccessOps ? () => _navigate('leader') : null,
           onAdmin: auth.canAccessAdmin ? () => _navigate('admin') : null,
@@ -521,8 +534,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         );
       case 'privacy':
         screen = PrivacyScreen(onBack: _goBack);
-      case 'cgu':
-        screen = TermsScreen(onBack: _goBack);
       case 'premium':
         screen = PremiumScreen(onBack: _goBack);
       case 'dashboard':
@@ -537,7 +548,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     final showSoftBanner = _appUpdates.updateAvailable &&
         !_appUpdates.forceUpdate &&
-        _dismissedSoftUpdateVersion != _appUpdates.latestVersion &&
+        !_softUpdateDismissed &&
         !_discreetLocked &&
         _currentScreen != 'splash' &&
         _currentScreen != 'calculator';
@@ -569,9 +580,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             AppUpdateBanner(
               latestVersion: _appUpdates.latestVersion,
               onUpdate: () => _appUpdates.openStoreOrUpdate(context),
-              onDismiss: () => setState(() {
-                _dismissedSoftUpdateVersion = _appUpdates.latestVersion;
-              }),
+              onDismiss: () => setState(() => _softUpdateDismissed = true),
             ),
           Expanded(
             child: AnimatedSwitcher(

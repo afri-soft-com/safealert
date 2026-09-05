@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/auth_provider.dart';
 import '../theme.dart';
 import '../widgets/status_bar.dart';
+
+const _kHostedManualUrl = 'https://safealert-admin.onrender.com/manuel.html';
 
 /// Manuel d'utilisation filtré selon le rôle plateforme.
 class HelpManualScreen extends StatelessWidget {
@@ -63,7 +66,6 @@ class HelpManualScreen extends StatelessWidget {
                     _P('1. Saisissez votre numéro (ex. 0812… — l\'indicatif +243 est ajouté si besoin).'),
                     _P('2. Appuyez sur « Envoyer le code » et consultez le SMS.'),
                     _P('3. Saisissez les 6 chiffres. Première utilisation : cochez « Nouveau compte » et choisissez un pseudo.'),
-                    _P('4. Créez un code PIN local. Aux prochaines ouvertures, le PIN déverrouille l’app sans renvoyer de SMS.'),
                   ],
                 ),
                 _section(
@@ -202,10 +204,18 @@ class HelpManualScreen extends StatelessWidget {
                     _P('Serveur inaccessible ? Vérifiez votre connexion Internet et réessayez.'),
                     _P('Mode invité : carte et annuaire sans compte. Connexion requise pour SOS, contacts et signalements.'),
                     _P('Suppression de compte : Paramètres → Supprimer le compte (irréversible).'),
-                    _P('CGU : Paramètres → Conditions générales d’utilisation, ou depuis l’écran de connexion.'),
                   ],
                 ),
                 const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () async {
+                    final uri = Uri.parse(_kHostedManualUrl);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                  child: const Text('Ouvrir la version web du manuel'),
+                ),
                 Center(
                   child: Text(
                     'SafeAlert — manuel utilisateur',

@@ -32,8 +32,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await api.requestCode(phone.trim());
-      // Show whenever API returns devCode (local DEV or temporary prod ALLOW_DEV_OTP)
-      if (res.devCode) {
+      // Never surface OTP in production builds; local/dev only.
+      if (!import.meta.env.PROD && res.devCode) {
         setDevHint(`Code de test : ${res.devCode}`);
         setCode(res.devCode);
       }

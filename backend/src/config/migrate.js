@@ -472,20 +472,16 @@ const migrate = async () => {
 
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;
     if (adminPhone) {
-      const normalized = normalizePhone(adminPhone);
-      if (!normalized) {
-        console.log("PLATFORM_ADMIN_PHONE invalide (attendu E.164, ex. +243…) — promotion ignorée");
+      const normalized = normalizePhone(adminPhone.trim()) || adminPhone.trim();
+      const promoted = await client.query(
+        `UPDATE users SET role = 'platform_admin', updated_at = NOW()
+         WHERE phone = $1 RETURNING id, phone, pseudo`,
+        [normalized]
+      );
+      if (promoted.rows.length > 0) {
+        console.log(`Platform admin promoted: ${promoted.rows[0].phone} (${promoted.rows[0].pseudo})`);
       } else {
-        const promoted = await client.query(
-          `UPDATE users SET role = 'platform_admin', updated_at = NOW()
-           WHERE phone = $1 RETURNING id, phone, pseudo`,
-          [normalized]
-        );
-        if (promoted.rows.length > 0) {
-          console.log(`Platform admin promoted: ${promoted.rows[0].phone} (${promoted.rows[0].pseudo})`);
-        } else {
-          console.log(`PLATFORM_ADMIN_PHONE=${normalized} — aucun utilisateur existant (créez le compte puis relancez migrate)`);
-        }
+        console.log(`PLATFORM_ADMIN_PHONE=${normalized} — aucun utilisateur existant (créez le compte puis relancez migrate)`);
       }
     }
 

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme.dart';
 import '../widgets/status_bar.dart';
+
+const _kHostedCguUrl = 'https://safealert-admin.onrender.com/cgu.html';
 
 class TermsScreen extends StatelessWidget {
   final VoidCallback onBack;
@@ -37,7 +40,7 @@ class TermsScreen extends StatelessWidget {
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
-              children: const [
+              children: [
                 Text(
                   'SafeAlert — Conditions générales d’utilisation',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.bleuFonce),
@@ -95,8 +98,18 @@ class TermsScreen extends StatelessWidget {
                       'Éditeur : AfriSoft — produit SafeAlert. Pas d’adresse postale publique à ce jour. '
                       'Contact : fiche Google Play « SafeAlert » ou le support indiqué par AfriSoft.',
                 ),
-                SizedBox(height: 24),
-                Text(
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () async {
+                    final uri = Uri.parse(_kHostedCguUrl);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                  child: const Text('Ouvrir les CGU sur le web'),
+                ),
+                const SizedBox(height: 8),
+                const Text(
                   'En utilisant SafeAlert, vous acceptez ces conditions. Une version plus détaillée pourra être publiée ultérieurement.',
                   style: TextStyle(fontSize: 11, color: AppColors.gris, fontStyle: FontStyle.italic),
                 ),

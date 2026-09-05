@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
@@ -83,9 +84,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     final ok = await auth.requestCode(_phoneCtrl.text.trim());
     if (ok && mounted) {
-      final code = auth.devCode;
-      if (code != null && code.isNotEmpty) {
-        _codeCtrl.text = code;
+      if (!kReleaseMode) {
+        final code = auth.devCode;
+        if (code != null && code.isNotEmpty) {
+          _codeCtrl.text = code;
+        }
       }
       setState(() => _step = _LoginStep.otp);
     }
@@ -123,9 +126,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     final ok = await auth.requestForgotPinCode();
     if (ok && mounted) {
-      final code = auth.devCode;
-      if (code != null && code.isNotEmpty) {
-        _codeCtrl.text = code;
+      if (!kReleaseMode) {
+        final code = auth.devCode;
+        if (code != null && code.isNotEmpty) {
+          _codeCtrl.text = code;
+        }
       }
       setState(() => _step = _LoginStep.otp);
       return;
@@ -292,7 +297,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   List<Widget> _otpFields(AuthProvider auth) {
     return [
-      if (auth.devCode != null) ...[
+      if (!kReleaseMode && auth.devCode != null) ...[
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(12),

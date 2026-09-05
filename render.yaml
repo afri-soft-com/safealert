@@ -93,8 +93,10 @@ services:
         sync: false
       - key: FCM_CLIENT_EMAIL
         sync: false
+      # Align with frontend/pubspec.yaml (version name) after each Play upload
       - key: APP_LATEST_VERSION
         value: "1.0.9"
+      # Align with admin-web/package.json
       - key: ADMIN_WEB_VERSION
         value: "1.0.3"
       - key: ADMIN_WEB_URL
@@ -112,6 +114,15 @@ services:
     # SPA fallback (obligatoire pour /annuaire, /ops, etc. en accès direct / refresh).
     # Le fichier public/_redirects n'est PAS honoré par le CDN Render — routes Blueprint/API uniquement.
     routes:
+      - type: rewrite
+        source: /cgu
+        destination: /cgu.html
+      - type: rewrite
+        source: /manuel
+        destination: /manuel.html
+      - type: rewrite
+        source: /privacy
+        destination: /privacy.html
       - type: rewrite
         source: /*
         destination: /index.html

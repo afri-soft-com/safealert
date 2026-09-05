@@ -65,10 +65,12 @@ async function configPayload() {
 }
 
 function getAppVersion(req, res) {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
   return res.json(versionPayload());
 }
 
 async function getAppConfig(req, res) {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
   return res.json(await configPayload());
 }
 

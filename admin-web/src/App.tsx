@@ -17,6 +17,8 @@ import PartnerPortalPage from "./pages/PartnerPortalPage";
 import HelpPage from "./pages/HelpPage";
 import AuditPage from "./pages/AuditPage";
 import SettingsPage from "./pages/SettingsPage";
+import CguPage from "./pages/CguPage";
+import ManuelPage from "./pages/ManuelPage";
 
 export default function App() {
   return (
@@ -25,6 +27,8 @@ export default function App() {
       <BrowserRouter>
         <MaintenanceGate>
           <Routes>
+            <Route path="/cgu" element={<CguPage />} />
+            <Route path="/manuel" element={<ManuelPage />} />
             <Route path="/connexion" element={<LoginPage />} />
             <Route path="/portail-partenaire" element={<PartnerPortalPage />} />
             <Route element={<ProtectedRoute />}>
