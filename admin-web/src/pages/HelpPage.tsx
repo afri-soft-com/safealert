@@ -7,6 +7,12 @@ export default function HelpPage() {
       </header>
 
       <div className="card">
+        <h3>Connexion</h3>
+        <ul>
+          <li>Code SMS, puis création obligatoire d’un PIN local (4 à 6 chiffres).</li>
+          <li>À la prochaine ouverture : PIN d’abord. « Code PIN oublié » renvoie un SMS.</li>
+        </ul>
+
         <h3>Rôles</h3>
         <ul>
           <li>
@@ -19,6 +25,22 @@ export default function HelpPage() {
           <li>
             <strong>Administrateur plateforme</strong> — cette console : utilisateurs, partenaires,
             ops, annuaire, incidents, groupes.
+          </li>
+        </ul>
+
+        <h3 style={{ marginTop: 20 }}>Connexion et PIN</h3>
+        <ul>
+          <li>
+            Première connexion : numéro, code SMS, puis création d&apos;un PIN local (jamais stocké
+            en clair).
+          </li>
+          <li>
+            <strong>Déconnexion</strong> verrouille la console : au retour, saisissez le PIN — pas
+            de SMS.
+          </li>
+          <li>
+            <strong>Changer de numéro</strong> ou <strong>Code PIN oublié</strong> depuis l&apos;écran
+            PIN.
           </li>
         </ul>
 

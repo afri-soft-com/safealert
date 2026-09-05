@@ -137,21 +137,19 @@ void main() {
   });
 
   group('logout', () {
-    test('clears auth state', () async {
+    test('locks the UI but keeps the token', () async {
       await fakeApi.setToken('some-token');
       provider = AuthProvider(
         apiService: fakeApi,
         pinService: LocalPinService(store: pinStore),
       );
-      provider.logout();
+      await provider.logout();
 
-      expect(fakeApi.hasToken, false);
-      expect(provider.isAuthenticated, false);
-      expect(provider.user, isNull);
-      expect(provider.phone, isNull);
+      expect(fakeApi.hasToken, true);
+      expect(provider.pinUnlocked, false);
     });
 
-    test('keeps local PIN for the same phone', () async {
+    test('keeps local PIN and session for reconnect without SMS', () async {
       fakeApi.onPost('/auth/request-code', () => {'message': 'ok'});
       fakeApi.onPost('/auth/verify-code', () => {
         'token': 'jwt-token',
@@ -163,10 +161,31 @@ void main() {
 
       await provider.logout();
 
-      expect(provider.isAuthenticated, false);
+      expect(fakeApi.hasToken, true);
+      expect(provider.isAuthenticated, true);
+      expect(provider.canEnterApp, false);
       expect(provider.hasLocalPin, true);
+      expect(provider.needsPinUnlock, true);
       expect(provider.pinPhone, '+243811234567');
       expect(await LocalPinService(store: pinStore).verify('246810'), true);
+    });
+
+    test('switchPhone clears token and PIN', () async {
+      fakeApi.onPost('/auth/request-code', () => {'message': 'ok'});
+      fakeApi.onPost('/auth/verify-code', () => {
+        'token': 'jwt-token',
+        'user': {'id': 'u1', 'phone': '+243811234567', 'role': 'citizen'},
+      });
+      await provider.requestCode('+243811234567');
+      await provider.verifyCode('123456');
+      await provider.setLocalPin('246810', confirm: '246810');
+
+      await provider.switchPhone();
+
+      expect(fakeApi.hasToken, false);
+      expect(provider.isAuthenticated, false);
+      expect(provider.hasLocalPin, false);
+      expect(provider.user, isNull);
     });
   });
 
@@ -210,22 +229,31 @@ void main() {
       await _otpLogin();
       await provider.setLocalPin('135790', confirm: '135790');
       await provider.logout();
-      await fakeApi.setToken('jwt-token');
-      fakeApi.onGet('/auth/profile', () => {
-        'id': 'u1',
-        'phone': '+243811234567',
-      });
-      await provider.checkAuth();
 
       expect(await provider.unlockWithPin('000000'), false);
       expect(provider.error, 'Code PIN incorrect');
       expect(provider.canEnterApp, false);
     });
 
-    test('correct PIN without session stays gated', () async {
+    test('correct PIN after logout unlocks without SMS', () async {
       await _otpLogin();
       await provider.setLocalPin('135790', confirm: '135790');
       await provider.logout();
+
+      expect(provider.hasLocalPin, true);
+      expect(provider.isAuthenticated, true);
+      expect(provider.canEnterApp, false);
+      expect(await provider.unlockWithPin('135790'), true);
+      expect(provider.canEnterApp, true);
+      expect(fakeApi.lastPath, isNot('/auth/request-code'));
+    });
+
+    test('correct PIN with expired token stays gated', () async {
+      await _otpLogin();
+      await provider.setLocalPin('135790', confirm: '135790');
+      await provider.switchPhone();
+      await LocalPinService(store: pinStore).setPin('135790', phone: '+243811234567');
+      await provider.loadPinState();
 
       expect(provider.hasLocalPin, true);
       expect(provider.isAuthenticated, false);

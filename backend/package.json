@@ -8,6 +8,7 @@
     "dev": "nodemon src/server.js",
     "migrate": "node src/config/migrate.js",
     "seed": "node src/config/seed.js",
+    "wipe:keep-superadmin": "node scripts/wipe-keep-superadmin.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "audit": "npm audit --audit-level=high"

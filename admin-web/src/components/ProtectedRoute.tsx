@@ -3,13 +3,13 @@ import { isStaffRole } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 export default function ProtectedRoute() {
-  const { isAuthenticated, user, ready } = useAuth();
+  const { canEnterConsole, user, ready } = useAuth();
 
   if (!ready) {
     return <div className="loading">Vérification de la session…</div>;
   }
 
-  if (!isAuthenticated || !isStaffRole(user?.role)) {
+  if (!canEnterConsole || !isStaffRole(user?.role)) {
     return <Navigate to="/connexion" replace />;
   }
 

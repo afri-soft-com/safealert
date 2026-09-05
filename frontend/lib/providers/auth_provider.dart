@@ -299,19 +299,41 @@ class AuthProvider extends ChangeNotifier {
       }
       _pinUnlocked = true;
       _needsPinSetup = false;
-      _loading = false;
       if (!_isAuthenticated) {
-        _error =
-            'Session expirée. Utilisez « Code PIN oublié » pour recevoir un code par SMS.';
-        notifyListeners();
-        return false;
+        final restored = await _restoreSessionFromStoredToken();
+        if (!restored) {
+          _pinUnlocked = false;
+          _error =
+              'Session expirée. Un code SMS est nécessaire. Utilisez « Code PIN oublié ».';
+          _loading = false;
+          notifyListeners();
+          return false;
+        }
       }
+      _startRealtimeServices();
+      _loading = false;
       notifyListeners();
       return true;
     } catch (_) {
       _error = 'Impossible de vérifier le code PIN';
       _loading = false;
       notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> _restoreSessionFromStoredToken() async {
+    await _api.init();
+    if (!_api.hasToken) return false;
+    try {
+      final res = await _api.get('/auth/profile');
+      _user = res;
+      _isAuthenticated = true;
+      _isGuest = false;
+      _applyPrivacySettings();
+      return true;
+    } catch (_) {
+      await _api.clearToken();
       return false;
     }
   }
@@ -335,9 +357,27 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Verrouille l'app derrière le PIN. Garde le jeton et le PIN (pas de SMS).
   Future<void> logout() async {
     _stopRealtimeServices();
+    _isGuest = false;
+    _devCode = null;
+    _pinUnlocked = false;
+    await _refreshPinState();
+    if (_hasLocalPin) {
+      _needsPinSetup = false;
+    } else if (_isAuthenticated) {
+      _needsPinSetup = true;
+    }
+    LocationService().sharePresence = true;
+    notifyListeners();
+  }
+
+  /// Déconnexion complète : autre numéro. Efface jeton + liaison PIN.
+  Future<void> switchPhone() async {
+    _stopRealtimeServices();
     await _api.clearToken();
+    await _pin.clear();
     _user = null;
     _isAuthenticated = false;
     _isGuest = false;

@@ -26,9 +26,7 @@ class SecurePinStore implements PinStore {
 
   @override
   Future<void> write(String key, String value) async {
-    try {
-      await _secure.write(key: key, value: value);
-    } catch (_) {}
+    await _secure.write(key: key, value: value);
   }
 
   @override

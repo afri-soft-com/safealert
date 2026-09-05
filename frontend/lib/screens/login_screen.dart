@@ -33,11 +33,38 @@ class _LoginScreenState extends State<LoginScreen> {
   _LoginStep _step = _LoginStep.phone;
   bool _isNew = false;
   bool _bootstrapped = false;
+  AuthProvider? _auth;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final auth = context.read<AuthProvider>();
+    if (!identical(_auth, auth)) {
+      _auth?.removeListener(_onAuthTick);
+      _auth = auth;
+      _auth!.addListener(_onAuthTick);
+    }
+  }
+
+  void _onAuthTick() {
+    if (!mounted || _auth == null) return;
+    _syncStepFromAuth(_auth!);
+  }
+
+  void _syncStepFromAuth(AuthProvider auth) {
+    if (auth.needsPinSetup && auth.isAuthenticated) {
+      if (_step != _LoginStep.pinCreate) {
+        setState(() => _step = _LoginStep.pinCreate);
+      }
+    } else if (auth.hasLocalPin && !auth.pinUnlocked && _step == _LoginStep.phone) {
+      setState(() => _step = _LoginStep.pinUnlock);
+    }
   }
 
   Future<void> _bootstrap() async {
@@ -56,6 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _auth?.removeListener(_onAuthTick);
     _phoneCtrl.dispose();
     _codeCtrl.dispose();
     _pseudoCtrl.dispose();
@@ -110,7 +138,34 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _unlockPin() async {
     final auth = context.read<AuthProvider>();
     final ok = await auth.unlockWithPin(_pinCtrl.text.trim());
-    if (ok && mounted) widget.onSuccess();
+    if (ok && mounted) {
+      widget.onSuccess();
+      return;
+    }
+    if (mounted &&
+        auth.error != null &&
+        auth.error!.contains('Session expirée')) {
+      final sent = await auth.requestForgotPinCode();
+      if (sent && mounted) {
+        if (!kReleaseMode) {
+          final code = auth.devCode;
+          if (code != null && code.isNotEmpty) {
+            _codeCtrl.text = code;
+          }
+        }
+        setState(() => _step = _LoginStep.otp);
+      }
+    }
+  }
+
+  Future<void> _switchPhone() async {
+    final auth = context.read<AuthProvider>();
+    await auth.switchPhone();
+    _phoneCtrl.clear();
+    _codeCtrl.clear();
+    _pinCtrl.clear();
+    _pinConfirmCtrl.clear();
+    if (mounted) setState(() => _step = _LoginStep.phone);
   }
 
   Future<void> _savePin() async {
@@ -140,9 +195,17 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  _LoginStep _effectiveStep(AuthProvider auth) {
+    if (_step == _LoginStep.otp) return _LoginStep.otp;
+    if (auth.needsPinSetup && auth.isAuthenticated) return _LoginStep.pinCreate;
+    if (auth.hasLocalPin && !auth.pinUnlocked) return _LoginStep.pinUnlock;
+    return _step;
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final step = _effectiveStep(auth);
     final viewInsets = MediaQuery.viewInsetsOf(context);
 
     return Scaffold(
@@ -181,7 +244,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            _subtitle,
+                            _subtitleFor(step),
                             textAlign: TextAlign.center,
                             style: const TextStyle(color: Colors.white60, fontSize: 13),
                           ),
@@ -192,11 +255,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               width: 28,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
                             )
-                          else if (_step == _LoginStep.phone)
+                          else if (step == _LoginStep.phone)
                             ..._phoneFields(auth)
-                          else if (_step == _LoginStep.otp)
+                          else if (step == _LoginStep.otp)
                             ..._otpFields(auth)
-                          else if (_step == _LoginStep.pinUnlock)
+                          else if (step == _LoginStep.pinUnlock)
                             ..._pinUnlockFields(auth)
                           else
                             ..._pinCreateFields(auth),
@@ -249,8 +312,8 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  String get _subtitle {
-    switch (_step) {
+  String _subtitleFor(_LoginStep step) {
+    switch (step) {
       case _LoginStep.phone:
         return 'Connectez-vous avec votre numéro';
       case _LoginStep.otp:
@@ -415,6 +478,13 @@ class _LoginScreenState extends State<LoginScreen> {
         child: const Text(
           'Code PIN oublié',
           style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+      ),
+      TextButton(
+        onPressed: auth.loading ? null : _switchPhone,
+        child: const Text(
+          'Changer de numéro',
+          style: TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w500),
         ),
       ),
     ];

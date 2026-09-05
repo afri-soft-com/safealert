@@ -81,6 +81,40 @@ void main() {
     expect(await LocalPinService(store: pinStore).verify('246810'), true);
   });
 
+  testWidgets('restored session without PIN shows create PIN immediately', (tester) async {
+    await fakeApi.setToken('valid-token');
+    fakeApi.onGet('/auth/profile', () => {
+      'id': 'u1',
+      'phone': '+243812345678',
+      'role': 'citizen',
+    });
+    await auth.checkAuth();
+
+    await pumpLogin(tester);
+
+    expect(find.text('Enregistrer le PIN'), findsOneWidget);
+    expect(find.text('Envoyer le code'), findsNothing);
+    expect(successCount, 0);
+  });
+
+  testWidgets('session needing PIN setup after checkAuth switches to create PIN', (tester) async {
+    await pumpLogin(tester);
+    expect(find.text('Envoyer le code'), findsOneWidget);
+
+    await fakeApi.setToken('valid-token');
+    fakeApi.onGet('/auth/profile', () => {
+      'id': 'u1',
+      'phone': '+243812345678',
+      'role': 'citizen',
+    });
+    await auth.checkAuth();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Enregistrer le PIN'), findsOneWidget);
+    expect(find.text('Envoyer le code'), findsNothing);
+    expect(successCount, 0);
+  });
+
   testWidgets('first OTP login forces PIN creation before success', (tester) async {
     fakeApi.onPost('/auth/request-code', () => {'message': 'ok', 'devCode': '111222'});
     fakeApi.onPost('/auth/verify-code', () => {
@@ -110,5 +144,57 @@ void main() {
 
     expect(successCount, 1);
     expect(auth.canEnterApp, true);
+  });
+
+  testWidgets('after logout the PIN screen is shown and unlocks without SMS', (tester) async {
+    fakeApi.onPost('/auth/request-code', () => {'message': 'ok', 'devCode': '111222'});
+    fakeApi.onPost('/auth/verify-code', () => {
+      'token': 'jwt-token',
+      'user': {'id': 'u1', 'phone': '+243812345678', 'role': 'citizen'},
+    });
+
+    await pumpLogin(tester);
+    await tester.enterText(find.byType(TextField).first, '+243812345678');
+    await tester.tap(find.text('Envoyer le code'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Vérifier'));
+    await tester.pumpAndSettle();
+    final pinFields = find.byType(TextField);
+    await tester.enterText(pinFields.at(0), '112233');
+    await tester.enterText(pinFields.at(1), '112233');
+    await tester.tap(find.text('Enregistrer le PIN'));
+    await tester.pumpAndSettle();
+    expect(auth.canEnterApp, true);
+
+    await auth.logout();
+    successCount = 0;
+    await pumpLogin(tester);
+
+    expect(find.text('Déverrouiller'), findsOneWidget);
+    expect(find.text('Code PIN oublié'), findsOneWidget);
+    expect(find.text('Changer de numéro'), findsOneWidget);
+    expect(find.text('Envoyer le code'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).first, '112233');
+    await tester.tap(find.text('Déverrouiller'));
+    await tester.pumpAndSettle();
+
+    expect(successCount, 1);
+    expect(auth.canEnterApp, true);
+    expect(fakeApi.lastPath, isNot('/auth/request-code'));
+  });
+
+  testWidgets('changer de numéro after PIN returns to the phone field', (tester) async {
+    await LocalPinService(store: pinStore).setPin('123456', phone: '+243811234567');
+
+    await pumpLogin(tester);
+    expect(find.text('Déverrouiller'), findsOneWidget);
+
+    await tester.tap(find.text('Changer de numéro'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Envoyer le code'), findsOneWidget);
+    expect(find.text('Déverrouiller'), findsNothing);
+    expect(auth.hasLocalPin, false);
   });
 }

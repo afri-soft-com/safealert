@@ -251,7 +251,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await ApiService().delete('/auth/account');
       if (!mounted) return;
-      await context.read<AuthProvider>().clearLocalPin();
+      await context.read<AuthProvider>().switchPhone();
       if (mounted) widget.onLogout();
     } catch (_) {
       if (mounted) setState(() => _deleting = false);
@@ -805,7 +805,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 title: const Text('Se déconnecter ?',
                                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                                 content: const Text(
-                                  'Votre code PIN reste enregistré sur cet appareil.',
+                                  'L’application se verrouille. Votre PIN et votre session restent sur cet appareil — pas de SMS à la reconnexion.',
                                   style: TextStyle(fontSize: 12),
                                 ),
                                 actions: [
@@ -823,6 +823,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           },
                           icon: const Icon(Icons.logout, size: 16),
                           label: const Text('Déconnexion', style: TextStyle(fontSize: 13)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.gris,
+                            side: const BorderSide(color: Color(0xFFDDDDDD)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: auth.loading ? null : () async {
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Changer de numéro ?',
+                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                                content: const Text(
+                                  'Déconnexion complète : le PIN local et la session seront effacés. Un SMS sera demandé pour le nouveau numéro.',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('Changer de numéro'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (ok != true || !mounted) return;
+                            await auth.switchPhone();
+                            widget.onLogout();
+                          },
+                          icon: const Icon(Icons.phonelink_setup, size: 16),
+                          label: const Text('Changer de numéro', style: TextStyle(fontSize: 13)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.gris,
                             side: const BorderSide(color: Color(0xFFDDDDDD)),
