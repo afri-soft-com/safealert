@@ -34,7 +34,8 @@ android {
     defaultConfig {
         applicationId = "com.safealert.safealert"
         minSdk = 23
-        targetSdk = flutter.targetSdkVersion
+        // Play requires API 36 for updates after 2026-08-31.
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
