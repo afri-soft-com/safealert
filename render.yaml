@@ -95,7 +95,7 @@ services:
         sync: false
       # Align with frontend/pubspec.yaml (version name) after each Play upload
       - key: APP_LATEST_VERSION
-        value: "1.0.10"
+        value: "1.0.11"
       # Align with admin-web/package.json
       - key: ADMIN_WEB_VERSION
         value: "1.0.4"

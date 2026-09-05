@@ -6,7 +6,7 @@ import { userFacingError } from "../utils/userFacingError";
 
 function needsPseudo(err: unknown): boolean {
   if (!(err instanceof ApiError) && !(err instanceof Error)) return false;
-  return /pseudo\s+requis/i.test(err.message);
+  return /pseudo\s+requis/i.test(err.message) || /aucun compte pour ce num[eé]ro/i.test(err.message);
 }
 
 function maskedPhone(phone: string | null | undefined): string {

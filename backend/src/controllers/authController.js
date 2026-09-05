@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { pool } = require("../config/database");
 const { sendSMS, isSMSConfigured } = require("../services/sms");
-const { normalizePhone } = require("../utils/phone");
+const { normalizePhone, phoneLookupVariants } = require("../utils/phone");
 const { log } = require("../utils/logger");
 const { incrPhoneOtp } = require("../config/redis");
 const { otpPhoneLimit } = require("../config/features");
@@ -52,6 +52,32 @@ const createSessionToken = async (user, { deviceId, deviceLabel, fcmToken } = {}
 
 const OTP_TTL_SECONDS = 300;
 const OTP_PHONE_MAX = Number(process.env.OTP_PHONE_MAX_PER_WINDOW || 5);
+const ERR_PSEUDO_REQUIRED = "Pseudo requis pour créer un compte";
+const ERR_NO_ACCOUNT =
+  "Aucun compte pour ce numéro. Cochez « Nouveau compte » pour vous inscrire.";
+
+const isTruthyFlag = (v) => v === true || v === "true" || v === 1 || v === "1";
+const isFalsyFlag = (v) => v === false || v === "false" || v === 0 || v === "0";
+
+/** Login vs register: explicit flag, else presence of `pseudo` (legacy clients). */
+const parseIsNewAccount = (body = {}) => {
+  const v = body.isNewAccount ?? body.is_new ?? body.is_new_account;
+  if (isTruthyFlag(v)) return true;
+  if (isFalsyFlag(v)) return false;
+  return Object.prototype.hasOwnProperty.call(body, "pseudo");
+};
+
+const platformAdminPhone = () =>
+  normalizePhone((process.env.PLATFORM_ADMIN_PHONE || "").trim());
+
+const findUserByPhone = async (phone) => {
+  const variants = phoneLookupVariants(phone);
+  if (variants.length === 0) return null;
+  const result = await pool.query("SELECT * FROM users WHERE phone = ANY($1::text[]) LIMIT 1", [
+    variants,
+  ]);
+  return result.rows[0] || null;
+};
 
 /**
  * Temporary OTP bypass for admin / client testing without reliable SMS.
@@ -189,31 +215,36 @@ const verifyCode = async (req, res) => {
       return res.status(401).json({ error: "Code invalide ou expiré" });
     }
 
-    // Resolve user before consuming OTP so a missing pseudo can be retried
-    // with the same code (admin-web and mobile first-login flows).
-    let user = await pool.query("SELECT * FROM users WHERE phone = $1", [phone]);
+    // Resolve user before consuming OTP so a missing pseudo / unknown phone
+    // can be retried with the same code (admin-web and mobile first-login).
+    let user = await findUserByPhone(phone);
+    const isNewAccount = parseIsNewAccount(req.body);
+    const pseudoTrimmed = pseudo != null ? String(pseudo).trim() : "";
+    const isAdminNumber = phone === platformAdminPhone();
 
-    if (user.rows.length === 0) {
-      if (!pseudo || !String(pseudo).trim()) {
-        return res.status(400).json({ error: "Pseudo requis pour créer un compte" });
+    if (!user) {
+      // Superadmin phone always logs in (no pseudo, no « Nouveau compte »).
+      if (isAdminNumber) {
+        await pool.query("UPDATE otp_codes SET used_at = NOW() WHERE id = $1", [otpRow.id]);
+        const created = await pool.query(
+          "INSERT INTO users (phone, pseudo, role) VALUES ($1, $2, $3) RETURNING *",
+          [phone, pseudoTrimmed || "Admin", "platform_admin"]
+        );
+        user = created.rows[0];
+      } else if (!isNewAccount) {
+        return res.status(404).json({ error: ERR_NO_ACCOUNT });
+      } else if (!pseudoTrimmed) {
+        return res.status(400).json({ error: ERR_PSEUDO_REQUIRED });
+      } else {
+        await pool.query("UPDATE otp_codes SET used_at = NOW() WHERE id = $1", [otpRow.id]);
+        const created = await pool.query(
+          "INSERT INTO users (phone, pseudo, role) VALUES ($1, $2, $3) RETURNING *",
+          [phone, pseudoTrimmed, "citizen"]
+        );
+        user = created.rows[0];
       }
-
-      const adminPhone = (process.env.PLATFORM_ADMIN_PHONE || "").trim();
-      const role =
-        adminPhone && phone === normalizePhone(adminPhone)
-          ? "platform_admin"
-          : "citizen";
-
-      await pool.query("UPDATE otp_codes SET used_at = NOW() WHERE id = $1", [otpRow.id]);
-
-      const result = await pool.query(
-        "INSERT INTO users (phone, pseudo, role) VALUES ($1, $2, $3) RETURNING *",
-        [phone, String(pseudo).trim(), role]
-      );
-      user = result.rows[0];
     } else {
       await pool.query("UPDATE otp_codes SET used_at = NOW() WHERE id = $1", [otpRow.id]);
-      user = user.rows[0];
     }
 
     user = await promoteIfPlatformAdminPhone(user);

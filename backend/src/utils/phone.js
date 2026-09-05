@@ -21,4 +21,28 @@ const normalizePhone = (raw) => {
   return phone;
 };
 
-module.exports = { normalizePhone };
+/**
+ * Variants of a number for DB lookup (E.164, local 0…, national 9 digits, 243…).
+ * Avoids "user missing" when the stored phone was not normalized the same way.
+ */
+const phoneLookupVariants = (raw) => {
+  const variants = new Set();
+  const push = (v) => {
+    if (v == null) return;
+    const s = String(v).trim();
+    if (s) variants.add(s);
+  };
+  push(raw);
+  const normalized = normalizePhone(raw);
+  push(normalized);
+  if (normalized && normalized.startsWith("+243") && normalized.length === 13) {
+    const national = normalized.slice(4);
+    push(national);
+    push(`0${national}`);
+    push(`243${national}`);
+    push(`+243${national}`);
+  }
+  return Array.from(variants);
+};
+
+module.exports = { normalizePhone, phoneLookupVariants };

@@ -118,23 +118,82 @@ describe("Auth", () => {
       .mockResolvedValueOnce({ rows: [{ id: "u1", phone: "+243811234567", pseudo: "Test", role: "citizen" }] });
     const res = await request(app)
       .post("/api/auth/verify-code")
-      .send({ phone: "+243811234567", code: "123456", pseudo: "Test" });
+      .send({ phone: "+243811234567", code: "123456", pseudo: "Test", isNewAccount: true });
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("token");
   });
 
-  it("POST /api/auth/verify-code rejects missing pseudo without consuming OTP", async () => {
+  it("POST /api/auth/verify-code logs in existing user without pseudo", async () => {
     mockQuery.mockReset();
     mockQuery
       .mockResolvedValueOnce({ rows: [{ id: "otp1", code_hash: validOtpHash }] })
-      .mockResolvedValueOnce({ rows: [] }); // SELECT user
+      .mockResolvedValueOnce({
+        rows: [{ id: "u-exist", phone: "+243811234567", pseudo: "Existing", role: "citizen" }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .post("/api/auth/verify-code")
+      .send({ phone: "+243811234567", code: "123456", isNewAccount: false });
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("token");
+    expect(res.body.user.pseudo).toBe("Existing");
+    expect(res.body.user.id).toBe("u-exist");
+  });
+
+  it("POST /api/auth/verify-code unknown phone without isNewAccount returns no-account", async () => {
+    mockQuery.mockReset();
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "otp1", code_hash: validOtpHash }] })
+      .mockResolvedValueOnce({ rows: [] });
     const res = await request(app)
       .post("/api/auth/verify-code")
       .send({ phone: "+243811234567", code: "123456" });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/aucun compte pour ce numéro/i);
+    expect(res.body.error).not.toMatch(/pseudo requis/i);
+    expect(mockQuery).toHaveBeenCalledTimes(2);
+  });
+
+  it("POST /api/auth/verify-code isNewAccount true without pseudo requires pseudo", async () => {
+    mockQuery.mockReset();
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "otp1", code_hash: validOtpHash }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .post("/api/auth/verify-code")
+      .send({ phone: "+243811234567", code: "123456", isNewAccount: true });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/pseudo requis/i);
-    // No UPDATE otp_codes when pseudo missing
     expect(mockQuery).toHaveBeenCalledTimes(2);
+  });
+
+  it("POST /api/auth/verify-code superadmin phone logs in without pseudo", async () => {
+    const prevAdmin = process.env.PLATFORM_ADMIN_PHONE;
+    process.env.PLATFORM_ADMIN_PHONE = "+243971163574";
+    mockQuery.mockReset();
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "otp1", code_hash: validOtpHash }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "u-admin",
+          phone: "+243971163574",
+          pseudo: "Admin",
+          role: "platform_admin",
+        }],
+      });
+    try {
+      const res = await request(app)
+        .post("/api/auth/verify-code")
+        .send({ phone: "+243971163574", code: "123456", isNewAccount: false });
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("token");
+      expect(res.body.user.role).toBe("platform_admin");
+    } finally {
+      if (prevAdmin === undefined) delete process.env.PLATFORM_ADMIN_PHONE;
+      else process.env.PLATFORM_ADMIN_PHONE = prevAdmin;
+    }
   });
 
   it("POST /api/auth/verify-code rejects invalid OTP", async () => {
@@ -812,7 +871,7 @@ describe("App version", () => {
     delete process.env.ADMIN_WEB_VERSION;
     const res = await request(app).get("/api/app/version");
     expect(res.status).toBe(200);
-    expect(res.body.latestVersion).toBe("1.0.10");
+    expect(res.body.latestVersion).toBe("1.0.11");
     expect(res.body.adminWebVersion).toBe("1.0.4");
     expect(res.body.adminWebUrl).toContain("safealert-admin");
   });

@@ -155,8 +155,13 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> verifyCode(String code, {String? pseudo}) async {
+  Future<bool> verifyCode(String code, {String? pseudo, bool isNewAccount = false}) async {
     if (_phone == null) return false;
+    if (isNewAccount && (pseudo == null || pseudo.trim().isEmpty)) {
+      _error = 'Pseudo requis pour créer un compte';
+      notifyListeners();
+      return false;
+    }
     _loading = true;
     _error = null;
     notifyListeners();
@@ -165,7 +170,8 @@ class AuthProvider extends ChangeNotifier {
       final res = await _api.post('/auth/verify-code', {
         'phone': _phone!,
         'code': code,
-        if (pseudo != null) 'pseudo': pseudo,
+        'isNewAccount': isNewAccount,
+        if (isNewAccount && pseudo != null && pseudo.trim().isNotEmpty) 'pseudo': pseudo.trim(),
         'device_id': deviceId,
         'device_label': defaultTargetPlatform.name,
       });

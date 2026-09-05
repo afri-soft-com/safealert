@@ -127,6 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final ok = await auth.verifyCode(
       _codeCtrl.text.trim(),
       pseudo: _isNew ? _pseudoCtrl.text.trim() : null,
+      isNewAccount: _isNew,
     );
     if (ok && mounted) {
       _pinCtrl.clear();
@@ -404,6 +405,15 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ],
+      ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          _isNew
+              ? 'Un pseudo est requis pour créer le compte.'
+              : 'Cochez seulement pour créer un compte. Sinon, connexion avec un numéro déjà inscrit.',
+          style: const TextStyle(color: Colors.white38, fontSize: 11),
+        ),
       ),
       if (_isNew) ...[
         TextField(

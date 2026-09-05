@@ -122,6 +122,49 @@ void main() {
       expect(provider.canEnterApp, false);
       expect(provider.user!['id'], 'u1');
       expect(fakeApi.token, 'jwt-token');
+      expect(fakeApi.lastBody!['isNewAccount'], false);
+      expect(fakeApi.lastBody!.containsKey('pseudo'), false);
+    });
+
+    test('login without pseudo sends isNewAccount false', () async {
+      fakeApi.onPost('/auth/request-code', () => {'message': 'ok'});
+      fakeApi.onPost('/auth/verify-code', () => {
+        'token': 'jwt-token',
+        'user': {'id': 'u1', 'phone': '+243811234567', 'role': 'citizen'},
+      });
+
+      await provider.requestCode('+243811234567');
+      final result = await provider.verifyCode('123456');
+
+      expect(result, true);
+      expect(fakeApi.lastBody!['isNewAccount'], false);
+      expect(fakeApi.lastBody!.containsKey('pseudo'), false);
+    });
+
+    test('new account without pseudo fails locally', () async {
+      fakeApi.onPost('/auth/request-code', () => {'message': 'ok'});
+
+      await provider.requestCode('+243811234567');
+      final result = await provider.verifyCode('123456', isNewAccount: true);
+
+      expect(result, false);
+      expect(provider.error, contains('Pseudo requis'));
+      expect(fakeApi.lastPath, '/auth/request-code');
+    });
+
+    test('unknown phone login shows no-account message', () async {
+      fakeApi.onPost('/auth/request-code', () => {'message': 'ok'});
+      fakeApi.onPost('/auth/verify-code', () => throw ApiException(
+        'Aucun compte pour ce numéro. Cochez « Nouveau compte » pour vous inscrire.',
+        404,
+      ));
+
+      await provider.requestCode('+243811234567');
+      final result = await provider.verifyCode('123456');
+
+      expect(result, false);
+      expect(provider.error, contains('Aucun compte pour ce numéro'));
+      expect(provider.error, isNot(contains('Pseudo requis')));
     });
 
     test('returns false on ApiException', () async {

@@ -27,11 +27,12 @@ class AuthService extends ChangeNotifier {
     await _api.post('/auth/request-code', {'phone': phone});
   }
 
-  Future<void> verifyCode(String phone, String code, {String? pseudo}) async {
+  Future<void> verifyCode(String phone, String code, {String? pseudo, bool isNewAccount = false}) async {
     final res = await _api.post('/auth/verify-code', {
       'phone': phone,
       'code': code,
-      if (pseudo != null) 'pseudo': pseudo,
+      'isNewAccount': isNewAccount,
+      if (isNewAccount && pseudo != null && pseudo.trim().isNotEmpty) 'pseudo': pseudo.trim(),
     });
     await _api.setToken(res['token'] as String);
     _user = res['user'] as Map<String, dynamic>;

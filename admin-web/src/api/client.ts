@@ -139,6 +139,7 @@ export const api = {
       body: JSON.stringify({
         phone,
         code,
+        isNewAccount: Boolean(pseudo?.trim()),
         ...(pseudo?.trim() ? { pseudo: pseudo.trim() } : {}),
       }),
     }),

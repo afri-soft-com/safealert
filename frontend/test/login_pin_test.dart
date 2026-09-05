@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:safealert/providers/auth_provider.dart';
 import 'package:safealert/screens/login_screen.dart';
+import 'package:safealert/services/api_service.dart';
 import 'package:safealert/services/local_pin_service.dart';
 import 'mocks.dart';
 
@@ -112,6 +113,30 @@ void main() {
 
     expect(find.text('Enregistrer le PIN'), findsOneWidget);
     expect(find.text('Envoyer le code'), findsNothing);
+    expect(successCount, 0);
+  });
+
+  testWidgets('unchecked Nouveau compte with unknown phone shows no-account, not pseudo', (tester) async {
+    fakeApi.onPost('/auth/request-code', () => {'message': 'ok', 'devCode': '111222'});
+    fakeApi.onPost('/auth/verify-code', () => throw ApiException(
+      'Aucun compte pour ce numéro. Cochez « Nouveau compte » pour vous inscrire.',
+      404,
+    ));
+
+    await pumpLogin(tester);
+    await tester.enterText(find.byType(TextField).first, '+243812345678');
+    await tester.tap(find.text('Envoyer le code'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nouveau compte'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '111222');
+    await tester.tap(find.text('Vérifier'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Aucun compte pour ce numéro'), findsOneWidget);
+    expect(find.textContaining('Pseudo requis'), findsNothing);
+    expect(fakeApi.lastBody!['isNewAccount'], false);
+    expect(fakeApi.lastBody!.containsKey('pseudo'), false);
     expect(successCount, 0);
   });
 
