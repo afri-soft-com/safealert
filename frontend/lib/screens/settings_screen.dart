@@ -248,6 +248,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _deleting = true);
     try {
       await ApiService().delete('/auth/account');
+      if (!mounted) return;
+      await context.read<AuthProvider>().clearLocalPin();
       if (mounted) widget.onLogout();
     } catch (_) {
       if (mounted) setState(() => _deleting = false);
@@ -786,7 +788,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 title: const Text('Se déconnecter ?',
                                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                                 content: const Text(
-                                  'Vous pourrez vous reconnecter avec votre numéro.',
+                                  'Votre code PIN reste enregistré sur cet appareil.',
                                   style: TextStyle(fontSize: 12),
                                 ),
                                 actions: [

@@ -176,7 +176,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (code == null || code.isEmpty) return;
     code = code.toUpperCase();
 
-    if (!auth.isAuthenticated) {
+    if (!auth.canEnterApp) {
       _navigate('login');
       return;
     }
@@ -397,14 +397,24 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         _currentScreen != 'annuaire' &&
         _currentScreen != 'calculator';
 
-    if (_currentScreen == 'splash' && auth.isAuthenticated && !maintenanceBlocks) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _navStack.last == 'splash') {
-          setState(() {
-            _navStack..clear()..add('home');
-          });
-        }
-      });
+    if (_currentScreen == 'splash' && !maintenanceBlocks) {
+      if (auth.canEnterApp) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _navStack.last == 'splash') {
+            setState(() {
+              _navStack..clear()..add('home');
+            });
+          }
+        });
+      } else if (auth.hasLocalPin || auth.needsPinSetup) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _navStack.last == 'splash') {
+            setState(() {
+              _navStack..clear()..add('login');
+            });
+          }
+        });
+      }
     }
 
     if (maintenanceBlocks) {
@@ -432,7 +442,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     switch (_currentScreen) {
       case 'splash':
         screen = SplashScreen(
-          onStart: () => _navigate(auth.isAuthenticated ? 'home' : 'login'),
+          onStart: () => _navigate(auth.canEnterApp ? 'home' : 'login'),
           onGuest: _enterGuest,
         );
       case 'login':
