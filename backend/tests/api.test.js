@@ -961,6 +961,134 @@ describe("Sessions revoke", () => {
   });
 });
 
+describe("Safe trips", () => {
+  const tripBody = {
+    origin_lat: -4.3217,
+    origin_lng: 15.3125,
+    dest_lat: -4.33,
+    dest_lng: 15.32,
+    dest_label: "Gombe",
+    eta_minutes: 20,
+    transport_mode: "moto",
+  };
+
+  it("POST /api/trips starts a trip without contacts or premium", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ id: "trip-1", status: "active", dest_label: "Gombe" }],
+      })
+      .mockResolvedValue({ rows: [] });
+    const res = await request(app)
+      .post("/api/trips")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send(tripBody);
+    expect(res.status).toBe(201);
+    expect(res.body.trip.id).toBe("trip-1");
+    expect(res.body.share_url).toMatch(/\/t\//);
+    const insertSql = mockQuery.mock.calls.find((c) =>
+      String(c[0]).includes("INSERT INTO safe_trips")
+    )?.[0];
+    expect(insertSql).toBeTruthy();
+    expect(insertSql).not.toMatch(/\$10::text/);
+    expect(insertSql).toMatch(/\$11::int/);
+  });
+
+  it("POST /api/trips requires origin and destination", async () => {
+    const res = await request(app)
+      .post("/api/trips")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ origin_lat: -4.3, origin_lng: 15.3 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/origine|destination/i);
+  });
+
+  it("POST /api/trips rejects the same origin and destination", async () => {
+    const res = await request(app)
+      .post("/api/trips")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({
+        origin_lat: -4.3217,
+        origin_lng: 15.3125,
+        dest_lat: -4.3217,
+        dest_lng: 15.3125,
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/distinct/i);
+  });
+
+  it("POST /api/trips returns 409 when a trip is already active", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "trip-active", status: "active" }],
+    });
+    const res = await request(app)
+      .post("/api/trips")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send(tripBody);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/déjà en cours/i);
+  });
+
+  it("POST /api/trips falls back when share_token types conflict (42P08)", async () => {
+    const typeErr = Object.assign(
+      new Error("inconsistent types deduced for parameter $10"),
+      { code: "42P08" }
+    );
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockRejectedValueOnce(typeErr)
+      .mockResolvedValueOnce({ rows: [{ id: "trip-2", status: "active" }] })
+      .mockResolvedValue({ rows: [] });
+    const res = await request(app)
+      .post("/api/trips")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send(tripBody);
+    expect(res.status).toBe(201);
+    expect(res.body.trip.id).toBe("trip-2");
+  });
+
+  it("POST /api/trips lets staff start even at the free weekly cap", async () => {
+    const prev = process.env.FEATURE_PREMIUM;
+    process.env.FEATURE_PREMIUM = "true";
+    try {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ id: "trip-staff", status: "active" }] })
+        .mockResolvedValue({ rows: [] });
+      const res = await request(app)
+        .post("/api/trips")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ ...tripBody, eta_minutes: 200 });
+      expect(res.status).toBe(201);
+      expect(res.body.trip.id).toBe("trip-staff");
+    } finally {
+      if (prev === undefined) delete process.env.FEATURE_PREMIUM;
+      else process.env.FEATURE_PREMIUM = prev;
+    }
+  });
+
+  it("POST /api/trips returns a precise 403 when the free weekly cap is reached", async () => {
+    const prev = process.env.FEATURE_PREMIUM;
+    process.env.FEATURE_PREMIUM = "true";
+    try {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ c: 3 }] });
+      const res = await request(app)
+        .post("/api/trips")
+        .set("Authorization", `Bearer ${validToken}`)
+        .send(tripBody);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/Limite de trajets/i);
+      expect(res.body.code).toBe("PREMIUM_REQUIRED");
+    } finally {
+      if (prev === undefined) delete process.env.FEATURE_PREMIUM;
+      else process.env.FEATURE_PREMIUM = prev;
+    }
+  });
+});
+
 describe("Heatmap slots", () => {
   it("GET /api/map/heatmap accepts slot=evening", async () => {
     mockQuery

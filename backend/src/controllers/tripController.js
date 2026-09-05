@@ -5,7 +5,8 @@ const { sendSMS } = require("../services/sms");
 const { sendAlert } = require("../services/alert");
 const { safeTrip, escortMode, publicShare } = require("../config/features");
 const { notifyTrustCircle } = require("./checkInController");
-const { getEntitlementsForUser, LEGACY } = require("../services/premiumEntitlements");
+const { getEntitlementsForUser, LEGACY, PREMIUM } = require("../services/premiumEntitlements");
+const { isStaffRole } = require("../services/appSettings");
 const { estimateEtaMinutes, normalizeTransportMode, haversineKm } = require("../utils/geo");
 const { fail } = require("../utils/httpError");
 
@@ -16,6 +17,16 @@ const PUBLIC_BASE =
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const clipDestLabel = (raw) => {
+  if (raw == null) return null;
+  const t = String(raw).trim();
+  if (!t) return null;
+  return t.length > 200 ? t.slice(0, 200) : t;
+};
+
+const isRetryableInsert = (err) =>
+  err && (err.code === "42703" || err.code === "42P08");
 
 const assertTripEnabled = (res) => {
   if (!safeTrip()) {
@@ -65,10 +76,14 @@ const startTrip = async (req, res) => {
     }
 
     let ents = LEGACY;
-    try {
-      ents = await getEntitlementsForUser(req.userId);
-    } catch (entErr) {
-      console.error("startTrip entitlements:", entErr.message);
+    if (isStaffRole(req.userRole)) {
+      ents = { ...PREMIUM, tier: "staff" };
+    } else {
+      try {
+        ents = await getEntitlementsForUser(req.userId);
+      } catch (entErr) {
+        console.error("startTrip entitlements:", entErr.message);
+      }
     }
     if (ents.trips_per_week != null) {
       const weekCount = await pool.query(
@@ -102,13 +117,17 @@ const startTrip = async (req, res) => {
       ? escort_contact_ids.map(String).filter((id) => UUID_RE.test(id))
       : [];
 
+    const destLabel = clipDestLabel(dest_label);
     const shareToken = publicShare() ? crypto.randomBytes(12).toString("hex") : null;
-    // Token lives until ETA + 2h (or max 24h)
-    const shareHours = Math.min(Math.max(Math.ceil(minutes / 60) + 2, 2), 24);
+    // Token lives until ETA + 2h (or max 24h). Hours are a separate bind so $10
+    // is never both varchar (share_token) and text — Postgres 42P08.
+    const shareHours = shareToken
+      ? Math.min(Math.max(Math.ceil(minutes / 60) + 2, 2), 24)
+      : null;
 
     const insertParams = [
       req.userId, originLat, originLng, destLat, destLng,
-      dest_label || null, minutes, escorts, notify_on_delay !== false,
+      destLabel, minutes, escorts, notify_on_delay !== false,
       shareToken, shareHours, mode,
     ];
     const insertFull = () =>
@@ -117,8 +136,8 @@ const startTrip = async (req, res) => {
            (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
             eta_at, last_lat, last_lng, last_ping_at, escort_contact_ids, notify_on_delay,
             share_token, share_expires_at, transport_mode)
-         VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 * INTERVAL '1 minute'), $2,$3, NOW(), $8, $9,
-                 $10, CASE WHEN $10::text IS NOT NULL THEN NOW() + ($11 * INTERVAL '1 hour') ELSE NULL END,
+         VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7::int * INTERVAL '1 minute'), $2,$3, NOW(), $8, $9,
+                 $10, CASE WHEN $11::int IS NOT NULL THEN NOW() + ($11::int * INTERVAL '1 hour') ELSE NULL END,
                  $12)
          RETURNING *`,
         insertParams
@@ -129,8 +148,8 @@ const startTrip = async (req, res) => {
            (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
             eta_at, last_lat, last_lng, last_ping_at, escort_contact_ids, notify_on_delay,
             share_token, share_expires_at)
-         VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 * INTERVAL '1 minute'), $2,$3, NOW(), $8, $9,
-                 $10, CASE WHEN $10::text IS NOT NULL THEN NOW() + ($11 * INTERVAL '1 hour') ELSE NULL END)
+         VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7::int * INTERVAL '1 minute'), $2,$3, NOW(), $8, $9,
+                 $10, CASE WHEN $11::int IS NOT NULL THEN NOW() + ($11::int * INTERVAL '1 hour') ELSE NULL END)
          RETURNING *`,
         insertParams.slice(0, 11)
       );
@@ -139,20 +158,20 @@ const startTrip = async (req, res) => {
         `INSERT INTO safe_trips
            (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
             eta_at, last_lat, last_lng, last_ping_at)
-         VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7 * INTERVAL '1 minute'), $2,$3, NOW())
+         VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7::int * INTERVAL '1 minute'), $2,$3, NOW())
          RETURNING *`,
-        [req.userId, originLat, originLng, destLat, destLng, dest_label || null, minutes]
+        [req.userId, originLat, originLng, destLat, destLng, destLabel, minutes]
       );
 
     let result;
     try {
       result = await insertFull();
     } catch (insertErr) {
-      if (insertErr.code !== "42703") throw insertErr;
+      if (!isRetryableInsert(insertErr)) throw insertErr;
       try {
         result = await insertNoMode();
       } catch (insertErr2) {
-        if (insertErr2.code !== "42703") throw insertErr2;
+        if (!isRetryableInsert(insertErr2)) throw insertErr2;
         result = await insertMinimal();
       }
     }
@@ -165,7 +184,7 @@ const startTrip = async (req, res) => {
       await notifyTrustCircle(
         req.userId,
         "🛣️ Trajet SafeAlert",
-        `{pseudo} partage un trajet vers ${dest_label || "sa destination"} (ETA ${minutes} min).`,
+        `{pseudo} partage un trajet vers ${destLabel || "sa destination"} (ETA ${minutes} min).`,
         "safe_trip_started",
         `🛣️ SafeAlert — {pseudo} a démarré un trajet sécurisé (ETA ${minutes} min).`
       );
@@ -201,6 +220,15 @@ const startTrip = async (req, res) => {
       return res.status(409).json({
         error: "Un trajet est déjà en cours. Terminez-le ou annulez-le.",
       });
+    }
+    if (err.code === "23503") {
+      return res.status(400).json({ error: "Compte introuvable. Reconnectez-vous." });
+    }
+    if (err.code === "22001") {
+      return res.status(400).json({ error: "Le libellé de destination est trop long." });
+    }
+    if (err.code === "42P01") {
+      return res.status(503).json({ error: "Le trajet sécurisé est temporairement indisponible." });
     }
     return fail(res, err, "Impossible de démarrer le trajet. Réessayez.");
   }
