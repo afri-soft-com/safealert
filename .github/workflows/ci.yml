@@ -531,24 +531,13 @@ jobs:
           commit: ${{ github.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload to Google Play internal track (optional)
-        if: ${{ env.PLAY_JSON != '' }}
-        continue-on-error: true
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.safealert.safealert
-          releaseFiles: frontend/build/app/outputs/bundle/release/app-release.aab
-          tracks: internal
-          status: completed
-
-      # Production is requested explicitly; do not swallow the Play API error.
-      - name: Upload to Google Play production track
+      # One Play edit for both tracks — a second upload of the same versionCode is rejected.
+      - name: Upload AAB to Google Play internal and production
         if: ${{ env.PLAY_JSON != '' }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.safealert.safealert
           releaseFiles: frontend/build/app/outputs/bundle/release/app-release.aab
-          tracks: production
+          tracks: internal,production
           status: completed

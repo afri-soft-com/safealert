@@ -14,7 +14,7 @@ changes
   ├─ backend ──┬─ docker-build
   │            └─ db-backup ──┐
   ├─ admin-web ───────────────┼─ deploy-render → smoke /health/ready
-  └─ frontend ────────────────┴─ mobile-aab (AAB + Release + Play internal + production)
+  └─ frontend ────────────────┴─ mobile-aab (AAB + Release + Play internal,production)
 ```
 
 1. **changes** — filtres de chemins (`backend`, `frontend`, `admin`, `deploy_web`).
@@ -67,7 +67,7 @@ Les runners GitHub Actions sont **hors** du réseau privé Render. Il faut l’*
 | `RENDER_ADMIN_SERVICE_ID` | ID service `safealert-admin` |
 | `PRODUCTION_URL` | Smoke test (défaut `https://safealert-api.onrender.com`) |
 | `ANDROID_KEYSTORE_BASE64` + `ANDROID_KEY_PROPERTIES` | Signature Play de l’AAB |
-| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Upload tracks **internal** puis **production** (`status: completed`) |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Upload Play **internal,production** (un seul edit, `status: completed`) |
 | `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_SSH_KEY` | Deploy SSH (workflow Deploy) |
 
 ## Déclenchement manuel (CI)

@@ -117,7 +117,7 @@ Sur push `main` si `frontend/**` change :
 1. Build AAB
 2. Artifact Actions
 3. Release prerelease `aab-main`
-4. Upload Play **internal** puis **production** (`status: completed`) si `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` est défini. Internal reste disponible pour les testeurs même si Production est refusée par Play. Ne pas passer `changesNotSentForReview` : Play le refuse si les changements partent automatiquement en revue.
+4. Upload Play **internal + production** dans le même edit (`status: completed`) si `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` est défini. Un second upload du même `versionCode` est refusé par Play. Ne pas passer `changesNotSentForReview` : Play le refuse si les changements partent automatiquement en revue.
 
 L’AAB est aussi toujours sur la release GitHub **`aab-main`**, même si Play refuse le commit.
 
