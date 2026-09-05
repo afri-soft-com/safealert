@@ -10,6 +10,7 @@ const NAV = [
   { to: "/partenaires", label: "Partenaires API" },
   { to: "/annuaire", label: "Annuaire d'urgence" },
   { to: "/incidents", label: "Incidents" },
+  { to: "/types-incidents", label: "Types d'incidents" },
   { to: "/groupes", label: "Groupes" },
   { to: "/audit", label: "Journal d'audit" },
   { to: "/aide", label: "Aide" },

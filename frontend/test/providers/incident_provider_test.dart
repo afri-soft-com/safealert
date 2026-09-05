@@ -239,6 +239,43 @@ void main() {
     });
   });
 
+  group('fetchIncidentTypes', () {
+    test('loads catalog from API', () async {
+      fakeApi.onGet('/incident-types', () => {
+        'data': [
+          {'slug': 'inondation', 'label_fr': 'Inondation'},
+          {'slug': 'vol', 'label_fr': 'Vol'},
+        ],
+      });
+
+      await provider.fetchIncidentTypes();
+
+      expect(provider.incidentTypes, hasLength(2));
+      expect(provider.incidentTypes.first.slug, 'inondation');
+      expect(provider.labelForType('inondation'), 'Inondation');
+    });
+
+    test('falls back to hardcoded list when API is empty', () async {
+      fakeApi.onGet('/incident-types', () => {'data': []});
+
+      await provider.fetchIncidentTypes();
+
+      expect(provider.incidentTypes, isNotEmpty);
+      expect(provider.labelForType('agression'), 'Agression');
+      expect(provider.labelForType('sos'), 'Alerte SOS');
+    });
+
+    test('falls back to cache then hardcoded when API fails', () async {
+      await fakeDb.put('incident_types', [
+        {'slug': 'braquage', 'label_fr': 'Braquage'},
+      ]);
+
+      await provider.fetchIncidentTypes();
+
+      expect(provider.labelForType('braquage'), 'Braquage');
+    });
+  });
+
   group('verifyIncident', () {
     test('verifies and refreshes incidents', () async {
       fakeApi.onPost('/map/incidents/1/verify', () => {'message': 'ConfirmÃ©'});

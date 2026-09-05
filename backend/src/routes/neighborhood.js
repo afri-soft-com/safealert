@@ -6,6 +6,7 @@ const router = Router();
 
 router.get("/", authenticate, ctrl.listSubscriptions);
 router.post("/subscribe", authenticate, ctrl.subscribe);
+router.patch("/:id", authenticate, ctrl.updateSubscription);
 router.delete("/:id", authenticate, ctrl.unsubscribe);
 
 module.exports = router;

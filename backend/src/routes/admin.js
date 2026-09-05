@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const { authenticate, requireStaff, requireSuperAdmin } = require("../middleware/auth");
 const ctrl = require("../controllers/adminController");
+const types = require("../controllers/incidentTypesController");
 
 const router = Router();
 
@@ -24,5 +25,9 @@ router.get("/groups", ctrl.listGroups);
 router.get("/audit-logs", ctrl.listAuditLogs);
 router.get("/settings", ctrl.getSettings);
 router.put("/settings/maintenance", requireSuperAdmin, ctrl.setMaintenanceSetting);
+router.get("/incident-types", types.listStaff);
+router.post("/incident-types", requireSuperAdmin, types.createType);
+router.patch("/incident-types/:id", requireSuperAdmin, types.updateType);
+router.delete("/incident-types/:id", requireSuperAdmin, types.deleteType);
 
 module.exports = router;

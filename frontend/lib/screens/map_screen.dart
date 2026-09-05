@@ -37,19 +37,11 @@ class _MapScreenState extends State<MapScreen> {
   /// Multi-select severity chips (default: all on = comportement inchangé).
   final Set<String> _severityFilters = {'danger', 'vigilance', 'safe'};
 
-  static const _typeOptions = {
-    'all': 'Tous types',
-    'agression': 'Agression',
-    'vol': 'Vol',
-    'suspect': 'Suspect',
-    'incendie': 'Incendie',
-    'autre': 'Autre',
-  };
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await context.read<IncidentProvider>().fetchIncidentTypes();
       await _initLocation();
       if (mounted) await _loadIncidents();
     });
@@ -135,7 +127,8 @@ class _MapScreenState extends State<MapScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
-        String selectedType = 'agression';
+        final catalog = context.read<IncidentProvider>().incidentTypes;
+        String selectedType = catalog.isNotEmpty ? catalog.first.slug : 'agression';
         bool anonymous = false;
         bool consentEvidence = false;
         String? photoPath;
@@ -167,11 +160,13 @@ class _MapScreenState extends State<MapScreen> {
                   const Text('Type d\'incident', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.gris)),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: selectedType,
-                    items: ['agression', 'vol', 'suspect', 'incendie', 'autre'].map((t) =>
-                      DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13))),
+                    value: catalog.any((t) => t.slug == selectedType)
+                        ? selectedType
+                        : (catalog.isNotEmpty ? catalog.first.slug : selectedType),
+                    items: catalog.map((t) =>
+                      DropdownMenuItem(value: t.slug, child: Text(t.labelFr, style: const TextStyle(fontSize: 13))),
                     ).toList(),
-                    onChanged: (v) => setSheetState(() => selectedType = v ?? 'agression'),
+                    onChanged: (v) => setSheetState(() => selectedType = v ?? selectedType),
                     decoration: InputDecoration(
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -502,16 +497,26 @@ class _MapScreenState extends State<MapScreen> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _typeFilter,
+                          value: _typeFilter == 'all' ||
+                                  provider.incidentTypes.any((t) => t.slug == _typeFilter)
+                              ? _typeFilter
+                              : 'all',
                           isDense: true,
                           decoration: InputDecoration(
                             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                             isDense: true,
                           ),
-                          items: _typeOptions.entries.map((e) =>
-                            DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 11))),
-                          ).toList(),
+                          items: [
+                            const DropdownMenuItem(
+                              value: 'all',
+                              child: Text('Tous types', style: TextStyle(fontSize: 11)),
+                            ),
+                            ...provider.incidentTypes.map((t) => DropdownMenuItem(
+                              value: t.slug,
+                              child: Text(t.labelFr, style: const TextStyle(fontSize: 11)),
+                            )),
+                          ],
                           onChanged: (v) async {
                             setState(() => _typeFilter = v ?? 'all');
                             await _loadIncidents();
@@ -592,7 +597,7 @@ class _MapScreenState extends State<MapScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(selected['incident_type'] as String? ?? 'Incident',
+                                    Text(provider.labelForType(selected['incident_type'] as String?),
                                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
                                             color: _colorForSeverity(selected['severity'] as String?))),
                                     if (selected['description'] != null)

@@ -2,6 +2,14 @@ const { pool } = require("../config/database");
 const { sendPush } = require("../config/firebase");
 const { neighborhoodWatch } = require("../config/features");
 
+/** Parse digest hour 0–23. `0` is valid (midnight). Invalid → null. */
+function parseDigestHour(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number.parseInt(value, 10);
+  if (!Number.isFinite(n) || n < 0 || n > 23) return null;
+  return n;
+}
+
 const subscribe = async (req, res) => {
   if (!neighborhoodWatch()) {
     return res.status(503).json({ error: "Veille de quartier désactivée" });
@@ -10,21 +18,50 @@ const subscribe = async (req, res) => {
   if (!quartier || String(quartier).trim().length < 2) {
     return res.status(400).json({ error: "Nom de quartier requis" });
   }
+  const hour = digest_hour === undefined || digest_hour === null || digest_hour === ""
+    ? 18
+    : parseDigestHour(digest_hour);
+  if (hour === null) {
+    return res.status(400).json({ error: "Heure du résumé invalide (0–23)" });
+  }
   try {
     const result = await pool.query(
       `INSERT INTO neighborhood_subscriptions (user_id, quartier, digest_hour)
        VALUES ($1, $2, $3)
        ON CONFLICT (user_id, quartier) DO UPDATE SET digest_hour = EXCLUDED.digest_hour
        RETURNING *`,
-      [
-        req.userId,
-        String(quartier).trim(),
-        Math.min(23, Math.max(0, parseInt(digest_hour) || 18)),
-      ]
+      [req.userId, String(quartier).trim(), hour]
     );
     return res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("neighborhood subscribe error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
+const updateSubscription = async (req, res) => {
+  if (!neighborhoodWatch()) {
+    return res.status(503).json({ error: "Veille de quartier désactivée" });
+  }
+  if (req.body.digest_hour === undefined || req.body.digest_hour === null || req.body.digest_hour === "") {
+    return res.status(400).json({ error: "Heure du résumé requise (0–23)" });
+  }
+  const hour = parseDigestHour(req.body.digest_hour);
+  if (hour === null) {
+    return res.status(400).json({ error: "Heure du résumé invalide (0–23)" });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE neighborhood_subscriptions SET digest_hour = $1
+       WHERE id = $2 AND user_id = $3 RETURNING *`,
+      [hour, req.params.id, req.userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Abonnement introuvable" });
+    }
+    return res.json(result.rows[0]);
+  } catch (err) {
+    console.error("neighborhood update error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
@@ -99,4 +136,11 @@ const sendDigests = async () => {
   return { sent };
 };
 
-module.exports = { subscribe, unsubscribe, listSubscriptions, sendDigests };
+module.exports = {
+  subscribe,
+  updateSubscription,
+  unsubscribe,
+  listSubscriptions,
+  sendDigests,
+  parseDigestHour,
+};

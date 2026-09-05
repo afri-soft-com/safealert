@@ -9,6 +9,7 @@ const PRESERVE_TABLES = new Set([
   "landmarks",
   "route_corridors",
   "app_settings",
+  "incident_types",
   "spatial_ref_sys",
   "geography_columns",
   "geometry_columns",

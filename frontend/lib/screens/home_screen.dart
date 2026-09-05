@@ -41,16 +41,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _incidentLabel(Map<String, dynamic> inc) {
+  String _incidentLabel(IncidentProvider provider, Map<String, dynamic> inc) {
     final type = inc['incident_type'] as String? ?? 'incident';
-    switch (type) {
-      case 'agression': return 'Agression signalée';
-      case 'vol': return 'Vol signalé';
-      case 'suspect': return 'Présence suspecte';
-      case 'incendie': return 'Incendie signalé';
-      case 'sos': return 'Alerte SOS';
-      default: return 'Incident signalé';
+    if (type == 'sos' || type == 'sos_discret') {
+      return provider.labelForType(type);
     }
+    final label = provider.labelForType(type);
+    if (label == type || label == 'Signalement') return 'Incident signalé';
+    return '$label signalé';
   }
 
   @override
@@ -118,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Alerte active — ${_incidentLabel(latest)}',
+                                'Alerte active — ${_incidentLabel(incidentProvider, latest)}',
                                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.rouge),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -229,8 +227,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           final icon = type == 'agression' || type == 'sos' ? '🔴' : (type == 'vol' || type == 'suspect' ? '🟡' : '🟢');
                           final desc = (inc['description'] as String?)?.trim();
                           final title = (desc != null && desc.isNotEmpty)
-                              ? '${_incidentLabel(inc)} — $desc'
-                              : _incidentLabel(inc);
+                              ? '${_incidentLabel(incidentProvider, inc)} — $desc'
+                              : _incidentLabel(incidentProvider, inc);
                           return _activityItem(
                             icon,
                             title,

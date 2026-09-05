@@ -7,6 +7,7 @@ import '../services/app_config_service.dart';
 import '../services/local_database.dart';
 import '../services/location_service.dart';
 import '../services/socket_service.dart';
+import '../data/incident_types.dart';
 import '../utils/location_format.dart';
 import '../utils/network_error.dart';
 
@@ -41,6 +42,7 @@ class IncidentProvider extends ChangeNotifier {
   Map<String, dynamic>? _lastSosAlert;
   bool _loading = false;
   bool _isOffline = false;
+  List<IncidentTypeDef> _incidentTypes = List<IncidentTypeDef>.from(kFallbackIncidentTypes);
 
   List<Map<String, dynamic>> get incidents => _incidents;
   Map<String, dynamic>? get stats => _stats;
@@ -48,6 +50,46 @@ class IncidentProvider extends ChangeNotifier {
   Map<String, dynamic>? get lastSosAlert => _lastSosAlert;
   bool get loading => _loading;
   bool get isOffline => _isOffline;
+  List<IncidentTypeDef> get incidentTypes => _incidentTypes;
+
+  String labelForType(String? slug) =>
+      incidentTypeLabel(slug, catalog: _incidentTypes);
+
+  Future<void> fetchIncidentTypes() async {
+    try {
+      final res = await _api.get('/incident-types');
+      final raw = (res['data'] as List?) ?? const [];
+      final parsed = raw
+          .whereType<Map>()
+          .map((e) => IncidentTypeDef.fromJson(Map<String, dynamic>.from(e)))
+          .where((t) => t.slug.isNotEmpty)
+          .toList();
+      if (parsed.isNotEmpty) {
+        _incidentTypes = parsed;
+        await _cache.put(
+          'incident_types',
+          parsed.map((t) => t.toJson()).toList(),
+        );
+        notifyListeners();
+        return;
+      }
+    } catch (_) {
+      final cached = await _cache.get('incident_types');
+      if (cached is List && cached.isNotEmpty) {
+        _incidentTypes = cached
+            .whereType<Map>()
+            .map((e) => IncidentTypeDef.fromJson(Map<String, dynamic>.from(e)))
+            .where((t) => t.slug.isNotEmpty)
+            .toList();
+        if (_incidentTypes.isNotEmpty) {
+          notifyListeners();
+          return;
+        }
+      }
+    }
+    _incidentTypes = List<IncidentTypeDef>.from(kFallbackIncidentTypes);
+    notifyListeners();
+  }
 
   void handleSosAlert(Map<String, dynamic> alert) {
     _lastSosAlert = alert;

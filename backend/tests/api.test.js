@@ -871,7 +871,7 @@ describe("App version", () => {
     delete process.env.ADMIN_WEB_VERSION;
     const res = await request(app).get("/api/app/version");
     expect(res.status).toBe(200);
-    expect(res.body.latestVersion).toBe("1.0.11");
+    expect(res.body.latestVersion).toBe("1.0.12");
     expect(res.body.adminWebVersion).toBe("1.0.4");
     expect(res.body.adminWebUrl).toContain("safealert-admin");
   });
@@ -1098,5 +1098,164 @@ describe("Heatmap slots", () => {
     expect(res.status).toBe(200);
     expect(res.body.slot).toBe("evening");
     expect(res.body.available_slots).toContain("weekend");
+  });
+});
+
+describe("Neighborhood veille", () => {
+  it("POST /api/neighborhood/subscribe stores chosen digest_hour including 0", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "sub-1", quartier: "Gombe", digest_hour: 0 }],
+    });
+    const res = await request(app)
+      .post("/api/neighborhood/subscribe")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ quartier: "Gombe", digest_hour: 0 });
+    expect(res.status).toBe(201);
+    expect(res.body.digest_hour).toBe(0);
+    expect(mockQuery.mock.calls[0][1][2]).toBe(0);
+  });
+
+  it("POST /api/neighborhood/subscribe defaults to 18 when hour omitted", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "sub-2", quartier: "Limete", digest_hour: 18 }],
+    });
+    const res = await request(app)
+      .post("/api/neighborhood/subscribe")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ quartier: "Limete" });
+    expect(res.status).toBe(201);
+    expect(mockQuery.mock.calls[0][1][2]).toBe(18);
+  });
+
+  it("POST /api/neighborhood/subscribe rejects hour 24", async () => {
+    const res = await request(app)
+      .post("/api/neighborhood/subscribe")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ quartier: "Gombe", digest_hour: 24 });
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH /api/neighborhood/:id updates digest_hour", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "sub-1", quartier: "Gombe", digest_hour: 9 }],
+    });
+    const res = await request(app)
+      .patch("/api/neighborhood/sub-1")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ digest_hour: 9 });
+    expect(res.status).toBe(200);
+    expect(res.body.digest_hour).toBe(9);
+    expect(mockQuery.mock.calls[0][1][0]).toBe(9);
+  });
+
+  it("PATCH /api/neighborhood/:id requires digest_hour", async () => {
+    const res = await request(app)
+      .patch("/api/neighborhood/sub-1")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH /api/neighborhood/:id returns 404 for another user", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .patch("/api/neighborhood/sub-1")
+      .set("Authorization", `Bearer ${user2Token}`)
+      .send({ digest_hour: 7 });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("Incident types catalog", () => {
+  it("GET /api/incident-types is public and returns reportable types", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        { slug: "agression", label_fr: "Agression", sort_order: 10 },
+        { slug: "vol", label_fr: "Vol", sort_order: 20 },
+      ],
+    });
+    const res = await request(app).get("/api/incident-types");
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(2);
+    expect(res.body.data[0].slug).toBe("agression");
+  });
+
+  it("GET /api/admin/incident-types allows staff to read", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "t1", slug: "vol", label_fr: "Vol", active: true }],
+    });
+    const res = await request(app)
+      .get("/api/admin/incident-types")
+      .set("Authorization", `Bearer ${staffToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].slug).toBe("vol");
+  });
+
+  it("POST /api/admin/incident-types is superadmin only", async () => {
+    const denied = await request(app)
+      .post("/api/admin/incident-types")
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ slug: "inondation", label_fr: "Inondation" });
+    expect(denied.status).toBe(403);
+
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "t2", slug: "inondation", label_fr: "Inondation", active: true }],
+    });
+    const ok = await request(app)
+      .post("/api/admin/incident-types")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ slug: "inondation", label_fr: "Inondation" });
+    expect(ok.status).toBe(201);
+    expect(ok.body.slug).toBe("inondation");
+  });
+
+  it("PATCH /api/admin/incident-types/:id updates label", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "t1", slug: "vol", label_fr: "Vol à l'arraché", active: true }],
+    });
+    const res = await request(app)
+      .patch("/api/admin/incident-types/t1")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ label_fr: "Vol à l'arraché" });
+    expect(res.status).toBe(200);
+    expect(res.body.label_fr).toBe("Vol à l'arraché");
+  });
+
+  it("DELETE /api/admin/incident-types/:id hard-deletes unused types", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "t3", slug: "inondation", system: false }] })
+      .mockResolvedValueOnce({ rows: [{ n: 0 }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .delete("/api/admin/incident-types/t3")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(true);
+  });
+
+  it("DELETE /api/admin/incident-types/:id deactivates types still in use", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: "t1", slug: "vol", system: false }] })
+      .mockResolvedValueOnce({ rows: [{ n: 4 }] })
+      .mockResolvedValueOnce({
+        rows: [{ id: "t1", slug: "vol", active: false }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .delete("/api/admin/incident-types/t1")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.deactivated).toBe(true);
+  });
+
+  it("DELETE /api/admin/incident-types/:id refuses system types", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "t0", slug: "sos", system: true }],
+    });
+    const res = await request(app)
+      .delete("/api/admin/incident-types/t0")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(400);
   });
 });

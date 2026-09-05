@@ -19,6 +19,7 @@ import AuditPage from "./pages/AuditPage";
 import SettingsPage from "./pages/SettingsPage";
 import CguPage from "./pages/CguPage";
 import ManuelPage from "./pages/ManuelPage";
+import IncidentTypesPage from "./pages/IncidentTypesPage";
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
                 <Route path="partenaires" element={<PartnersPage />} />
                 <Route path="annuaire" element={<EmergencyPage />} />
                 <Route path="incidents" element={<IncidentsPage />} />
+                <Route path="types-incidents" element={<IncidentTypesPage />} />
                 <Route path="groupes" element={<GroupsPage />} />
                 <Route path="audit" element={<AuditPage />} />
                 <Route path="reglages" element={<SettingsPage />} />

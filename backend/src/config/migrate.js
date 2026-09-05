@@ -281,6 +281,18 @@ const migrate = async () => {
       );
       CREATE INDEX IF NOT EXISTS idx_neighborhood_subs_quartier ON neighborhood_subscriptions(quartier);
 
+      CREATE TABLE IF NOT EXISTS incident_types (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        slug VARCHAR(50) UNIQUE NOT NULL,
+        label_fr VARCHAR(80) NOT NULL,
+        active BOOLEAN DEFAULT true,
+        sort_order SMALLINT DEFAULT 100,
+        reportable BOOLEAN DEFAULT true,
+        system BOOLEAN DEFAULT false,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS incident_evidence (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         incident_id UUID NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
@@ -457,6 +469,42 @@ const migrate = async () => {
             ST_SetSRID(ST_MakePoint(15.340, -4.380), 4326)::geography, 'Limete', 'Axe fréquenté')
       `);
     }
+
+    await client.query(`
+      ALTER TABLE neighborhood_subscriptions
+        DROP CONSTRAINT IF EXISTS neighborhood_subscriptions_digest_hour_check;
+      ALTER TABLE neighborhood_subscriptions
+        ADD CONSTRAINT neighborhood_subscriptions_digest_hour_check
+        CHECK (digest_hour >= 0 AND digest_hour <= 23);
+
+      CREATE TABLE IF NOT EXISTS incident_types (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        slug VARCHAR(50) UNIQUE NOT NULL,
+        label_fr VARCHAR(80) NOT NULL,
+        active BOOLEAN DEFAULT true,
+        sort_order SMALLINT DEFAULT 100,
+        reportable BOOLEAN DEFAULT true,
+        system BOOLEAN DEFAULT false,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      ALTER TABLE incident_types ADD COLUMN IF NOT EXISTS reportable BOOLEAN DEFAULT true;
+      ALTER TABLE incident_types ADD COLUMN IF NOT EXISTS system BOOLEAN DEFAULT false;
+      ALTER TABLE incident_types ADD COLUMN IF NOT EXISTS sort_order SMALLINT DEFAULT 100;
+      ALTER TABLE incident_types ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT true;
+    `);
+
+    await client.query(`
+      INSERT INTO incident_types (slug, label_fr, active, sort_order, reportable, system) VALUES
+        ('sos', 'SOS', true, 0, false, true),
+        ('agression', 'Agression', true, 10, true, false),
+        ('vol', 'Vol', true, 20, true, false),
+        ('accident', 'Accident', true, 30, true, false),
+        ('incendie', 'Incendie', true, 40, true, false),
+        ('suspect', 'Présence suspecte', true, 50, true, false),
+        ('autre', 'Autre', true, 60, true, false)
+      ON CONFLICT (slug) DO NOTHING
+    `);
 
     await client.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;

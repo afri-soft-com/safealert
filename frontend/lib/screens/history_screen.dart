@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
+import '../data/incident_types.dart';
 import '../providers/history_provider.dart';
+import '../providers/incident_provider.dart';
 import '../utils/location_format.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
@@ -28,6 +30,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final hp = context.watch<HistoryProvider>();
+    final types = context.watch<IncidentProvider>().incidentTypes;
     return Scaffold(
       body: Column(
         children: [
@@ -69,7 +72,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 style: const TextStyle(fontSize: 24),
                               ),
                               title: Text(
-                                _typeLabel(item['incident_type'] as String?),
+                                incidentTypeLabel(item['incident_type'] as String?, catalog: types),
                                 style: const TextStyle(fontWeight: FontWeight.w600),
                               ),
                               subtitle: Text(
@@ -92,27 +95,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
       ),
     );
-  }
-
-  String _typeLabel(String? type) {
-    switch (type) {
-      case 'sos':
-        return 'Alerte SOS';
-      case 'sos_discret':
-        return 'SOS Discret';
-      case 'vol':
-        return 'Vol';
-      case 'agression':
-        return 'Agression';
-      case 'accident':
-        return 'Accident';
-      case 'incendie':
-        return 'Incendie';
-      case 'autre':
-        return 'Autre';
-      default:
-        return 'Signalement';
-    }
   }
 
   String _formatDate(String? iso) {

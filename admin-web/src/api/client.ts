@@ -275,6 +275,27 @@ export const api = {
   deleteEmergencyNumber: (id: string) =>
     request<{ message: string }>(`/admin/emergency-numbers/${id}`, { method: "DELETE" }),
 
+  getIncidentTypes: () =>
+    request<{ data: IncidentTypeRow[] }>("/admin/incident-types"),
+
+  createIncidentType: (data: IncidentTypeInput) =>
+    request<IncidentTypeRow>("/admin/incident-types", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateIncidentType: (id: string, data: Partial<IncidentTypeInput>) =>
+    request<IncidentTypeRow>(`/admin/incident-types/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  deleteIncidentType: (id: string) =>
+    request<{ message: string; deleted?: boolean; deactivated?: boolean }>(
+      `/admin/incident-types/${id}`,
+      { method: "DELETE" }
+    ),
+
   getIncidents: (params: Record<string, string>) => {
     const qs = new URLSearchParams(params).toString();
     return request<{ data: IncidentRow[]; page: number; limit: number; total: number }>(
@@ -376,6 +397,26 @@ export interface EmergencyInput {
   is_offline_available?: boolean;
 }
 
+export interface IncidentTypeRow {
+  id: string;
+  slug: string;
+  label_fr: string;
+  active: boolean;
+  sort_order: number;
+  reportable: boolean;
+  system: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IncidentTypeInput {
+  slug?: string;
+  label_fr: string;
+  active?: boolean;
+  sort_order?: number;
+  reportable?: boolean;
+}
+
 export interface IncidentRow {
   id: string;
   incident_type: string;
@@ -439,8 +480,10 @@ export const INCIDENT_TYPE_LABELS: Record<string, string> = {
   sos: "SOS",
   agression: "Agression",
   vol: "Vol",
+  accident: "Accident",
   suspect: "Présence suspecte",
   incendie: "Incendie",
+  autre: "Autre",
   incident: "Incident",
 };
 
