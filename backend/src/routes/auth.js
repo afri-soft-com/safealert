@@ -18,6 +18,19 @@ router.post(
   [body("phone").isMobilePhone(), body("code").isLength({ min: 6, max: 6 })],
   ctrl.verifyCode
 );
+router.post(
+  "/google",
+  authVerifyLimiter,
+  [body("idToken").optional().isString(), body("id_token").optional().isString()],
+  ctrl.googleLogin
+);
+router.post(
+  "/link-phone",
+  authenticate,
+  authVerifyLimiter,
+  [body("phone").isMobilePhone(), body("code").isLength({ min: 6, max: 6 })],
+  ctrl.linkPhone
+);
 router.get("/profile", authenticate, ctrl.getProfile);
 router.put("/profile", authenticate, ctrl.updateProfile);
 router.put(

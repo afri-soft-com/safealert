@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
@@ -21,6 +21,7 @@ export default function LoginPage() {
     isAuthenticated,
     ready,
     login,
+    loginWithGoogle,
     hasLocalPin,
     needsPinSetup,
     pinPhone,
@@ -40,6 +41,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [devHint, setDevHint] = useState("");
+  const googleBtnRef = useRef<HTMLDivElement>(null);
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
   useEffect(() => {
     if (!ready) return;
@@ -49,6 +52,69 @@ export default function LoginPage() {
       setStep("pinUnlock");
     }
   }, [ready, needsPinSetup, user, hasLocalPin]);
+
+  const handleGoogleCredential = async (idToken: string) => {
+    setError("");
+    setLoading(true);
+    try {
+      await loginWithGoogle(idToken);
+      setPin("");
+      setPinConfirm("");
+      setStep("pinCreate");
+    } catch (err) {
+      setError(userFacingError(err, "Connexion Google impossible. Réessayez."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!ready || step !== "phone" || !googleClientId) return;
+    let cancelled = false;
+
+    const render = () => {
+      if (cancelled || !googleBtnRef.current || !window.google?.accounts?.id) return;
+      googleBtnRef.current.innerHTML = "";
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: (response) => {
+          if (response?.credential) void handleGoogleCredential(response.credential);
+        },
+        ux_mode: "popup",
+      });
+      window.google.accounts.id.renderButton(googleBtnRef.current, {
+        theme: "outline",
+        size: "large",
+        text: "continue_with",
+        locale: "fr",
+        width: 320,
+        shape: "rectangular",
+      });
+    };
+
+    const existing = document.getElementById("google-gis") as HTMLScriptElement | null;
+    if (window.google?.accounts?.id) {
+      render();
+      return () => {
+        cancelled = true;
+      };
+    }
+    const s = existing ?? document.createElement("script");
+    if (!existing) {
+      s.src = "https://accounts.google.com/gsi/client";
+      s.async = true;
+      s.defer = true;
+      s.id = "google-gis";
+      document.head.appendChild(s);
+    }
+    s.addEventListener("load", render);
+    return () => {
+      cancelled = true;
+      s.removeEventListener("load", render);
+    };
+    // GIS callback closes over the latest login handler.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, step, googleClientId]);
 
   if (!ready) return <div className="loading">Chargement…</div>;
   if (isAuthenticated) return <Navigate to="/" replace />;
@@ -163,7 +229,7 @@ export default function LoginPage() {
         ? "Créez un code PIN (4 à 6 chiffres). Plus de SMS à chaque connexion."
         : step === "code"
           ? "Saisissez le code reçu par SMS"
-          : "Connexion réservée aux administrateurs";
+          : "Connexion Google ou numéro — réservée aux administrateurs";
 
   const displayPhone = maskedPhone(pinPhone || user?.phone);
 
@@ -176,6 +242,15 @@ export default function LoginPage() {
         {error && <div className="form-error">{error}</div>}
 
         {step === "phone" && (
+          <>
+            {googleClientId ? (
+              <>
+                <div ref={googleBtnRef} style={{ display: "flex", justifyContent: "center", marginBottom: "1rem" }} />
+                <p className="form-hint" style={{ textAlign: "center", marginBottom: "1rem" }}>
+                  ou
+                </p>
+              </>
+            ) : null}
           <form onSubmit={handleRequestCode}>
             <div className="form-group">
               <label htmlFor="phone">Numéro de téléphone</label>
@@ -192,6 +267,7 @@ export default function LoginPage() {
               {loading ? "Envoi…" : "Recevoir le code"}
             </button>
           </form>
+          </>
         )}
 
         {step === "code" && (

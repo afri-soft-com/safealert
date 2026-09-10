@@ -16,7 +16,8 @@ export function isSuperAdmin(role?: string | null): boolean {
 
 export interface AuthUser {
   id: string;
-  phone: string;
+  phone: string | null;
+  email?: string | null;
   pseudo: string;
   role: UserRole;
   sector_name: string | null;
@@ -142,6 +143,12 @@ export const api = {
         isNewAccount: Boolean(pseudo?.trim()),
         ...(pseudo?.trim() ? { pseudo: pseudo.trim() } : {}),
       }),
+    }),
+
+  googleLogin: (idToken: string) =>
+    request<{ token: string; user: AuthUser; isNew?: boolean; needsPinSetup?: boolean }>("/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ idToken }),
     }),
 
   getStats: () =>

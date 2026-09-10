@@ -44,6 +44,13 @@ services:
         sync: false
       - key: JWT_EXPIRES_IN
         value: 30d
+      # Web OAuth client ID (public). Set in dashboard. Never a client secret.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_ANDROID_CLIENT_ID
+        sync: false
+      - key: GOOGLE_IOS_CLIENT_ID
+        sync: false
       - key: CORS_ORIGIN
         sync: false
       - key: PLATFORM_ADMIN_PHONE
@@ -95,10 +102,10 @@ services:
         sync: false
       # Align with frontend/pubspec.yaml (version name) after each Play upload
       - key: APP_LATEST_VERSION
-        value: "1.0.12"
+        value: "1.0.13"
       # Align with admin-web/package.json
       - key: ADMIN_WEB_VERSION
-        value: "1.0.4"
+        value: "1.0.5"
       - key: ADMIN_WEB_URL
         value: "https://safealert-admin.onrender.com"
 
@@ -129,3 +136,5 @@ services:
     envVars:
       - key: VITE_API_BASE_URL
         value: https://safealert-api.onrender.com/api
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false

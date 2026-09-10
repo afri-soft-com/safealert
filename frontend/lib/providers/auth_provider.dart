@@ -8,6 +8,7 @@ import '../services/local_pin_service.dart';
 import '../services/location_service.dart';
 import '../services/socket_service.dart';
 import '../services/trip_tracking_service.dart';
+import '../services/google_sign_in_service.dart';
 
 /// Routes nécessitant une authentification (US-14 mode invité).
 const kAuthRequiredScreens = {
@@ -42,10 +43,15 @@ abstract final class UserRoles {
 class AuthProvider extends ChangeNotifier {
   final ApiService _api;
   final LocalPinService _pin;
+  final GoogleSignInService _google;
 
-  AuthProvider({ApiService? apiService, LocalPinService? pinService})
-      : _api = apiService ?? ApiService(),
-        _pin = pinService ?? LocalPinService();
+  AuthProvider({
+    ApiService? apiService,
+    LocalPinService? pinService,
+    GoogleSignInService? googleSignIn,
+  })  : _api = apiService ?? ApiService(),
+        _pin = pinService ?? LocalPinService(),
+        _google = googleSignIn ?? GoogleSignInService();
   bool _loading = false;
   bool _isAuthenticated = false;
   bool _isGuest = false;
@@ -110,9 +116,12 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = true;
         _isGuest = false;
         final profilePhone = res['phone'] as String?;
+        final identity = (profilePhone != null && profilePhone.isNotEmpty)
+            ? profilePhone
+            : res['id']?.toString();
         if (_hasLocalPin) {
           _pinUnlocked = false;
-          if (profilePhone != null && _pinPhone != null && profilePhone != _pinPhone) {
+          if (identity != null && _pinPhone != null && identity != _pinPhone) {
             await _pin.clear();
             await _refreshPinState();
             _needsPinSetup = true;
@@ -205,6 +214,105 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  String? get _pinIdentity {
+    final phone = _phone ?? _user?['phone'] as String?;
+    if (phone != null && phone.isNotEmpty) return phone;
+    final id = _user?['id'] as String?;
+    if (id != null && id.isNotEmpty) return id;
+    return _pinPhone;
+  }
+
+  Future<bool> loginWithGoogle({Future<String?> Function()? obtainIdToken}) async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final token = obtainIdToken != null
+          ? await obtainIdToken()
+          : await _google.signInIdToken();
+      if (token == null) {
+        _loading = false;
+        notifyListeners();
+        return false;
+      }
+      if (token.isEmpty) {
+        _error =
+            'Connexion Google mal configurée (jeton manquant). Vérifiez l’identifiant client Web.';
+        _loading = false;
+        notifyListeners();
+        return false;
+      }
+      final deviceId = await _api.ensureDeviceId();
+      final res = await _api.post('/auth/google', {
+        'idToken': token,
+        'device_id': deviceId,
+        'device_label': defaultTargetPlatform.name,
+      });
+      await _api.setToken(res['token'] as String);
+      _user = res['user'] as Map<String, dynamic>;
+      _phone = _user?['phone'] as String?;
+      _isAuthenticated = true;
+      _isGuest = false;
+      await _refreshPinState();
+      final identity = _pinIdentity;
+      final stored = _pinPhone;
+      if (stored != null && identity != null && stored != identity) {
+        await _pin.clear();
+        await _refreshPinState();
+      }
+      _needsPinSetup = true;
+      _pinUnlocked = false;
+      _loading = false;
+      notifyListeners();
+      FCMService().uploadToken();
+      _applyPrivacySettings();
+      _startRealtimeServices();
+      return true;
+    } catch (e) {
+      final mapped = mapGoogleSignInError(e);
+      _error = mapped ?? userFacingError(e);
+      if (mapped == null &&
+          (e.toString().toLowerCase().contains('cancel') ||
+              e.toString().toLowerCase().contains('12501'))) {
+        _error = null;
+      }
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> linkPhone(String phone, String code) async {
+    final normalized = normalizePhone(phone);
+    if (normalized == null) {
+      _error = 'Numéro de téléphone invalide';
+      notifyListeners();
+      return false;
+    }
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final res = await _api.post('/auth/link-phone', {
+        'phone': normalized,
+        'code': code,
+      });
+      final user = res['user'];
+      if (user is Map<String, dynamic>) {
+        _user = user;
+        _phone = user['phone'] as String?;
+      }
+      _loading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = userFacingError(e);
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   void enterGuestMode() {
     _isGuest = true;
     _isAuthenticated = false;
@@ -263,9 +371,9 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    final phone = _phone ?? _user?['phone'] as String? ?? _pinPhone;
+    final phone = _pinIdentity;
     if (phone == null || phone.isEmpty) {
-      _error = 'Numéro introuvable. Recommencez la connexion.';
+      _error = 'Compte introuvable. Recommencez la connexion.';
       _loading = false;
       notifyListeners();
       return false;
@@ -348,7 +456,8 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> requestForgotPinCode() async {
     final phone = _pinPhone ?? _phone ?? _user?['phone'] as String?;
     if (phone == null || phone.isEmpty) {
-      _error = 'Aucun numéro enregistré. Saisissez votre numéro.';
+      _error =
+          'Aucun numéro associé. Reconnectez-vous avec Google, ou associez un +243 dans Paramètres.';
       notifyListeners();
       return false;
     }

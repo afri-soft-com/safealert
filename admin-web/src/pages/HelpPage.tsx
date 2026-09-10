@@ -9,8 +9,8 @@ export default function HelpPage() {
       <div className="card">
         <h3>Connexion</h3>
         <ul>
-          <li>Code SMS, puis création obligatoire d’un PIN local (4 à 6 chiffres).</li>
-          <li>À la prochaine ouverture : PIN d’abord. « Code PIN oublié » renvoie un SMS.</li>
+          <li>Google (« Continuer avec Google ») ou code SMS, puis création obligatoire d’un PIN local (4 à 6 chiffres).</li>
+          <li>À la prochaine ouverture : PIN d’abord. « Code PIN oublié » renvoie un SMS si un numéro est associé.</li>
         </ul>
 
         <h3>Rôles</h3>

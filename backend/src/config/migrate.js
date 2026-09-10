@@ -518,6 +518,16 @@ const migrate = async () => {
       );
     `);
 
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(64);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+      ALTER TABLE users ALTER COLUMN phone DROP NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id
+        ON users (google_id) WHERE google_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
+        ON users (LOWER(email)) WHERE email IS NOT NULL AND BTRIM(email) <> '';
+    `);
+
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;
     if (adminPhone) {
       const normalized = normalizePhone(adminPhone.trim()) || adminPhone.trim();

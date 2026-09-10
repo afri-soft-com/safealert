@@ -108,6 +108,16 @@ class _LoginScreenState extends State<LoginScreen> {
     return '•••• ${phone.substring(phone.length - 4)}';
   }
 
+  Future<void> _continueWithGoogle() async {
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.loginWithGoogle();
+    if (ok && mounted) {
+      _pinCtrl.clear();
+      _pinConfirmCtrl.clear();
+      setState(() => _step = _LoginStep.pinCreate);
+    }
+  }
+
   Future<void> _sendCode() async {
     final auth = context.read<AuthProvider>();
     final ok = await auth.requestCode(_phoneCtrl.text.trim());
@@ -316,7 +326,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String _subtitleFor(_LoginStep step) {
     switch (step) {
       case _LoginStep.phone:
-        return 'Connectez-vous avec votre numéro';
+        return 'Connectez-vous avec Google ou votre numéro';
       case _LoginStep.otp:
         return 'Saisissez le code reçu par SMS';
       case _LoginStep.pinUnlock:
@@ -328,6 +338,41 @@ class _LoginScreenState extends State<LoginScreen> {
 
   List<Widget> _phoneFields(AuthProvider auth) {
     return [
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: auth.loading ? null : _continueWithGoogle,
+          icon: const Icon(Icons.g_mobiledata, color: Colors.white, size: 28),
+          label: auth.loading
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text(
+                  'Continuer avec Google',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                ),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: Colors.white54),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
+      const Row(
+        children: [
+          Expanded(child: Divider(color: Colors.white24)),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: Text('ou', style: TextStyle(color: Colors.white54, fontSize: 12)),
+          ),
+          Expanded(child: Divider(color: Colors.white24)),
+        ],
+      ),
+      const SizedBox(height: 16),
       Semantics(
         label: 'Numéro de téléphone',
         textField: true,

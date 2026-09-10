@@ -184,9 +184,11 @@ jobs:
       - name: Build production bundle
         env:
           API_BASE_URL: ${{ vars.API_BASE_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_SERVER_CLIENT_ID }}
         run: |
           set -euo pipefail
           export VITE_API_BASE_URL="${API_BASE_URL:-https://safealert-api.onrender.com/api}"
+          export VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID:-}"
           npm run build
 
   docker-build:
@@ -501,13 +503,17 @@ jobs:
         timeout-minutes: 30
         env:
           API_BASE_URL: ${{ vars.API_BASE_URL }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ vars.GOOGLE_SERVER_CLIENT_ID }}
         run: |
           set -euo pipefail
           # GitHub-hosted runners have ~7 GB RAM; frontend/android/gradle.properties asks for 8G+4G.
           sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx2G -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8/' android/gradle.properties
           printf '\norg.gradle.daemon=false\norg.gradle.vfs.watch=false\n' >> android/gradle.properties
           BASE="${API_BASE_URL:-https://safealert-api.onrender.com/api}"
-          flutter build appbundle --release --dart-define=API_BASE_URL="$BASE"
+          GOOGLE_ID="${GOOGLE_SERVER_CLIENT_ID:-}"
+          flutter build appbundle --release \
+            --dart-define=API_BASE_URL="$BASE" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_ID"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4

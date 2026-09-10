@@ -8,6 +8,7 @@ const { log } = require("../utils/logger");
 const { incrPhoneOtp } = require("../config/redis");
 const { otpPhoneLimit } = require("../config/features");
 const { writeAudit } = require("../services/audit");
+const { verifyGoogleIdToken } = require("../services/googleAuth");
 
 const promoteIfPlatformAdminPhone = async (user) => {
   const adminPhone = (process.env.PLATFORM_ADMIN_PHONE || "").trim();
@@ -48,6 +49,37 @@ const createSessionToken = async (user, { deviceId, deviceLabel, fcmToken } = {}
   }
 
   return { token, deviceId: resolvedDeviceId, jti };
+};
+
+const publicSessionUser = (user) => ({
+  id: user.id,
+  phone: user.phone ?? null,
+  email: user.email ?? null,
+  pseudo: user.pseudo,
+  role: user.role,
+  sector_name: user.sector_name ?? null,
+  is_discreet_mode: user.is_discreet_mode ?? false,
+  share_presence: user.share_presence ?? true,
+  sos_notify_groups: user.sos_notify_groups ?? true,
+});
+
+const sanitizePseudo = (name) => {
+  const raw = String(name || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 50);
+  return raw || "Citoyen";
+};
+
+const uniquePseudo = async (base) => {
+  const root = sanitizePseudo(base);
+  for (let i = 0; i < 10; i++) {
+    const candidate =
+      i === 0 ? root : `${root.slice(0, 40)}-${crypto.randomBytes(2).toString("hex")}`.slice(0, 50);
+    const exists = await pool.query("SELECT 1 FROM users WHERE pseudo = $1 LIMIT 1", [candidate]);
+    if (exists.rows.length === 0) return candidate;
+  }
+  return `Citoyen-${crypto.randomUUID().slice(0, 8)}`;
 };
 
 const OTP_TTL_SECONDS = 300;
@@ -259,16 +291,7 @@ const verifyCode = async (req, res) => {
     return res.json({
       token,
       deviceId,
-      user: {
-        id: user.id,
-        phone: user.phone,
-        pseudo: user.pseudo,
-        role: user.role,
-        sector_name: user.sector_name ?? null,
-        is_discreet_mode: user.is_discreet_mode ?? false,
-        share_presence: user.share_presence ?? true,
-        sos_notify_groups: user.sos_notify_groups ?? true,
-      },
+      user: publicSessionUser(user),
     });
   } catch (err) {
     console.error("verifyCode error:", err);
@@ -276,10 +299,194 @@ const verifyCode = async (req, res) => {
   }
 };
 
+const googleAuthErrorStatus = (code) => {
+  switch (code) {
+    case "not_configured":
+      return 503;
+    case "bad_aud":
+    case "unverified_email":
+    case "invalid_token":
+      return 401;
+    default:
+      return 401;
+  }
+};
+
+const googleAuthErrorMessage = (code) => {
+  switch (code) {
+    case "not_configured":
+      return "Connexion Google non configurée sur le serveur.";
+    case "bad_aud":
+      return "Identifiant Google non autorisé pour cette application.";
+    case "unverified_email":
+      return "L'adresse e-mail Google n'est pas vérifiée.";
+    case "invalid_token":
+      return "Connexion Google refusée. Réessayez.";
+    default:
+      return "Connexion Google impossible. Réessayez.";
+  }
+};
+
+/**
+ * POST /api/auth/google { idToken }
+ * Verifies Google ID token, finds or creates a citizen user, issues SafeAlert JWT.
+ * Never auto-promotes to admin/platform_admin.
+ */
+const googleLogin = async (req, res) => {
+  const idToken = String(req.body?.idToken || req.body?.id_token || "").trim();
+  if (!idToken) {
+    return res.status(400).json({ error: "Jeton Google requis" });
+  }
+
+  try {
+    const payload = await verifyGoogleIdToken(idToken);
+    const googleId = String(payload.sub);
+    const email = payload.email ? String(payload.email).trim().toLowerCase() : null;
+    const displayName = payload.name || payload.given_name || (email ? email.split("@")[0] : "Citoyen");
+
+    let isNew = false;
+    let user = null;
+
+    const byGoogle = await pool.query("SELECT * FROM users WHERE google_id = $1 LIMIT 1", [googleId]);
+    user = byGoogle.rows[0] || null;
+
+    if (!user && email) {
+      const byEmail = await pool.query("SELECT * FROM users WHERE LOWER(email) = $1 LIMIT 1", [email]);
+      user = byEmail.rows[0] || null;
+      if (user) {
+        if (user.google_id && user.google_id !== googleId) {
+          return res.status(409).json({
+            error: "Cet e-mail est déjà lié à un autre compte Google.",
+          });
+        }
+        const linked = await pool.query(
+          `UPDATE users SET
+             google_id = COALESCE(google_id, $1),
+             email = COALESCE(email, $2),
+             updated_at = NOW()
+           WHERE id = $3
+           RETURNING *`,
+          [googleId, email, user.id]
+        );
+        user = linked.rows[0] || user;
+      }
+    }
+
+    if (!user) {
+      const pseudo = await uniquePseudo(displayName);
+      const created = await pool.query(
+        `INSERT INTO users (phone, pseudo, role, email, google_id)
+         VALUES (NULL, $1, 'citizen', $2, $3)
+         RETURNING *`,
+        [pseudo, email, googleId]
+      );
+      user = created.rows[0];
+      isNew = true;
+    } else if (email && !user.email) {
+      const updated = await pool.query(
+        `UPDATE users SET email = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+        [email, user.id]
+      );
+      user = updated.rows[0] || user;
+    }
+
+    // Do not promote via Google — platform_admin stays phone-based.
+    const { device_id, device_label, fcm_token } = req.body || {};
+    const { token, deviceId } = await createSessionToken(user, {
+      deviceId: device_id,
+      deviceLabel: device_label,
+      fcmToken: fcm_token,
+    });
+
+    return res.json({
+      token,
+      deviceId,
+      isNew,
+      needsPinSetup: true,
+      user: publicSessionUser(user),
+    });
+  } catch (err) {
+    if (err && err.code) {
+      return res.status(googleAuthErrorStatus(err.code)).json({
+        error: googleAuthErrorMessage(err.code),
+        code: err.code,
+      });
+    }
+    console.error("googleLogin error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
+/**
+ * POST /api/auth/link-phone { phone, code } (authenticated)
+ * Attaches a +243 number after SMS OTP so SOS SMS identity still works.
+ */
+const linkPhone = async (req, res) => {
+  const phone = normalizePhone(req.body.phone);
+  const { code } = req.body;
+  if (!phone || !code) {
+    return res.status(400).json({ error: "Téléphone et code requis" });
+  }
+
+  try {
+    const me = await pool.query("SELECT * FROM users WHERE id = $1", [req.userId]);
+    if (me.rows.length === 0) {
+      return res.status(404).json({ error: "Utilisateur non trouvé" });
+    }
+    let user = me.rows[0];
+    if (user.phone && normalizePhone(user.phone) === phone) {
+      return res.json({ message: "Numéro déjà associé", user: publicSessionUser(user) });
+    }
+    if (user.phone) {
+      return res.status(409).json({
+        error: "Un numéro est déjà associé à ce compte.",
+      });
+    }
+
+    const otpResult = await pool.query(
+      `SELECT id, code_hash FROM otp_codes
+       WHERE phone = $1 AND used_at IS NULL AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [phone]
+    );
+    if (otpResult.rows.length === 0) {
+      return res.status(401).json({ error: "Code invalide ou expiré" });
+    }
+    const otpRow = otpResult.rows[0];
+    const valid = await bcrypt.compare(String(code), otpRow.code_hash);
+    if (!valid) {
+      return res.status(401).json({ error: "Code invalide ou expiré" });
+    }
+
+    const taken = await findUserByPhone(phone);
+    if (taken && taken.id !== req.userId) {
+      return res.status(409).json({
+        error: "Ce numéro est déjà utilisé par un autre compte.",
+      });
+    }
+
+    await pool.query("UPDATE otp_codes SET used_at = NOW() WHERE id = $1", [otpRow.id]);
+    const updated = await pool.query(
+      `UPDATE users SET phone = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [phone, req.userId]
+    );
+    user = updated.rows[0];
+    user = await promoteIfPlatformAdminPhone(user);
+
+    return res.json({
+      message: "Numéro associé",
+      user: publicSessionUser(user),
+    });
+  } catch (err) {
+    console.error("linkPhone error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
 const getProfile = async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, phone, pseudo, role, sector_name, avatar_url, is_discreet_mode, share_presence,
+      `SELECT id, phone, email, google_id, pseudo, role, sector_name, avatar_url, is_discreet_mode, share_presence,
               sos_notify_groups, last_seen_at, created_at
        FROM users WHERE id = $1`,
       [req.userId]
@@ -464,6 +671,8 @@ const deleteAccount = async (req, res) => {
 module.exports = {
   requestCode,
   verifyCode,
+  googleLogin,
+  linkPhone,
   getProfile,
   updateProfile,
   updatePosition,

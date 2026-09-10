@@ -258,11 +258,101 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _linkPhoneDialog(AuthProvider auth) async {
+    final phoneCtrl = TextEditingController(text: '+243');
+    final codeCtrl = TextEditingController();
+    var codeSent = false;
+    var busy = false;
+    String? err;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            Future<void> send() async {
+              setLocal(() {
+                busy = true;
+                err = null;
+              });
+              final ok = await auth.requestCode(phoneCtrl.text.trim());
+              setLocal(() {
+                busy = false;
+                codeSent = ok;
+                err = ok ? null : auth.error;
+              });
+            }
+
+            Future<void> confirm() async {
+              setLocal(() {
+                busy = true;
+                err = null;
+              });
+              final ok = await auth.linkPhone(phoneCtrl.text.trim(), codeCtrl.text.trim());
+              if (ok && ctx.mounted) {
+                Navigator.pop(ctx);
+                if (mounted) {
+                  showAppSnackBar(context, 'Numéro associé. Les SMS SOS peuvent l’utiliser.');
+                }
+                return;
+              }
+              setLocal(() {
+                busy = false;
+                err = auth.error;
+              });
+            }
+
+            return AlertDialog(
+              title: const Text('Associer un numéro',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Un +243 permet les SMS SOS et « Code PIN oublié ». Sans numéro, l’app reste utilisable.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(hintText: '+243 …'),
+                  ),
+                  if (codeSent) ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: codeCtrl,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      decoration: const InputDecoration(hintText: 'Code SMS'),
+                    ),
+                  ],
+                  if (err != null) ...[
+                    const SizedBox(height: 8),
+                    Text(err!, style: const TextStyle(color: AppColors.rouge, fontSize: 12)),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+                ElevatedButton(
+                  onPressed: busy ? null : (codeSent ? confirm : send),
+                  child: Text(busy ? '…' : (codeSent ? 'Associer' : 'Envoyer le code')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    phoneCtrl.dispose();
+    codeCtrl.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
-    final phone = user?['phone'] as String? ?? auth.phone ?? '+243 xxx xxx xxx';
+    final hasPhone = (user?['phone'] as String?)?.isNotEmpty == true;
 
     return Scaffold(
       body: Column(
@@ -327,12 +417,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 Text(user?['pseudo'] as String? ?? 'Citoyen',
                                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
                                     overflow: TextOverflow.ellipsis),
-                                Text(phone, style: const TextStyle(fontSize: 11, color: AppColors.gris), overflow: TextOverflow.ellipsis),
+                                Text(
+                                  (user?['phone'] as String?)?.isNotEmpty == true
+                                      ? user!['phone'] as String
+                                      : (user?['email'] as String? ?? 'Compte Google — aucun numéro'),
+                                  style: const TextStyle(fontSize: 11, color: AppColors.gris),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ],
                             ),
                           ),
                         ],
                       ),
+                      if (!hasPhone) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: auth.loading ? null : () => _linkPhoneDialog(auth),
+                            icon: const Icon(Icons.phonelink_setup, size: 16),
+                            label: const Text('Associer un numéro +243', style: TextStyle(fontSize: 13)),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

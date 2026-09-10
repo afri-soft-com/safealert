@@ -28,6 +28,7 @@ interface AuthContextValue {
   needsPinSetup: boolean;
   pinPhone: string | null;
   login: (phone: string, code: string, pseudo?: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => void;
   switchPhone: () => void;
   setLocalPin: (pin: string, confirm: string) => Promise<void>;
@@ -77,7 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(profile);
           if (adminPin.hasPin()) {
             const bound = adminPin.storedPhone();
-            if (bound && bound !== profile.phone) {
+            const identity = profile.phone || profile.id;
+            if (bound && bound !== identity) {
               adminPin.clear();
               refreshPin();
               setNeedsPinSetup(true);
@@ -113,7 +115,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Accès réservé aux administrateurs");
       }
       const bound = adminPin.storedPhone();
-      if (bound && bound !== authUser.phone) {
+      const identity = authUser.phone || authUser.id;
+      if (bound && bound !== identity) {
+        adminPin.clear();
+      }
+      saveSession(token, authUser);
+      setUser(authUser);
+      refreshPin();
+      setNeedsPinSetup(true);
+      setPinUnlocked(false);
+    },
+    [refreshPin]
+  );
+
+  const loginWithGoogle = useCallback(
+    async (idToken: string) => {
+      const { token, user: authUser } = await api.googleLogin(idToken);
+      if (!isStaffRole(authUser.role)) {
+        clearSession();
+        throw new Error("Accès réservé aux administrateurs");
+      }
+      const bound = adminPin.storedPhone();
+      const identity = authUser.phone || authUser.id;
+      if (bound && bound !== identity) {
         adminPin.clear();
       }
       saveSession(token, authUser);
@@ -149,9 +173,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (pin !== confirm) {
         throw new Error("Les codes PIN ne correspondent pas");
       }
-      const phone = user?.phone || pinPhone;
+      const phone = user?.phone || user?.id || pinPhone;
       if (!phone) {
-        throw new Error("Numéro introuvable. Recommencez la connexion.");
+        throw new Error("Compte introuvable. Recommencez la connexion.");
       }
       await adminPin.setPin(pin, phone);
       refreshPin();
@@ -211,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       needsPinSetup,
       pinPhone,
       login,
+      loginWithGoogle,
       logout,
       switchPhone,
       setLocalPin,
@@ -227,6 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       needsPinSetup,
       pinPhone,
       login,
+      loginWithGoogle,
       logout,
       switchPhone,
       setLocalPin,

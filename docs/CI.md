@@ -70,6 +70,8 @@ Les runners GitHub Actions sont **hors** du réseau privé Render. Il faut l’*
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Upload Play **internal,production** (un seul edit, `status: completed`) |
 | `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_SSH_KEY` | Deploy SSH (workflow Deploy) |
 
+**Variable (pas un secret)** : `GOOGLE_SERVER_CLIENT_ID` — Web OAuth client ID public, passé en `--dart-define` (AAB) et `VITE_GOOGLE_CLIENT_ID` (admin-web). Pas de client secret.
+
 ## Déclenchement manuel (CI)
 
 GitHub → **Actions** → **CI** → **Run workflow** :

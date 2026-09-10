@@ -231,10 +231,14 @@ jobs:
       - name: Build App Bundle (Play Store)
         env:
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ vars.GOOGLE_SERVER_CLIENT_ID }}
         run: |
           set -euo pipefail
           BASE="${API_BASE_URL:-https://safealert-api.onrender.com/api}"
-          flutter build appbundle --release --dart-define=API_BASE_URL="$BASE"
+          GOOGLE_ID="${GOOGLE_SERVER_CLIENT_ID:-}"
+          flutter build appbundle --release \
+            --dart-define=API_BASE_URL="$BASE" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_ID"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4

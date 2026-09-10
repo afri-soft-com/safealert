@@ -344,4 +344,52 @@ void main() {
       expect(await LocalPinService(store: pinStore).hasPin(), false);
     });
   });
+
+  group('loginWithGoogle', () {
+    test('sets token and requires PIN setup', () async {
+      fakeApi.onPost('/auth/google', () => {
+        'token': 'google-jwt',
+        'isNew': true,
+        'needsPinSetup': true,
+        'user': {
+          'id': 'g1',
+          'phone': null,
+          'email': 'ada@example.com',
+          'pseudo': 'Ada',
+          'role': 'citizen',
+        },
+      });
+
+      final ok = await provider.loginWithGoogle(obtainIdToken: () async => 'id-token');
+
+      expect(ok, true);
+      expect(provider.isAuthenticated, true);
+      expect(provider.needsPinSetup, true);
+      expect(provider.canEnterApp, false);
+      expect(provider.user!['id'], 'g1');
+      expect(fakeApi.token, 'google-jwt');
+      expect(fakeApi.lastBody!['idToken'], 'id-token');
+    });
+
+    test('cancelled Google sign-in does not set an error', () async {
+      final ok = await provider.loginWithGoogle(obtainIdToken: () async => null);
+
+      expect(ok, false);
+      expect(provider.isAuthenticated, false);
+      expect(provider.error, isNull);
+    });
+
+    test('Google-only user can save a PIN with user id', () async {
+      fakeApi.onPost('/auth/google', () => {
+        'token': 'google-jwt',
+        'user': {'id': 'g1', 'phone': null, 'email': 'ada@example.com', 'role': 'citizen'},
+      });
+      await provider.loginWithGoogle(obtainIdToken: () async => 'id-token');
+      final saved = await provider.setLocalPin('246810', confirm: '246810');
+
+      expect(saved, true);
+      expect(provider.canEnterApp, true);
+      expect(provider.pinPhone, 'g1');
+    });
+  });
 }

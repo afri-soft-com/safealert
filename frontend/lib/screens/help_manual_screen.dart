@@ -62,9 +62,9 @@ class HelpManualScreen extends StatelessWidget {
                   icon: Icons.phone_android,
                   title: 'Connexion',
                   children: const [
-                    _P('Première connexion : numéro, code SMS à 6 chiffres, puis création d\'un PIN local (4 à 6 chiffres).'),
-                    _P('Ensuite, y compris après « Déconnexion », l\'écran PIN s\'affiche — pas de SMS. « Changer de numéro » efface le PIN et redemande le téléphone.'),
-                    _P('« Code PIN oublié » envoie un SMS pour définir un nouveau PIN.'),
+                    _P('Première connexion : Google (« Continuer avec Google ») ou numéro + code SMS, puis création d\'un PIN local (4 à 6 chiffres).'),
+                    _P('Ensuite, y compris après « Déconnexion », l\'écran PIN s\'affiche — pas de SMS. « Changer de numéro » efface le PIN et redemande le téléphone ou Google.'),
+                    _P('« Code PIN oublié » envoie un SMS si un numéro est associé. Compte Google seul : reconnectez-vous avec Google, puis associez un +243 dans Paramètres pour les SMS SOS.'),
                   ],
                 ),
                 _section(
