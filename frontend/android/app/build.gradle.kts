@@ -39,12 +39,8 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
-        // Fallback if Dart serverClientId is unset — must be the Web OAuth client (be940).
-        resValue(
-            "string",
-            "default_web_client_id",
-            "552870535150-8i0ki30r45bipf8ren9ajtfp5bt5ipkr.apps.googleusercontent.com",
-        )
+        // default_web_client_id comes from google-services.json (client_type 3)
+        // via the google-services plugin — do not also set resValue (duplicate merge).
     }
 
     signingConfigs {
