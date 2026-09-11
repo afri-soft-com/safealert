@@ -17,5 +17,5 @@ samples, guidance on mobile development, and a full API reference.
 
 <!-- ci-trigger: web+mobile deploy -->
 
-<!-- ci-trigger: mobile-aab + play 1.0.17 -->
+<!-- ci-trigger: mobile-aab + play 1.0.17 firebase oauth -->
 

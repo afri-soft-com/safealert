@@ -43,7 +43,7 @@ android {
         resValue(
             "string",
             "default_web_client_id",
-            "552870535150-rv4p0va1lpqdeb863ur48dt6p4i4mp3j.apps.googleusercontent.com",
+            "552870535150-8i0ki30r45bipf8ren9ajtfp5bt5ipkr.apps.googleusercontent.com",
         )
     }
 
