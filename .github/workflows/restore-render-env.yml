@@ -95,8 +95,24 @@ jobs:
           echo "Deploy HTTP ${code}"
           cat /tmp/deploy.json; echo
           case "$code" in 200|201|202) ;; *) exit 1 ;; esac
-          deploy_id=$(python3 -c 'import json; d=json.load(open("/tmp/deploy.json")); print(d.get("id") or d.get("deploy",{}).get("id") or "")')
+          deploy_id=$(python3 -c '
+import json
+from pathlib import Path
+raw = Path("/tmp/deploy.json").read_text().strip()
+if raw:
+    d = json.loads(raw)
+    print(d.get("id") or d.get("deploy", {}).get("id") or "")
+')
+          if [ -z "$deploy_id" ]; then
+            deploy_id=$(curl -fsS -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Accept: application/json" \
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys?limit=1" \
+              | python3 -c 'import json,sys; rows=json.load(sys.stdin); d=rows[0] if isinstance(rows,list) and rows else {}; print((d.get("deploy") or d).get("id") or "")')
+          fi
           echo "deploy_id=$deploy_id"
+          if [ -z "$deploy_id" ]; then
+            echo "Could not resolve deploy id after HTTP ${code}"
+            exit 1
+          fi
           for i in $(seq 1 60); do
             st=$(curl -fsS -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Accept: application/json" \
               "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${deploy_id}" \
