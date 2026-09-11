@@ -40,7 +40,8 @@ class GoogleSignInService {
 
   /// google_sign_in 6.x: constructor `serverClientId` (not v7 `initialize()`).
   GoogleSignIn get _google {
-    if (_client != null) return _client!;
+    final injected = _client;
+    if (injected != null) return injected;
     return _defaultClient ??= GoogleSignIn(
       serverClientId: kGoogleServerClientId.isEmpty ? null : kGoogleServerClientId,
       scopes: const ['email', 'profile'],
