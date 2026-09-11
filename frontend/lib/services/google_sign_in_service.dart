@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -9,6 +10,13 @@ const kGoogleServerClientId = String.fromEnvironment(
   defaultValue:
       '552870535150-8i0ki30r45bipf8ren9ajtfp5bt5ipkr.apps.googleusercontent.com',
 );
+
+/// First 20 chars of the configured Web client (public) — safe to show in UI.
+String get kGoogleServerClientIdPrefix {
+  final id = kGoogleServerClientId.trim();
+  if (id.isEmpty) return '(vide)';
+  return id.length <= 20 ? id : id.substring(0, 20);
+}
 
 /// Maps native Google Sign-In failures to short French copy (no stacks).
 /// Returns null when the user cancelled.
@@ -24,15 +32,18 @@ String? mapGoogleSignInError(Object error) {
         blob.contains('developer_error') ||
         RegExp(r'\b10:').hasMatch(blob) ||
         code == '10') {
-      // Play hybrid signing can use classical + post-quantum (+ upload for sideload).
-      return 'Connexion Google refusée (erreur 10). SHA-1 Firebase : '
-          'Play classique, Play post-quantique et clé d’upload (même package).';
+      // SHA-1s are already in Firebase for classical/PQC/upload — error 10 now
+      // usually means OAuth Audience / Auth Google / API enablement on be940.
+      return 'Connexion Google refusée (erreur 10). '
+          'Web=$kGoogleServerClientIdPrefix… '
+          'Vérifiez Audience (utilisateur test), Auth Google activé, APIs Identity Toolkit.';
     }
     if (blob.contains('apiexception: 7') || blob.contains('network') || code == '7') {
       return 'Réseau indisponible. Vérifiez votre connexion.';
     }
-    if (blob.contains('id_token') || blob.contains('idtoken')) {
-      return 'Connexion Google mal configurée (jeton manquant). Vérifiez l’identifiant client Web.';
+    if (blob.contains('id_token') || blob.contains('idtoken') || code == 'id_token_missing') {
+      return 'Connexion Google mal configurée (jeton manquant). '
+          'Web=$kGoogleServerClientIdPrefix…';
     }
     return 'Connexion Google impossible. Réessayez.';
   }
@@ -49,6 +60,8 @@ class GoogleSignInService {
 
   /// google_sign_in 6.x — same pattern as SENGA/Mova: Web `serverClientId` only
   /// (no Android client ID; scopes optional — defaults cover email/profile).
+  /// Keep Google OAuth ID token (aud=Web) for `POST /api/auth/google` — do not
+  /// switch to Firebase Auth ID tokens (aud=projectId) without backend changes.
   GoogleSignIn get _google {
     final injected = _client;
     if (injected != null) return injected;
@@ -59,6 +72,10 @@ class GoogleSignInService {
 
   /// Returns the Google ID token, or null if the user cancelled.
   Future<String?> signInIdToken() async {
+    debugPrint(
+      'GoogleSignIn serverClientId prefix=$kGoogleServerClientIdPrefix… '
+      '(len=${kGoogleServerClientId.length})',
+    );
     try {
       await _google.signOut();
     } catch (_) {

@@ -11,7 +11,7 @@ on:
       app_latest_version:
         description: APP_LATEST_VERSION
         required: true
-        default: "1.0.18"
+        default: "1.0.19"
       google_client_id:
         description: Web GOOGLE_CLIENT_ID
         required: true

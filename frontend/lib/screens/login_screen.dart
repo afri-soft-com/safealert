@@ -294,7 +294,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ? auth.error!
                                   : '${auth.error!}\n(app $_appVersionLabel)',
                               textAlign: TextAlign.center,
-                              maxLines: 5,
+                              maxLines: 8,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(color: AppColors.rouge, fontSize: 12),
                             ),
