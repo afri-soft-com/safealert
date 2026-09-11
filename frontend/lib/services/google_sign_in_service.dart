@@ -36,13 +36,16 @@ class GoogleSignInService {
   GoogleSignInService({GoogleSignIn? client}) : _client = client;
 
   final GoogleSignIn? _client;
+  GoogleSignIn? _defaultClient;
 
-  GoogleSignIn get _google =>
-      _client ??
-      GoogleSignIn(
-        serverClientId: kGoogleServerClientId.isEmpty ? null : kGoogleServerClientId,
-        scopes: const ['email', 'profile'],
-      );
+  /// google_sign_in 6.x: constructor `serverClientId` (not v7 `initialize()`).
+  GoogleSignIn get _google {
+    if (_client != null) return _client!;
+    return _defaultClient ??= GoogleSignIn(
+      serverClientId: kGoogleServerClientId.isEmpty ? null : kGoogleServerClientId,
+      scopes: const ['email', 'profile'],
+    );
+  }
 
   /// Returns the Google ID token, or null if the user cancelled.
   Future<String?> signInIdToken() async {
