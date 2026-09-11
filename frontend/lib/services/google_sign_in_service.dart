@@ -18,6 +18,17 @@ String get kGoogleServerClientIdPrefix {
   return id.length <= 20 ? id : id.substring(0, 20);
 }
 
+bool _isDeveloperError10(PlatformException error) {
+  final code = error.code.toLowerCase();
+  final blob = '${error.message ?? ''} ${error.details ?? ''}'.toLowerCase();
+  return blob.contains('apiexception: 10') ||
+      blob.contains('api exception: 10') ||
+      blob.contains('developer_error') ||
+      RegExp(r'\b10:').hasMatch(blob) ||
+      code == '10' ||
+      code == 'sha_ko';
+}
+
 /// Maps native Google Sign-In failures to short French copy (no stacks).
 /// Returns null when the user cancelled.
 String? mapGoogleSignInError(Object error) {
@@ -27,16 +38,16 @@ String? mapGoogleSignInError(Object error) {
     if (code.contains('cancel') || blob.contains('12501') || blob.contains('sign_in_canceled')) {
       return null;
     }
-    if (blob.contains('apiexception: 10') ||
-        blob.contains('api exception: 10') ||
-        blob.contains('developer_error') ||
-        RegExp(r'\b10:').hasMatch(blob) ||
-        code == '10') {
-      // SHA-1s are already in Firebase for classical/PQC/upload — error 10 now
-      // usually means OAuth Audience / Auth Google / API enablement on be940.
-      return 'Connexion Google refusée (erreur 10). '
+    if (code == 'sha_ok_web_ko') {
+      return 'Erreur 10 diagnostic: SHA Android OK, client Web refusé. '
           'Web=$kGoogleServerClientIdPrefix… '
-          'Vérifiez Audience (utilisateur test), Auth Google activé, APIs Identity Toolkit.';
+          'Activez Identity Toolkit / republiez le consentement OAuth.';
+    }
+    if (code == 'sha_ko' || _isDeveloperError10(error)) {
+      return 'Erreur 10 diagnostic: package+SHA refusés. '
+          'Web=$kGoogleServerClientIdPrefix… '
+          'Un autre projet Cloud a peut-être encore ce SHA. '
+          'Vérifiez Clients Android be940 + projets 5082114/Kongomarket.';
     }
     if (blob.contains('apiexception: 7') || blob.contains('network') || code == '7') {
       return 'Réseau indisponible. Vérifiez votre connexion.';
@@ -56,32 +67,25 @@ class GoogleSignInService {
   GoogleSignInService({GoogleSignIn? client}) : _client = client;
 
   final GoogleSignIn? _client;
-  GoogleSignIn? _defaultClient;
 
-  /// google_sign_in 6.x — same pattern as SENGA/Mova: Web `serverClientId` only
-  /// (no Android client ID; scopes optional — defaults cover email/profile).
-  /// Keep Google OAuth ID token (aud=Web) for `POST /api/auth/google` — do not
-  /// switch to Firebase Auth ID tokens (aud=projectId) without backend changes.
-  GoogleSignIn get _google {
-    final injected = _client;
-    if (injected != null) return injected;
-    return _defaultClient ??= GoogleSignIn(
-      serverClientId: kGoogleServerClientId,
-    );
+  GoogleSignIn _clientWithWeb() => GoogleSignIn(
+        serverClientId: kGoogleServerClientId.isEmpty ? null : kGoogleServerClientId,
+      );
+
+  /// No serverClientId — tests whether Play Services accepts package+SHA alone.
+  GoogleSignIn _clientShaOnly() => GoogleSignIn();
+
+  Future<void> _freshSignOut(GoogleSignIn client) async {
+    try {
+      await client.signOut();
+    } catch (_) {
+      /* ignore */
+    }
   }
 
-  /// Returns the Google ID token, or null if the user cancelled.
-  Future<String?> signInIdToken() async {
-    debugPrint(
-      'GoogleSignIn serverClientId prefix=$kGoogleServerClientIdPrefix… '
-      '(len=${kGoogleServerClientId.length})',
-    );
-    try {
-      await _google.signOut();
-    } catch (_) {
-      /* ignore — force a fresh account picker */
-    }
-    final account = await _google.signIn();
+  Future<String?> _idTokenFrom(GoogleSignIn client) async {
+    await _freshSignOut(client);
+    final account = await client.signIn();
     if (account == null) return null;
     var auth = await account.authentication;
     var token = auth.idToken;
@@ -97,5 +101,47 @@ class GoogleSignInService {
       );
     }
     return token;
+  }
+
+  /// Returns the Google ID token, or null if the user cancelled.
+  ///
+  /// On ApiException 10 with Web `serverClientId`, retries without it to tell
+  /// apart SHA/package rejection vs Web-client rejection.
+  Future<String?> signInIdToken() async {
+    debugPrint(
+      'GoogleSignIn serverClientId prefix=$kGoogleServerClientIdPrefix… '
+      '(len=${kGoogleServerClientId.length})',
+    );
+    final injected = _client;
+    if (injected != null) {
+      return _idTokenFrom(injected);
+    }
+
+    try {
+      return await _idTokenFrom(_clientWithWeb());
+    } on PlatformException catch (e) {
+      if (!_isDeveloperError10(e)) rethrow;
+      debugPrint('GoogleSignIn error 10 with Web client — retry SHA-only');
+      try {
+        final bare = _clientShaOnly();
+        await _freshSignOut(bare);
+        final account = await bare.signIn();
+        if (account != null) {
+          // Package+SHA accepted; Web serverClientId is the problem.
+          throw PlatformException(
+            code: 'sha_ok_web_ko',
+            message: 'sha_ok_web_ko',
+          );
+        }
+        // User cancelled the retry — treat as cancel.
+        return null;
+      } on PlatformException catch (e2) {
+        if (e2.code == 'sha_ok_web_ko') rethrow;
+        if (_isDeveloperError10(e2)) {
+          throw PlatformException(code: 'sha_ko', message: 'sha_ko');
+        }
+        rethrow;
+      }
+    }
   }
 }
