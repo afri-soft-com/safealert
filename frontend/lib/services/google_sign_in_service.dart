@@ -1,8 +1,14 @@
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-/// Web client ID (public) passed at build time — same as backend GOOGLE_CLIENT_ID.
-const kGoogleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+/// Web OAuth client (public) — same audience as backend `GOOGLE_CLIENT_ID`.
+/// Prefer `--dart-define=GOOGLE_SERVER_CLIENT_ID=…`; default matches
+/// `google-services.json` client_type 3 (be940).
+const kGoogleServerClientId = String.fromEnvironment(
+  'GOOGLE_SERVER_CLIENT_ID',
+  defaultValue:
+      '552870535150-8i0ki30r45bipf8ren9ajtfp5bt5ipkr.apps.googleusercontent.com',
+);
 
 /// Maps native Google Sign-In failures to short French copy (no stacks).
 /// Returns null when the user cancelled.
@@ -18,7 +24,9 @@ String? mapGoogleSignInError(Object error) {
         blob.contains('developer_error') ||
         RegExp(r'\b10:').hasMatch(blob) ||
         code == '10') {
-      return 'Connexion Google refusée (erreur 10). Empreintes SHA-1 Firebase : Play App Signing et clé d’upload (même package).';
+      // Play hybrid signing can use classical + post-quantum (+ upload for sideload).
+      return 'Connexion Google refusée (erreur 10). SHA-1 Firebase : '
+          'Play classique, Play post-quantique et clé d’upload (même package).';
     }
     if (blob.contains('apiexception: 7') || blob.contains('network') || code == '7') {
       return 'Réseau indisponible. Vérifiez votre connexion.';
@@ -39,13 +47,13 @@ class GoogleSignInService {
   final GoogleSignIn? _client;
   GoogleSignIn? _defaultClient;
 
-  /// google_sign_in 6.x: constructor `serverClientId` (not v7 `initialize()`).
+  /// google_sign_in 6.x — same pattern as SENGA/Mova: Web `serverClientId` only
+  /// (no Android client ID; scopes optional — defaults cover email/profile).
   GoogleSignIn get _google {
     final injected = _client;
     if (injected != null) return injected;
     return _defaultClient ??= GoogleSignIn(
-      serverClientId: kGoogleServerClientId.isEmpty ? null : kGoogleServerClientId,
-      scopes: const ['email', 'profile'],
+      serverClientId: kGoogleServerClientId,
     );
   }
 

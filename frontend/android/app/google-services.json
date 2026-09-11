@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "552870535150-4d04armu8m10puutgru836q8k2e5o5eg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.safealert.safealert",
+            "certificate_hash": "b2b52a7d09a3bb75fb7ec49bb1a27adf7d4b718a"
+          }
+        },
+        {
           "client_id": "552870535150-j1g4ma59rmdgtn48hqh95p2ru5bvi0qf.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

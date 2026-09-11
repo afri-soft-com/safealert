@@ -10,6 +10,7 @@ void main() {
     ));
     expect(msg, contains('SHA-1'));
     expect(msg, contains('erreur 10'));
+    expect(msg, contains('post-quantique'));
   });
 
   test('cancelled sign-in maps to null', () {

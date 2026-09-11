@@ -1,0 +1,153 @@
+# One-shot / reusable: patch specific Render env keys without wiping others.
+# Usage: workflow_dispatch or called from CI after Google Sign-In fingerprint updates.
+name: Patch Render env (single keys)
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_latest_version:
+        description: APP_LATEST_VERSION (e.g. 1.0.18)
+        required: true
+        default: "1.0.18"
+      google_client_id:
+        description: Web GOOGLE_CLIENT_ID (leave empty = keep)
+        required: false
+        default: "552870535150-8i0ki30r45bipf8ren9ajtfp5bt5ipkr.apps.googleusercontent.com"
+      google_android_client_id:
+        description: Comma-separated Android OAuth client IDs
+        required: false
+        default: "552870535150-358uiarfelvoefjndn31f18d22fi6edd.apps.googleusercontent.com,552870535150-4d04armu8m10puutgru836q8k2e5o5eg.apps.googleusercontent.com,552870535150-j1g4ma59rmdgtn48hqh95p2ru5bvi0qf.apps.googleusercontent.com"
+      vite_google_client_id:
+        description: Admin VITE_GOOGLE_CLIENT_ID (leave empty = keep)
+        required: false
+        default: "552870535150-8i0ki30r45bipf8ren9ajtfp5bt5ipkr.apps.googleusercontent.com"
+      redeploy:
+        description: Trigger deploy after env update
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  patch-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Merge env keys on safealert-api (no wipe)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_API_SERVICE_ID }}
+          APP_LATEST_VERSION: ${{ inputs.app_latest_version }}
+          GOOGLE_CLIENT_ID: ${{ inputs.google_client_id }}
+          GOOGLE_ANDROID_CLIENT_ID: ${{ inputs.google_android_client_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RENDER_API_KEY:-}" ] || [ -z "${SERVICE_ID:-}" ]; then
+            echo "Secrets Render manquants"
+            exit 1
+          fi
+          curl -fsS -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Accept: application/json" \
+            "https://api.render.com/v1/services/${SERVICE_ID}/env-vars" > /tmp/env.json
+          python3 <<'PY'
+          import json, os
+          raw = json.load(open("/tmp/env.json"))
+          # Response shape: [{envVar: {key, value}}, ...] or [{key, value}, ...]
+          items = []
+          for row in raw:
+              ev = row.get("envVar") if isinstance(row, dict) and "envVar" in row else row
+              if not isinstance(ev, dict):
+                  continue
+              k = ev.get("key")
+              if not k:
+                  continue
+              items.append({"key": k, "value": ev.get("value") or ""})
+          by = {i["key"]: i["value"] for i in items}
+          updates = {
+              "APP_LATEST_VERSION": os.environ.get("APP_LATEST_VERSION") or "",
+              "GOOGLE_CLIENT_ID": os.environ.get("GOOGLE_CLIENT_ID") or "",
+              "GOOGLE_ANDROID_CLIENT_ID": os.environ.get("GOOGLE_ANDROID_CLIENT_ID") or "",
+          }
+          for k, v in updates.items():
+              if v.strip():
+                  by[k] = v.strip()
+                  print(f"SET {k}={v.strip()[:80]}{'...' if len(v.strip())>80 else ''}")
+              else:
+                  print(f"KEEP {k} (input empty)")
+          out = [{"key": k, "value": v} for k, v in sorted(by.items())]
+          print(f"Total env keys after merge: {len(out)}")
+          json.dump(out, open("/tmp/env-put.json", "w"))
+          PY
+          http_code=$(curl -sS -o /tmp/env-put-resp.json -w "%{http_code}" -X PUT \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/env-put.json \
+            "https://api.render.com/v1/services/${SERVICE_ID}/env-vars")
+          echo "PUT env-vars HTTP ${http_code}"
+          head -c 400 /tmp/env-put-resp.json; echo
+          test "$http_code" = "200"
+
+      - name: Redeploy safealert-api (keep cache)
+        if: inputs.redeploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_API_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          http_code=$(curl -sS -o /tmp/deploy.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":"do_not_clear"}' \
+            "https://api.render.com/v1/services/${SERVICE_ID}/deploys")
+          echo "Deploy HTTP ${http_code}"
+          cat /tmp/deploy.json; echo
+          test "$http_code" = "201" -o "$http_code" = "200"
+
+  patch-admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Merge VITE_GOOGLE_CLIENT_ID on safealert-admin
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_ADMIN_SERVICE_ID }}
+          VITE_GOOGLE_CLIENT_ID: ${{ inputs.vite_google_client_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RENDER_API_KEY:-}" ] || [ -z "${SERVICE_ID:-}" ]; then
+            echo "Secrets admin Render manquants — skip"
+            exit 0
+          fi
+          if [ -z "${VITE_GOOGLE_CLIENT_ID:-}" ]; then
+            echo "VITE_GOOGLE_CLIENT_ID empty — skip"
+            exit 0
+          fi
+          curl -fsS -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Accept: application/json" \
+            "https://api.render.com/v1/services/${SERVICE_ID}/env-vars" > /tmp/env.json
+          python3 <<'PY'
+          import json, os
+          raw = json.load(open("/tmp/env.json"))
+          items = []
+          for row in raw:
+              ev = row.get("envVar") if isinstance(row, dict) and "envVar" in row else row
+              if not isinstance(ev, dict):
+                  continue
+              k = ev.get("key")
+              if not k:
+                  continue
+              items.append({"key": k, "value": ev.get("value") or ""})
+          by = {i["key"]: i["value"] for i in items}
+          by["VITE_GOOGLE_CLIENT_ID"] = os.environ["VITE_GOOGLE_CLIENT_ID"].strip()
+          print("SET VITE_GOOGLE_CLIENT_ID=" + by["VITE_GOOGLE_CLIENT_ID"])
+          out = [{"key": k, "value": v} for k, v in sorted(by.items())]
+          json.dump(out, open("/tmp/env-put.json", "w"))
+          PY
+          http_code=$(curl -sS -o /tmp/env-put-resp.json -w "%{http_code}" -X PUT \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/env-put.json \
+            "https://api.render.com/v1/services/${SERVICE_ID}/env-vars")
+          echo "PUT admin env-vars HTTP ${http_code}"
+          head -c 400 /tmp/env-put-resp.json; echo
+          test "$http_code" = "200"

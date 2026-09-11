@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/auth_provider.dart';
@@ -34,11 +35,23 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isNew = false;
   bool _bootstrapped = false;
   AuthProvider? _auth;
+  String _appVersionLabel = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() => _appVersionLabel = '${info.version}+${info.buildNumber}');
+    } catch (_) {
+      /* ignore — version label is diagnostic only */
+    }
   }
 
   @override
@@ -277,9 +290,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           if (auth.error != null) ...[
                             const SizedBox(height: 12),
                             Text(
-                              auth.error!,
+                              _appVersionLabel.isEmpty
+                                  ? auth.error!
+                                  : '${auth.error!}\n(app $_appVersionLabel)',
                               textAlign: TextAlign.center,
-                              maxLines: 3,
+                              maxLines: 5,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(color: AppColors.rouge, fontSize: 12),
                             ),
@@ -308,6 +323,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                               ],
+                            ),
+                          ],
+                          if (_appVersionLabel.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            Text(
+                              _appVersionLabel,
+                              style: const TextStyle(color: Colors.white38, fontSize: 11),
                             ),
                           ],
                         ],

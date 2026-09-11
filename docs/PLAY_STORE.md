@@ -63,8 +63,13 @@ Ou télécharger la release GitHub **`aab-main`** (CI, si `frontend/**` a chang�
 6. **Classement du contenu** + public cible (pas enfants si SOS adulte).
 7. **Internal testing** : uploader l’AAB → ajouter testeurs e-mail → lien de test.
 8. **Empreintes SHA-1 (Firebase Android `com.safealert.safealert`)** — un client OAuth Android **par** SHA-1 (Google n’autorise pas deux SHA sur le même client) :
-   - **Play App Signing** (install Play) : Play Console → Intégrité de l’app → SHA-1 classique → Firebase → **Add fingerprint**.
-   - **Clé d’upload** (AAB CI / sideload release) : `3B:A3:CC:57:89:0C:AB:A5:D2:B3:E3:95:44:D8:3E:00:7E:18:F4:0B` → **Add fingerprint** → Save → re-télécharger `google-services.json` si `oauth_client` était vide.
+   - **Play App Signing** (install Play) : Play Console → **Intégrité de l’app** / Play App Signing → copier **toutes** les SHA-1 affichées :
+     - **Classique** : `8F:16:15:BC:67:12:FD:8E:2E:12:A3:BC:F2:14:B1:59:F4:F3:53:17`
+     - **Post-quantique (PQC)** : `B2:B5:2A:7D:09:A3:BB:75:FB:7E:C4:9B:B1:A2:7A:DF:7D:4B:71:8A` — **obligatoire** si hybrid signing actif
+     - Si une table **Previous / anciennes clés** existe, les ajouter aussi
+   - **Clé d’upload** (AAB CI / sideload release) : `3B:A3:CC:57:89:0C:AB:A5:D2:B3:E3:95:44:D8:3E:00:7E:18:F4:0B` → **Add fingerprint**.
+   - Après chaque ajout : Save → éventuellement re-télécharger `google-services.json` → attendre ~5–15 min → **désinstaller / réinstaller** depuis Play.
+   - Astuce : Bundle Explorer → APK universel signé → `apksigner verify --print-certs` pour confirmer le SHA-1 réellement livré.
    - Sans ces empreintes, « Continuer avec Google » échoue avec ApiException **10**.
    - SafeAlert n’utilise **pas** Firebase Authentication pour Google (SDK `google_sign_in` + JWT backend) : activer le fournisseur Google dans Firebase Auth est optionnel pour ce flux.
 9. Après tests : **Closed / Open testing** puis **Production** (pays : RDC + autres).
