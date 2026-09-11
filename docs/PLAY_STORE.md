@@ -62,7 +62,11 @@ Ou télécharger la release GitHub **`aab-main`** (CI, si `frontend/**` a chang�
 5. **Permissions photos/vidéos** : l’AAB ne doit **pas** déclarer `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO` (preuves témoin via photo picker + CAMERA seulement). Si Play Console affiche encore « Photo and video permissions », choisir que l’accès large n’est **pas** requis / migrer vers le sélecteur, puis uploader un AAB sans ces permissions. Ne pas tenter une déclaration « core gallery » — SafeAlert n’est pas une app galerie.
 6. **Classement du contenu** + public cible (pas enfants si SOS adulte).
 7. **Internal testing** : uploader l’AAB → ajouter testeurs e-mail → lien de test.
-8. **Play App Signing** : accepter (Google gère la clé app ; vous gardez la clé d’upload). Copier le **SHA-1** de l’app signing key (Play Console → Intégrité de l’app) dans Google Cloud → client OAuth **Android** (`com.safealert.safealert`). Sinon « Continuer avec Google » échoue avec ApiException 10.
+8. **Empreintes SHA-1 (Firebase Android `com.safealert.safealert`)** — un client OAuth Android **par** SHA-1 (Google n’autorise pas deux SHA sur le même client) :
+   - **Play App Signing** (install Play) : Play Console → Intégrité de l’app → SHA-1 classique → Firebase → **Add fingerprint**.
+   - **Clé d’upload** (AAB CI / sideload release) : `3B:A3:CC:57:89:0C:AB:A5:D2:B3:E3:95:44:D8:3E:00:7E:18:F4:0B` → **Add fingerprint** → Save → re-télécharger `google-services.json` si `oauth_client` était vide.
+   - Sans ces empreintes, « Continuer avec Google » échoue avec ApiException **10**.
+   - SafeAlert n’utilise **pas** Firebase Authentication pour Google (SDK `google_sign_in` + JWT backend) : activer le fournisseur Google dans Firebase Auth est optionnel pour ce flux.
 9. Après tests : **Closed / Open testing** puis **Production** (pays : RDC + autres).
 
 ### E. Avant soumission

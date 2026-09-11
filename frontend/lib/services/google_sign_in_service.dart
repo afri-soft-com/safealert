@@ -15,9 +15,10 @@ String? mapGoogleSignInError(Object error) {
     }
     if (blob.contains('apiexception: 10') ||
         blob.contains('api exception: 10') ||
+        blob.contains('developer_error') ||
         RegExp(r'\b10:').hasMatch(blob) ||
         code == '10') {
-      return 'Connexion Google refusée (erreur 10). Ajoutez l’empreinte SHA-1 Play App Signing dans Google Cloud.';
+      return 'Connexion Google refusée (erreur 10). Empreintes SHA-1 Firebase : Play App Signing et clé d’upload (même package).';
     }
     if (blob.contains('apiexception: 7') || blob.contains('network') || code == '7') {
       return 'Réseau indisponible. Vérifiez votre connexion.';
@@ -50,11 +51,20 @@ class GoogleSignInService {
 
   /// Returns the Google ID token, or null if the user cancelled.
   Future<String?> signInIdToken() async {
-    await _google.signOut();
+    try {
+      await _google.signOut();
+    } catch (_) {
+      /* ignore — force a fresh account picker */
+    }
     final account = await _google.signIn();
     if (account == null) return null;
-    final auth = await account.authentication;
-    final token = auth.idToken;
+    var auth = await account.authentication;
+    var token = auth.idToken;
+    if (token == null || token.isEmpty) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      auth = await account.authentication;
+      token = auth.idToken;
+    }
     if (token == null || token.isEmpty) {
       throw PlatformException(
         code: 'id_token_missing',
