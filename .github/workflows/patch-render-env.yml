@@ -101,7 +101,10 @@ jobs:
             "https://api.render.com/v1/services/${SERVICE_ID}/deploys")
           echo "Deploy HTTP ${http_code}"
           cat /tmp/deploy.json; echo
-          test "$http_code" = "201" -o "$http_code" = "200"
+          case "$http_code" in
+            200|201|202) ;;
+            *) exit 1 ;;
+          esac
 
   patch-admin:
     runs-on: ubuntu-latest
