@@ -18,36 +18,46 @@ String get kGoogleServerClientIdPrefix {
   return id.length <= 20 ? id : id.substring(0, 20);
 }
 
-bool _isDeveloperError10(PlatformException error) {
-  final code = error.code.toLowerCase();
-  final blob = '${error.message ?? ''} ${error.details ?? ''}'.toLowerCase();
-  return blob.contains('apiexception: 10') ||
-      blob.contains('api exception: 10') ||
-      blob.contains('developer_error') ||
-      RegExp(r'\b10:').hasMatch(blob) ||
-      code == '10' ||
-      code == 'sha_ko';
+bool _blobLooksLikeError10(String blob) {
+  final b = blob.toLowerCase();
+  return b.contains('apiexception: 10') ||
+      b.contains('api exception: 10') ||
+      b.contains('developer_error') ||
+      b.contains('developer console is not setup') ||
+      RegExp(r'\b10:').hasMatch(b);
 }
 
 /// Maps native Google Sign-In failures to short French copy (no stacks).
 /// Returns null when the user cancelled.
 String? mapGoogleSignInError(Object error) {
+  if (error is GoogleSignInException) {
+    switch (error.code) {
+      case GoogleSignInExceptionCode.canceled:
+      case GoogleSignInExceptionCode.interrupted:
+        return null;
+      case GoogleSignInExceptionCode.clientConfigurationError:
+      case GoogleSignInExceptionCode.providerConfigurationError:
+        return 'Erreur Google config (v7). Web=$kGoogleServerClientIdPrefix… '
+            'Complétez Branding OAuth et republiez Audience, '
+            'ou recréez les clients Android be940.';
+      default:
+        final desc = '${error.description ?? ''} ${error.toString()}';
+        if (_blobLooksLikeError10(desc)) {
+          return 'Erreur 10 (Credential Manager). Web=$kGoogleServerClientIdPrefix… '
+              'Branding OAuth + Identity Toolkit + clients Android be940.';
+        }
+        return 'Connexion Google impossible. Réessayez.';
+    }
+  }
   if (error is PlatformException) {
     final code = error.code.toLowerCase();
     final blob = '${error.message ?? ''} ${error.details ?? ''}'.toLowerCase();
     if (code.contains('cancel') || blob.contains('12501') || blob.contains('sign_in_canceled')) {
       return null;
     }
-    if (code == 'sha_ok_web_ko') {
-      return 'Erreur 10 diagnostic: SHA Android OK, client Web refusé. '
-          'Web=$kGoogleServerClientIdPrefix… '
-          'Activez Identity Toolkit / republiez le consentement OAuth.';
-    }
-    if (code == 'sha_ko' || _isDeveloperError10(error)) {
-      return 'Erreur 10 diagnostic: package+SHA refusés. '
-          'Web=$kGoogleServerClientIdPrefix… '
-          'Un autre projet Cloud a peut-être encore ce SHA. '
-          'Vérifiez Clients Android be940 + projets 5082114/Kongomarket.';
+    if (_blobLooksLikeError10(blob) || code == '10') {
+      return 'Erreur 10. Web=$kGoogleServerClientIdPrefix… '
+          'SHA Play OK — complétez Branding et Publish Audience (be940).';
     }
     if (blob.contains('apiexception: 7') || blob.contains('network') || code == '7') {
       return 'Réseau indisponible. Vérifiez votre connexion.';
@@ -60,88 +70,55 @@ String? mapGoogleSignInError(Object error) {
   }
   final text = error.toString().toLowerCase();
   if (text.contains('cancel')) return null;
+  if (_blobLooksLikeError10(text)) {
+    return 'Erreur 10. Web=$kGoogleServerClientIdPrefix… '
+        'Complétez Branding OAuth (be940) puis Publish Audience.';
+  }
   return 'Connexion Google impossible. Réessayez.';
 }
 
 class GoogleSignInService {
-  GoogleSignInService({GoogleSignIn? client}) : _client = client;
+  GoogleSignInService();
 
-  final GoogleSignIn? _client;
+  bool _ready = false;
 
-  GoogleSignIn _clientWithWeb() => GoogleSignIn(
-        serverClientId: kGoogleServerClientId.isEmpty ? null : kGoogleServerClientId,
-      );
-
-  /// No serverClientId — tests whether Play Services accepts package+SHA alone.
-  GoogleSignIn _clientShaOnly() => GoogleSignIn();
-
-  Future<void> _freshSignOut(GoogleSignIn client) async {
-    try {
-      await client.signOut();
-    } catch (_) {
-      /* ignore */
-    }
-  }
-
-  Future<String?> _idTokenFrom(GoogleSignIn client) async {
-    await _freshSignOut(client);
-    final account = await client.signIn();
-    if (account == null) return null;
-    var auth = await account.authentication;
-    var token = auth.idToken;
-    if (token == null || token.isEmpty) {
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      auth = await account.authentication;
-      token = auth.idToken;
-    }
-    if (token == null || token.isEmpty) {
-      throw PlatformException(
-        code: 'id_token_missing',
-        message: 'id_token_missing',
-      );
-    }
-    return token;
+  Future<void> _ensureInitialized() async {
+    if (_ready) return;
+    await GoogleSignIn.instance.initialize(
+      serverClientId:
+          kGoogleServerClientId.isEmpty ? null : kGoogleServerClientId,
+    );
+    _ready = true;
+    debugPrint(
+      'GoogleSignIn v7 init Web=$kGoogleServerClientIdPrefix… '
+      '(len=${kGoogleServerClientId.length})',
+    );
   }
 
   /// Returns the Google ID token, or null if the user cancelled.
-  ///
-  /// On ApiException 10 with Web `serverClientId`, retries without it to tell
-  /// apart SHA/package rejection vs Web-client rejection.
   Future<String?> signInIdToken() async {
-    debugPrint(
-      'GoogleSignIn serverClientId prefix=$kGoogleServerClientIdPrefix… '
-      '(len=${kGoogleServerClientId.length})',
-    );
-    final injected = _client;
-    if (injected != null) {
-      return _idTokenFrom(injected);
-    }
-
+    await _ensureInitialized();
     try {
-      return await _idTokenFrom(_clientWithWeb());
-    } on PlatformException catch (e) {
-      if (!_isDeveloperError10(e)) rethrow;
-      debugPrint('GoogleSignIn error 10 with Web client — retry SHA-only');
-      try {
-        final bare = _clientShaOnly();
-        await _freshSignOut(bare);
-        final account = await bare.signIn();
-        if (account != null) {
-          // Package+SHA accepted; Web serverClientId is the problem.
-          throw PlatformException(
-            code: 'sha_ok_web_ko',
-            message: 'sha_ok_web_ko',
-          );
-        }
-        // User cancelled the retry — treat as cancel.
-        return null;
-      } on PlatformException catch (e2) {
-        if (e2.code == 'sha_ok_web_ko') rethrow;
-        if (_isDeveloperError10(e2)) {
-          throw PlatformException(code: 'sha_ko', message: 'sha_ko');
-        }
-        rethrow;
+      await GoogleSignIn.instance.signOut();
+    } catch (_) {
+      /* ignore — force a fresh account picker */
+    }
+    try {
+      final account = await GoogleSignIn.instance.authenticate();
+      final token = account.authentication.idToken;
+      if (token == null || token.isEmpty) {
+        throw PlatformException(
+          code: 'id_token_missing',
+          message: 'id_token_missing',
+        );
       }
+      return token;
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled ||
+          e.code == GoogleSignInExceptionCode.interrupted) {
+        return null;
+      }
+      rethrow;
     }
   }
 }

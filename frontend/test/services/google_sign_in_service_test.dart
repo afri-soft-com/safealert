@@ -1,38 +1,40 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:safealert/services/google_sign_in_service.dart';
 
 void main() {
-  test('ApiException 10 maps to SHA diagnostic with Web prefix', () {
+  test('ApiException 10 maps to Branding diagnostic with Web prefix', () {
     final msg = mapGoogleSignInError(PlatformException(
       code: 'sign_in_failed',
       message: 'com.google.android.gms.common.api.ApiException: 10:',
     ));
-    expect(msg, contains('Erreur 10 diagnostic'));
+    expect(msg, contains('Erreur 10'));
     expect(msg, contains('Web=$kGoogleServerClientIdPrefix'));
-    expect(msg, contains('package+SHA'));
+    expect(msg, contains('Branding'));
     expect(kGoogleServerClientIdPrefix.length, lessThanOrEqualTo(20));
     expect(kGoogleServerClientIdPrefix, startsWith('552870535150-8i0ki'));
   });
 
-  test('sha_ok_web_ko maps to Web-client diagnostic', () {
-    final msg = mapGoogleSignInError(PlatformException(
-      code: 'sha_ok_web_ko',
-      message: 'sha_ok_web_ko',
+  test('GoogleSignInException clientConfigurationError maps to config message', () {
+    final msg = mapGoogleSignInError(GoogleSignInException(
+      code: GoogleSignInExceptionCode.clientConfigurationError,
+      description: 'bad config',
     ));
-    expect(msg, contains('SHA Android OK'));
-    expect(msg, contains('client Web'));
+    expect(msg, contains('config'));
+    expect(msg, contains('Web=$kGoogleServerClientIdPrefix'));
   });
 
-  test('sha_ko maps to package+SHA diagnostic', () {
-    final msg = mapGoogleSignInError(PlatformException(
-      code: 'sha_ko',
-      message: 'sha_ko',
-    ));
-    expect(msg, contains('package+SHA refusés'));
+  test('GoogleSignInException canceled maps to null', () {
+    expect(
+      mapGoogleSignInError(GoogleSignInException(
+        code: GoogleSignInExceptionCode.canceled,
+      )),
+      isNull,
+    );
   });
 
-  test('cancelled sign-in maps to null', () {
+  test('cancelled PlatformException maps to null', () {
     expect(
       mapGoogleSignInError(PlatformException(code: 'sign_in_canceled', message: '12501')),
       isNull,
