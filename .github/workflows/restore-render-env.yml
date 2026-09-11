@@ -1,0 +1,111 @@
+# Restore / set individual Render env keys (never full PUT — secrets get blanked).
+name: Restore Render env keys
+
+on:
+  workflow_dispatch:
+    inputs:
+      restore_jwt:
+        description: Restore JWT_SECRET from GitHub secret
+        type: boolean
+        default: true
+      app_latest_version:
+        description: APP_LATEST_VERSION
+        required: true
+        default: "1.0.18"
+      google_client_id:
+        description: Web GOOGLE_CLIENT_ID
+        required: true
+        default: "552870535150-8i0ki30r45bipf8ren9ajtfp5bt5ipkr.apps.googleusercontent.com"
+      google_android_client_id:
+        description: Comma-separated Android OAuth client IDs
+        required: true
+        default: "552870535150-358uiarfelvoefjndn31f18d22fi6edd.apps.googleusercontent.com,552870535150-4d04armu8m10puutgru836q8k2e5o5eg.apps.googleusercontent.com,552870535150-j1g4ma59rmdgtn48hqh95p2ru5bvi0qf.apps.googleusercontent.com"
+      redeploy:
+        type: boolean
+        default: true
+
+jobs:
+  restore-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: PUT individual env keys (safe)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_API_SERVICE_ID }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          RESTORE_JWT: ${{ inputs.restore_jwt }}
+          APP_LATEST_VERSION: ${{ inputs.app_latest_version }}
+          GOOGLE_CLIENT_ID: ${{ inputs.google_client_id }}
+          GOOGLE_ANDROID_CLIENT_ID: ${{ inputs.google_android_client_id }}
+        run: |
+          set -euo pipefail
+          put_key() {
+            local key="$1"
+            export VAL="$2"
+            local code
+            local body
+            body=$(python3 -c 'import json,os; print(json.dumps({"value": os.environ["VAL"]}))')
+            code=$(curl -sS -o /tmp/put-one.json -w "%{http_code}" -X PUT \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Accept: application/json" \
+              -H "Content-Type: application/json" \
+              -d "$body" \
+              "https://api.render.com/v1/services/${SERVICE_ID}/env-vars/${key}")
+            echo "PUT ${key} HTTP ${code} (len=${#VAL})"
+            head -c 240 /tmp/put-one.json; echo
+            case "$code" in 200|201) ;; *) exit 1 ;; esac
+          }
+          if [ "${RESTORE_JWT}" = "true" ]; then
+            if [ -z "${JWT_SECRET:-}" ] || [ "${#JWT_SECRET}" -lt 32 ]; then
+              echo "JWT_SECRET GitHub secret missing or too short"
+              exit 1
+            fi
+            put_key JWT_SECRET "$JWT_SECRET"
+          fi
+          put_key APP_LATEST_VERSION "$APP_LATEST_VERSION"
+          put_key GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID"
+          put_key GOOGLE_ANDROID_CLIENT_ID "$GOOGLE_ANDROID_CLIENT_ID"
+
+      - name: List env keys (names only)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_API_SERVICE_ID }}
+        run: |
+          curl -fsS -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Accept: application/json" \
+            "https://api.render.com/v1/services/${SERVICE_ID}/env-vars" \
+            | python3 -c 'import json,sys; raw=json.load(sys.stdin)
+          for row in raw:
+            ev=row.get("envVar",row)
+            print(ev.get("key"), "secret="+str(bool(ev.get("value") in (None,""))))'
+
+      - name: Redeploy API
+        if: inputs.redeploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_API_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/deploy.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache":"do_not_clear"}' \
+            "https://api.render.com/v1/services/${SERVICE_ID}/deploys")
+          echo "Deploy HTTP ${code}"
+          cat /tmp/deploy.json; echo
+          case "$code" in 200|201|202) ;; *) exit 1 ;; esac
+          deploy_id=$(python3 -c 'import json; d=json.load(open("/tmp/deploy.json")); print(d.get("id") or d.get("deploy",{}).get("id") or "")')
+          echo "deploy_id=$deploy_id"
+          for i in $(seq 1 60); do
+            st=$(curl -fsS -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Accept: application/json" \
+              "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${deploy_id}" \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("status") or d.get("deploy",{}).get("status") or "")')
+            echo "status=$st"
+            case "$st" in
+              live) exit 0 ;;
+              update_failed|build_failed|canceled|deactivated) exit 1 ;;
+            esac
+            sleep 10
+          done
+          exit 1
