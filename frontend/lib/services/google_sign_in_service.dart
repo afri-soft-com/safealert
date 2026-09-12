@@ -27,37 +27,58 @@ bool _blobLooksLikeError10(String blob) {
       RegExp(r'\b10:').hasMatch(b);
 }
 
+String _exDetail(GoogleSignInException e) {
+  final parts = <String>[
+    e.code.name,
+    if (e.description != null && e.description!.trim().isNotEmpty) e.description!.trim(),
+    if (e.details != null) e.details.toString(),
+  ];
+  return parts.join(' | ');
+}
+
 /// Maps native Google Sign-In failures to short French copy (no stacks).
-/// Returns null when the user cancelled.
+///
+/// Never returns null for a real failure — Credential Manager often reports
+/// OAuth/SHA misconfig as [GoogleSignInExceptionCode.canceled], which must
+/// still show a message so the user is not left with a silent no-op.
 String? mapGoogleSignInError(Object error) {
   if (error is GoogleSignInException) {
+    final detail = _exDetail(error);
     switch (error.code) {
       case GoogleSignInExceptionCode.canceled:
       case GoogleSignInExceptionCode.interrupted:
-        return null;
+        // Often a disguised DEVELOPER_ERROR / NoCredential on Android CM.
+        return 'Connexion Google fermée sans compte. '
+            'Si vous n’avez pas annulé : config OAuth/SHA. '
+            'Web=$kGoogleServerClientIdPrefix… ($detail)';
       case GoogleSignInExceptionCode.clientConfigurationError:
       case GoogleSignInExceptionCode.providerConfigurationError:
-        return 'Erreur Google config (v7). Web=$kGoogleServerClientIdPrefix… '
-            'Complétez Branding OAuth et republiez Audience, '
-            'ou recréez les clients Android be940.';
-      default:
-        final desc = '${error.description ?? ''} ${error.toString()}';
-        if (_blobLooksLikeError10(desc)) {
-          return 'Erreur 10 (Credential Manager). Web=$kGoogleServerClientIdPrefix… '
-              'Branding OAuth + Identity Toolkit + clients Android be940.';
+        return 'Erreur Google config. Web=$kGoogleServerClientIdPrefix… ($detail)';
+      case GoogleSignInExceptionCode.uiUnavailable:
+        return 'Google Sign-In indisponible (pas d’Activity). Réessayez.';
+      case GoogleSignInExceptionCode.userMismatch:
+        return 'Compte Google différent de la session en cours. Réessayez.';
+      case GoogleSignInExceptionCode.unknownError:
+        if (_blobLooksLikeError10(detail)) {
+          return 'Erreur 10 (Credential Manager). '
+              'Web=$kGoogleServerClientIdPrefix… ($detail)';
         }
-        return 'Connexion Google impossible. Réessayez.';
+        return 'Connexion Google impossible. Web=$kGoogleServerClientIdPrefix… ($detail)';
     }
   }
   if (error is PlatformException) {
     final code = error.code.toLowerCase();
     final blob = '${error.message ?? ''} ${error.details ?? ''}'.toLowerCase();
-    if (code.contains('cancel') || blob.contains('12501') || blob.contains('sign_in_canceled')) {
-      return null;
+    if (code == 'google_dismissed' ||
+        code.contains('cancel') ||
+        blob.contains('12501') ||
+        blob.contains('sign_in_canceled')) {
+      return 'Connexion Google fermée sans compte. '
+          'Si vous n’avez pas annulé : config OAuth/SHA. '
+          'Web=$kGoogleServerClientIdPrefix…';
     }
     if (_blobLooksLikeError10(blob) || code == '10') {
-      return 'Erreur 10. Web=$kGoogleServerClientIdPrefix… '
-          'SHA Play OK — complétez Branding et Publish Audience (be940).';
+      return 'Erreur 10. Web=$kGoogleServerClientIdPrefix…';
     }
     if (blob.contains('apiexception: 7') || blob.contains('network') || code == '7') {
       return 'Réseau indisponible. Vérifiez votre connexion.';
@@ -66,15 +87,19 @@ String? mapGoogleSignInError(Object error) {
       return 'Connexion Google mal configurée (jeton manquant). '
           'Web=$kGoogleServerClientIdPrefix…';
     }
-    return 'Connexion Google impossible. Réessayez.';
+    return 'Connexion Google impossible (${error.code}). '
+        'Web=$kGoogleServerClientIdPrefix…';
   }
-  final text = error.toString().toLowerCase();
-  if (text.contains('cancel')) return null;
+  final text = error.toString();
+  if (text.toLowerCase().contains('cancel')) {
+    return 'Connexion Google fermée sans compte. '
+        'Si vous n’avez pas annulé : config OAuth/SHA. '
+        'Web=$kGoogleServerClientIdPrefix…';
+  }
   if (_blobLooksLikeError10(text)) {
-    return 'Erreur 10. Web=$kGoogleServerClientIdPrefix… '
-        'Complétez Branding OAuth (be940) puis Publish Audience.';
+    return 'Erreur 10. Web=$kGoogleServerClientIdPrefix…';
   }
-  return 'Connexion Google impossible. Réessayez.';
+  return 'Connexion Google impossible. Web=$kGoogleServerClientIdPrefix… ($text)';
 }
 
 class GoogleSignInService {
@@ -84,6 +109,12 @@ class GoogleSignInService {
 
   Future<void> _ensureInitialized() async {
     if (_ready) return;
+    if (!GoogleSignIn.instance.supportsAuthenticate()) {
+      throw PlatformException(
+        code: 'google_unsupported',
+        message: 'authenticate_unsupported',
+      );
+    }
     await GoogleSignIn.instance.initialize(
       serverClientId:
           kGoogleServerClientId.isEmpty ? null : kGoogleServerClientId,
@@ -95,7 +126,8 @@ class GoogleSignInService {
     );
   }
 
-  /// Returns the Google ID token, or null if the user cancelled.
+  /// Returns the Google ID token, or null only for a true empty success path
+  /// (should not happen with [authenticate]). Failures throw / map to UI text.
   Future<String?> signInIdToken() async {
     await _ensureInitialized();
     try {
@@ -114,10 +146,8 @@ class GoogleSignInService {
       }
       return token;
     } on GoogleSignInException catch (e) {
-      if (e.code == GoogleSignInExceptionCode.canceled ||
-          e.code == GoogleSignInExceptionCode.interrupted) {
-        return null;
-      }
+      // Never swallow — Credential Manager maps many config failures to canceled.
+      debugPrint('GoogleSignInException ${_exDetail(e)}');
       rethrow;
     }
   }

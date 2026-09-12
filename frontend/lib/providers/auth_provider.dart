@@ -231,6 +231,10 @@ class AuthProvider extends ChangeNotifier {
           ? await obtainIdToken()
           : await _google.signInIdToken();
       if (token == null) {
+        // Should be rare with google_sign_in 7 authenticate(); never leave UI blank.
+        _error =
+            'Connexion Google fermée sans compte. Si vous n’avez pas annulé, '
+            'vérifiez OAuth/SHA (Web client be940).';
         _loading = false;
         notifyListeners();
         return false;
