@@ -6,9 +6,9 @@ const { OAuth2Client } = require("google-auth-library");
 
 const allowedAudiences = () => {
   const ids = [
-    process.env.GOOGLE_CLIENT_ID,
-    ...(String(process.env.GOOGLE_ANDROID_CLIENT_ID || "").split(",")),
-    process.env.GOOGLE_IOS_CLIENT_ID,
+    ...String(process.env.GOOGLE_CLIENT_ID || "").split(/[,\s]+/),
+    ...String(process.env.GOOGLE_ANDROID_CLIENT_ID || "").split(/[,\s]+/),
+    ...String(process.env.GOOGLE_IOS_CLIENT_ID || "").split(/[,\s]+/),
   ]
     .map((s) => String(s || "").trim())
     .filter(Boolean);

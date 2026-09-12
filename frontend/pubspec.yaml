@@ -1,7 +1,7 @@
 name: safealert
 description: "SafeAlert - Application de Sécurité Citoyenne"
 publish_to: 'none'
-version: 1.0.22+42
+version: 1.0.23+43
 
 environment:
   sdk: ^3.8.1
@@ -48,7 +48,7 @@ dependencies:
   in_app_update: ^4.2.5
   package_info_plus: ^8.1.2
   uuid: ^4.5.1
-  google_sign_in: ^7.2.0
+  google_sign_in: ^6.2.2
 
 dev_dependencies:
   flutter_test:

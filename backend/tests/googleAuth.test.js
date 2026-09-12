@@ -59,6 +59,19 @@ describe("allowedAudiences", () => {
     expect(aud).toContain("android-a.apps.googleusercontent.com");
     expect(aud).toContain("android-b.apps.googleusercontent.com");
   });
+
+  it("splits GOOGLE_CLIENT_ID CSV into multiple web audiences", () => {
+    const prev = process.env.GOOGLE_CLIENT_ID;
+    process.env.GOOGLE_CLIENT_ID =
+      "web-a.apps.googleusercontent.com, web-b.apps.googleusercontent.com";
+    try {
+      const aud = allowedAudiences();
+      expect(aud).toContain("web-a.apps.googleusercontent.com");
+      expect(aud).toContain("web-b.apps.googleusercontent.com");
+    } finally {
+      process.env.GOOGLE_CLIENT_ID = prev;
+    }
+  });
 });
 
 describe("POST /api/auth/google", () => {
