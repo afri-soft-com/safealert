@@ -252,6 +252,43 @@ export const api = {
     }>(`/admin/premium?${params}`);
   },
 
+  getTreasury: () =>
+    request<{
+      balance_cdf: number;
+      updated_at: string;
+      pay_hub_configured: boolean;
+      preferred_telecoms: string[];
+      min_withdraw_cdf: number;
+      ledger: Array<{
+        id: string;
+        direction: string;
+        amount_cdf: number;
+        balance_after_cdf: number;
+        reason?: string | null;
+        created_at: string;
+      }>;
+      withdrawals: Array<{
+        id: string;
+        amount_cdf: number;
+        telecom: string;
+        destination_phone: string;
+        status: string;
+        failure_reason?: string | null;
+        created_at: string;
+        completed_at?: string | null;
+      }>;
+    }>("/admin/treasury"),
+
+  withdrawTreasury: (body: {
+    amount_cdf: number;
+    telecom: string;
+    phone: string;
+  }) =>
+    request<{ message: string; withdrawal: unknown }>("/admin/treasury/withdraw", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   getPartners: () =>
     request<{ data: PartnerRow[] }>("/admin/partners"),
 

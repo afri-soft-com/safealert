@@ -5,6 +5,7 @@
 
 const { pool } = require("../config/database");
 const { premium } = require("../config/features");
+const { hubConfigured } = require("./afrisoftPayHub");
 
 const PRICING = {
   currency: "USD",
@@ -12,6 +13,32 @@ const PRICING = {
   yearly_usd: 20,
   monthly_cdf_approx: 5500,
   yearly_cdf_approx: 55000,
+};
+
+const usdToCdfRate = () => {
+  const n = Number(process.env.USD_TO_CDF_RATE || 2850);
+  return Number.isFinite(n) && n > 0 ? n : 2850;
+};
+
+/** max(2300, ceil(usd * rate)) — SerdiPay floor. */
+const toCdf = (amountUsd, rate = usdToCdfRate()) => {
+  const usd = Number(amountUsd);
+  if (!Number.isFinite(usd) || usd < 0) return 2300;
+  return Math.max(2300, Math.ceil(usd * rate));
+};
+
+const pricingWithCdf = () => {
+  const rate = usdToCdfRate();
+  const monthly_cdf = toCdf(PRICING.monthly_usd, rate);
+  const yearly_cdf = toCdf(PRICING.yearly_usd, rate);
+  return {
+    ...PRICING,
+    usd_to_cdf_rate: rate,
+    monthly_cdf,
+    yearly_cdf,
+    monthly_cdf_approx: monthly_cdf,
+    yearly_cdf_approx: yearly_cdf,
+  };
 };
 
 const FREE = {
@@ -113,15 +140,20 @@ const getStatusPayload = async (userId) => {
   const until = await getPremiumUntil(userId);
   const active = premium() && until && new Date(until) > new Date();
   const entitlements = entitlementsFor(!!active);
+  const pricing = pricingWithCdf();
   return {
     feature_enabled: premium(),
     active: !!active,
     premium_until: until || null,
-    pricing: PRICING,
+    pricing,
     entitlements,
     benefits: BENEFIT_KEYS,
     test_purchase_allowed: premium() && allowTestPurchase(),
-    checkout_available: premium() && stripeConfigured(),
+    checkout_available: premium() && (stripeConfigured() || hubConfigured()),
+    mobile_money_available: premium() && hubConfigured(),
+    afriSoftPayHubEnabled: hubConfigured(),
+    preferred_operators: ["mpesa", "airtel"],
+    preferred_telecoms: ["MP", "AM"],
   };
 };
 
@@ -139,4 +171,7 @@ module.exports = {
   entitlementsFor,
   getEntitlementsForUser,
   getStatusPayload,
+  usdToCdfRate,
+  toCdf,
+  pricingWithCdf,
 };

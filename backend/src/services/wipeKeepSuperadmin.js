@@ -10,6 +10,7 @@ const PRESERVE_TABLES = new Set([
   "route_corridors",
   "app_settings",
   "incident_types",
+  "platform_wallet",
   "spatial_ref_sys",
   "geography_columns",
   "geometry_columns",
@@ -17,6 +18,9 @@ const PRESERVE_TABLES = new Set([
 
 /** Child / operational tables, FK-safe order (children first). */
 const WIPE_TABLES = [
+  "platform_wallet_ledger",
+  "platform_wallet_withdrawals",
+  "premium_payment_intents",
   "partner_webhook_deliveries",
   "incident_chat_messages",
   "incident_evidence",

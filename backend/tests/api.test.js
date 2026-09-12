@@ -871,7 +871,7 @@ describe("App version", () => {
     delete process.env.ADMIN_WEB_VERSION;
     const res = await request(app).get("/api/app/version");
     expect(res.status).toBe(200);
-    expect(res.body.latestVersion).toBe("1.0.12");
+    expect(res.body.latestVersion).toBe("1.0.24");
     expect(res.body.adminWebVersion).toBe("1.0.4");
     expect(res.body.adminWebUrl).toContain("safealert-admin");
   });

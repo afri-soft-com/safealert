@@ -11,7 +11,7 @@ on:
       app_latest_version:
         description: APP_LATEST_VERSION
         required: true
-        default: "1.0.19"
+        default: "1.0.24"
       google_client_id:
         description: Web GOOGLE_CLIENT_ID
         required: true
@@ -38,6 +38,8 @@ jobs:
           APP_LATEST_VERSION: ${{ inputs.app_latest_version }}
           GOOGLE_CLIENT_ID: ${{ inputs.google_client_id }}
           GOOGLE_ANDROID_CLIENT_ID: ${{ inputs.google_android_client_id }}
+          AFRISOFT_PAY_HUB_API_KEY: ${{ secrets.AFRISOFT_PAY_HUB_API_KEY }}
+          AFRISOFT_PAY_HUB_WEBHOOK_SECRET: ${{ secrets.AFRISOFT_PAY_HUB_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           put_key() {
@@ -66,6 +68,18 @@ jobs:
           put_key APP_LATEST_VERSION "$APP_LATEST_VERSION"
           put_key GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID"
           put_key GOOGLE_ANDROID_CLIENT_ID "$GOOGLE_ANDROID_CLIENT_ID"
+
+          # AfriSoft pay hub (Mobile Money)
+          put_key AFRISOFT_PAY_HUB_URL "https://pay.afri-soft.com"
+          put_key AFRISOFT_PAY_HUB_APP_ID "safealert"
+          put_key FEATURE_PREMIUM "true"
+          put_key USD_TO_CDF_RATE "2850"
+          if [ -n "${AFRISOFT_PAY_HUB_API_KEY:-}" ]; then
+            put_key AFRISOFT_PAY_HUB_API_KEY "$AFRISOFT_PAY_HUB_API_KEY"
+            put_key AFRISOFT_PAY_HUB_WEBHOOK_SECRET "${AFRISOFT_PAY_HUB_WEBHOOK_SECRET:-$AFRISOFT_PAY_HUB_API_KEY}"
+          else
+            echo "WARN: AFRISOFT_PAY_HUB_API_KEY GitHub secret missing — hub keys not updated"
+          fi
 
       - name: List env keys (names only)
         env:

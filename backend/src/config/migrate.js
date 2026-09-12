@@ -528,6 +528,77 @@ const migrate = async () => {
         ON users (LOWER(email)) WHERE email IS NOT NULL AND BTRIM(email) <> '';
     `);
 
+    // ── AfriSoft pay hub: premium intents + platform treasury ──
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS payment_intents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        purpose VARCHAR(40) NOT NULL DEFAULT 'premium',
+        plan_code VARCHAR(20),
+        amount_cdf INTEGER NOT NULL,
+        currency VARCHAR(8) NOT NULL DEFAULT 'CDF',
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING'
+          CHECK (status IN ('PENDING','COMPLETED','FAILED','CANCELLED')),
+        telecom VARCHAR(8),
+        payer_phone VARCHAR(20),
+        hub_reference VARCHAR(160),
+        hub_payment_id VARCHAR(120),
+        provider_ref VARCHAR(120),
+        days_granted INTEGER DEFAULT 30,
+        failure_reason TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        completed_at TIMESTAMP WITH TIME ZONE
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_intents_user
+        ON payment_intents(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_payment_intents_hub_payment
+        ON payment_intents(hub_payment_id)
+        WHERE hub_payment_id IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_intents_hub_ref
+        ON payment_intents(hub_reference)
+        WHERE hub_reference IS NOT NULL;
+
+      CREATE TABLE IF NOT EXISTS platform_wallets (
+        id UUID PRIMARY KEY,
+        balance_cdf BIGINT NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS platform_wallet_ledger_entries (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        wallet_id UUID NOT NULL REFERENCES platform_wallets(id) ON DELETE CASCADE,
+        direction VARCHAR(10) NOT NULL CHECK (direction IN ('CREDIT','DEBIT')),
+        amount_cdf BIGINT NOT NULL,
+        balance_after_cdf BIGINT NOT NULL,
+        reason TEXT,
+        payment_intent_id UUID REFERENCES payment_intents(id) ON DELETE SET NULL,
+        external_reference VARCHAR(160),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_ledger_created
+        ON platform_wallet_ledger_entries(created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_platform_ledger_intent_credit
+        ON platform_wallet_ledger_entries(payment_intent_id)
+        WHERE payment_intent_id IS NOT NULL AND direction = 'CREDIT';
+
+      CREATE TABLE IF NOT EXISTS platform_wallet_withdrawals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        amount_cdf BIGINT NOT NULL,
+        telecom VARCHAR(8) NOT NULL,
+        destination_phone VARCHAR(20) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING'
+          CHECK (status IN ('PENDING','COMPLETED','FAILED')),
+        external_reference VARCHAR(160),
+        failure_reason TEXT,
+        requested_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        completed_at TIMESTAMP WITH TIME ZONE
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_withdrawals_created
+        ON platform_wallet_withdrawals(created_at DESC);
+    `);
+
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;
     if (adminPhone) {
       const normalized = normalizePhone(adminPhone.trim()) || adminPhone.trim();

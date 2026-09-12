@@ -7,6 +7,7 @@ const NAV = [
   { to: "/ops", label: "Ops temps réel" },
   { to: "/utilisateurs", label: "Utilisateurs" },
   { to: "/abonnements", label: "Abonnements" },
+  { to: "/tresorerie", label: "Trésorerie" },
   { to: "/partenaires", label: "Partenaires API" },
   { to: "/annuaire", label: "Annuaire d'urgence" },
   { to: "/incidents", label: "Incidents" },

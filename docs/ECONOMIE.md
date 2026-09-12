@@ -47,10 +47,20 @@ Pas de publicité dans l’app aujourd’hui (pas de bénéfice « sans pubs » 
 | Flag off | `FEATURE_PREMIUM` absent / false | Limites Free **non** appliquées (comportement historique) |
 | Flag on | `FEATURE_PREMIUM=true` | Entitlements Free / Premium actifs |
 | Test | `FEATURE_PREMIUM_TEST_PURCHASE=true` **ou** `ALLOW_DEV_OTP=true` **ou** `NODE_ENV≠production` | Bouton « Activer Premium (test) » → `POST /api/premium/grant` |
+| **Mobile Money (AfriSoft hub)** | `AFRISOFT_PAY_HUB_APP_ID` + `AFRISOFT_HUB_API_KEY` | `POST /api/premium/mobile-money` → C2B ; webhook `/webhooks/afrisoft-payments` active Premium + crédite la trésorerie |
 | Stripe | `STRIPE_SECRET_KEY` + `STRIPE_PRICE_ID_PREMIUM` | Stub Checkout (`POST /api/premium/checkout`) — **pas de secrets fictifs** |
-| Admin | Rôle `platform_admin` | Accorder / révoquer Premium (console Utilisateurs) |
+| Admin | Rôle `platform_admin` | Accorder / révoquer Premium ; trésorerie `/tresorerie` (retrait B2C) |
 
-Stripe n’est **pas** requis pour le MVP. Sans clés Stripe, l’API renvoie `checkout_available: false` et l’app propose l’activation test (si autorisée) ou un message « paiement bientôt ».
+Montant CDF facturé : `max(2300, ceil(usd * USD_TO_CDF_RATE))` (défaut rate **2850** → mensuel **5700 FC**, annuel **57000 FC**).
+
+Stripe n’est **pas** requis. Sans hub Mobile Money ni Stripe, l’API expose `mobile_money_available: false` et l’app propose l’activation test (si autorisée) ou un message « paiement bientôt ».
+
+## Roadmap paiement
+
+1. MVP actuel : entitlements + grant admin / test + **AfriSoft Mobile Money live**
+2. Stripe Checkout réel (carte) en option
+3. Reçus + historique paiements côté citoyen
+4. Facturation partenaires (facture mensuelle / portail)
 
 ## Offre partenaires (B2B)
 
@@ -69,24 +79,20 @@ Inclus selon plan : webhooks SOS / incidents, portail `/portail-partenaire` (lim
 
 ```bash
 FEATURE_PREMIUM=true
-# FEATURE_PREMIUM_TEST_PURCHASE=true   # testers (prod) sans Stripe
-# STRIPE_SECRET_KEY=                   # réel uniquement — jamais de placeholder
+# AFRISOFT_PAY_HUB_URL=https://pay.afri-soft.com
+# AFRISOFT_PAY_HUB_APP_ID=safealert
+# AFRISOFT_HUB_API_KEY=
+# AFRISOFT_HUB_WEBHOOK_SECRET=
+# USD_TO_CDF_RATE=2850
+# FEATURE_PREMIUM_TEST_PURCHASE=true   # testers (prod) sans paiement
+# STRIPE_SECRET_KEY=                   # optionnel — jamais de placeholder
 # STRIPE_PRICE_ID_PREMIUM=
-# STRIPE_WEBHOOK_SECRET=
-# STRIPE_SUCCESS_URL=https://…
-# STRIPE_CANCEL_URL=https://…
 ```
-
-## Roadmap paiement
-
-1. MVP actuel : entitlements + grant admin / test + stub Checkout
-2. Stripe Checkout réel (Mobile Money / carte selon dispo)
-3. Reçus + `stripe_customer_id` sur `users`
-4. Facturation partenaires (facture mensuelle / portail)
 
 ## Références code
 
 - Entitlements : `backend/src/services/premiumEntitlements.js`
-- API : `GET/POST /api/premium/*`
+- Mobile Money : `backend/src/services/afrisoftPayHub.js`, `premiumPayments.js`, `platformWallet.js`
+- API : `POST /api/premium/mobile-money`, webhook `/webhooks/afrisoft-payments`, admin `/api/admin/treasury`
 - Flag : `FEATURE_PREMIUM` dans `docs/FEATURES.md`
 - Manuel utilisateur : section Premium dans `docs/MANUEL_UTILISATEUR.md`

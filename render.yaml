@@ -78,6 +78,18 @@ services:
         value: afrisoft-partenaire
       - key: AFRISOFT_HUB_API_KEY
         sync: false
+      - key: AFRISOFT_PAY_HUB_URL
+        value: https://pay.afri-soft.com
+      - key: AFRISOFT_PAY_HUB_APP_ID
+        value: safealert
+      - key: AFRISOFT_PAY_HUB_API_KEY
+        sync: false
+      - key: AFRISOFT_PAY_HUB_WEBHOOK_SECRET
+        sync: false
+      - key: FEATURE_PREMIUM
+        value: "true"
+      - key: USD_TO_CDF_RATE
+        value: "2850"
       - key: SERDIPAY_API_KEY
         sync: false
       - key: SERDIPAY_SMS_URL

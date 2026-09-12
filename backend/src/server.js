@@ -43,6 +43,8 @@ const trustZonesRoutes = require("./routes/trustZones");
 const neighborhoodRoutes = require("./routes/neighborhood");
 const backupRoutes = require("./routes/backup");
 const premiumRoutes = require("./routes/premium");
+const paymentsRoutes = require("./routes/payments");
+const webhooksRoutes = require("./routes/webhooks");
 const opsRoutes = require("./routes/ops");
 const invitesRoutes = require("./routes/invites");
 const safetyPingsRoutes = require("./routes/safetyPings");
@@ -114,7 +116,16 @@ io.on("connection", (socket) => {
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      // Preserve raw body for AfriSoft hub webhook HMAC verification.
+      if (req.originalUrl && req.originalUrl.startsWith("/webhooks/")) {
+        req.rawBody = buf.toString("utf8");
+      }
+    },
+  })
+);
 app.use("/api", apiLimiter);
 
 if (isProduction) {
@@ -165,6 +176,8 @@ app.use("/api/trust-zones", trustZonesRoutes);
 app.use("/api/neighborhood", neighborhoodRoutes);
 app.use("/api/backup", backupRoutes);
 app.use("/api/premium", premiumRoutes);
+app.use("/api/payments", paymentsRoutes);
+app.use("/webhooks", webhooksRoutes);
 app.use("/api/ops", opsRoutes);
 app.use("/api/invites", invitesRoutes);
 app.use("/api/safety-pings", safetyPingsRoutes);

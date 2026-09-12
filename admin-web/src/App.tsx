@@ -8,6 +8,7 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import UsersPage from "./pages/UsersPage";
 import SubscriptionsPage from "./pages/SubscriptionsPage";
+import TreasuryPage from "./pages/TreasuryPage";
 import PartnersPage from "./pages/PartnersPage";
 import EmergencyPage from "./pages/EmergencyPage";
 import IncidentsPage from "./pages/IncidentsPage";
@@ -38,6 +39,7 @@ export default function App() {
                 <Route path="ops" element={<OpsPage />} />
                 <Route path="utilisateurs" element={<UsersPage />} />
                 <Route path="abonnements" element={<SubscriptionsPage />} />
+                <Route path="tresorerie" element={<TreasuryPage />} />
                 <Route path="partenaires" element={<PartnersPage />} />
                 <Route path="annuaire" element={<EmergencyPage />} />
                 <Route path="incidents" element={<IncidentsPage />} />

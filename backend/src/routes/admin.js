@@ -2,6 +2,7 @@ const { Router } = require("express");
 const { authenticate, requireStaff, requireSuperAdmin } = require("../middleware/auth");
 const ctrl = require("../controllers/adminController");
 const types = require("../controllers/incidentTypesController");
+const treasury = require("../controllers/treasuryController");
 
 const router = Router();
 
@@ -9,6 +10,8 @@ router.use(authenticate, requireStaff);
 
 router.get("/stats", ctrl.getStats);
 router.get("/premium", ctrl.listPremiumSubscriptions);
+router.get("/treasury", treasury.getTreasury);
+router.post("/treasury/withdraw", requireSuperAdmin, treasury.withdrawTreasury);
 router.get("/users", ctrl.listUsers);
 router.patch("/users/:id/role", ctrl.updateUserRole);
 router.patch("/users/:id/active", requireSuperAdmin, ctrl.setUserActive);

@@ -4,7 +4,7 @@ import '../theme.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 
-/// Paywall / statut Premium (FR). Activation test si le serveur l'autorise.
+/// Paywall / statut Premium (FR). Mobile Money (MP/AM) + activation test.
 class PremiumScreen extends StatefulWidget {
   final VoidCallback onBack;
   const PremiumScreen({super.key, required this.onBack});
@@ -15,10 +15,14 @@ class PremiumScreen extends StatefulWidget {
 
 class _PremiumScreenState extends State<PremiumScreen> {
   final _api = ApiService();
+  final _phoneCtrl = TextEditingController();
   bool _loading = true;
   bool _acting = false;
+  bool _polling = false;
   String? _error;
   Map<String, dynamic>? _status;
+  String _plan = 'monthly';
+  String _telecom = 'MP';
 
   static const _benefitLabels = <String, String>{
     'trajets_illimites': 'Trajets sécurisés illimités',
@@ -32,6 +36,12 @@ class _PremiumScreenState extends State<PremiumScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _phoneCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -75,19 +85,71 @@ class _PremiumScreenState extends State<PremiumScreen> {
     }
   }
 
-  Future<void> _tryCheckout() async {
+  Future<void> _payMobileMoney() async {
+    final phone = _phoneCtrl.text.trim();
+    if (phone.isEmpty) {
+      showAppSnackBar(context, 'Entrez votre numéro Mobile Money', isError: true);
+      return;
+    }
     setState(() => _acting = true);
     try {
-      final res = await _api.post('/premium/checkout', {});
+      final intent = await _api.post('/premium/mobile-money', {
+        'plan': _plan,
+        'phone': phone,
+        'telecom': _telecom,
+      });
       if (!mounted) return;
-      final url = res['checkout_url'] as String?;
-      if (url != null && url.isNotEmpty) {
-        showAppSnackBar(context, 'Redirection paiement bientôt disponible');
-      } else {
+      final id = intent['id']?.toString();
+      showAppSnackBar(
+        context,
+        (intent['message'] as String?) ??
+            'Confirmez le paiement sur votre téléphone (USSD / PIN).',
+      );
+      if (id != null && id.isNotEmpty) {
+        await _pollPayment(id);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        e,
+        isError: true,
+        fallback: 'Paiement Mobile Money indisponible',
+      );
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _pollPayment(String intentId) async {
+    if (_polling) return;
+    setState(() => _polling = true);
+    try {
+      for (var i = 0; i < 24; i++) {
+        await Future<void>.delayed(const Duration(seconds: 5));
+        if (!mounted) return;
+        final res = await _api.get('/premium/payments/$intentId');
+        final status = (res['status'] as String?)?.toLowerCase() ?? '';
+        if (status == 'completed') {
+          showAppSnackBar(context, 'Premium activé — merci !');
+          await _load();
+          return;
+        }
+        if (status == 'failed' || status == 'cancelled') {
+          showAppSnackBar(
+            context,
+            (res['message'] as String?) ??
+                (res['failure_reason'] as String?) ??
+                'Paiement échoué',
+            isError: true,
+          );
+          return;
+        }
+      }
+      if (mounted) {
         showAppSnackBar(
           context,
-          (res['message'] as String?) ??
-              'Paiement en ligne bientôt disponible. Demandez un accès test ou contactez le support.',
+          'Paiement en cours — rouvrez Premium dans quelques minutes.',
         );
       }
     } catch (e) {
@@ -96,10 +158,10 @@ class _PremiumScreenState extends State<PremiumScreen> {
         context,
         e,
         isError: true,
-        fallback: 'Checkout indisponible',
+        fallback: 'Suivi du paiement interrompu',
       );
     } finally {
-      if (mounted) setState(() => _acting = false);
+      if (mounted) setState(() => _polling = false);
     }
   }
 
@@ -111,12 +173,18 @@ class _PremiumScreenState extends State<PremiumScreen> {
     final pricing = (st?['pricing'] as Map?)?.cast<String, dynamic>();
     final monthly = pricing?['monthly_usd'] ?? 2;
     final yearly = pricing?['yearly_usd'] ?? 20;
-    final cdf = pricing?['monthly_cdf_approx'] ?? 5500;
+    final cdf = pricing?['monthly_cdf'] ??
+        pricing?['monthly_cdf_approx'] ??
+        5500;
+    final yearlyCdf = pricing?['yearly_cdf'] ??
+        pricing?['yearly_cdf_approx'] ??
+        55000;
     final benefits = (st?['benefits'] as List?)?.cast<String>() ??
         _benefitLabels.keys.toList();
     final until = st?['premium_until']?.toString();
     final testOk = st?['test_purchase_allowed'] == true;
-    final checkoutOk = st?['checkout_available'] == true;
+    final mmOk = st?['mobile_money_available'] == true ||
+        st?['afriSoftPayHubEnabled'] == true;
 
     return Scaffold(
       body: Column(
@@ -199,7 +267,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                                 Text(
                                   active && until != null
                                       ? 'Valable jusqu\'au ${_fmtDate(until)}'
-                                      : '$monthly USD / mois (~$cdf CDF) — ou $yearly USD / an',
+                                      : '$monthly USD / mois (~$cdf CDF) — ou $yearly USD / an (~$yearlyCdf CDF)',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: AppColors.gris,
@@ -244,14 +312,110 @@ class _PremiumScreenState extends State<PremiumScreen> {
                           }),
                           const SizedBox(height: 20),
                           if (!active && enabled) ...[
-                            if (testOk)
+                            if (mmOk) ...[
+                              const Text(
+                                'Payer par Mobile Money',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.gris,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              SegmentedButton<String>(
+                                segments: const [
+                                  ButtonSegment(
+                                    value: 'monthly',
+                                    label: Text('Mensuel'),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'yearly',
+                                    label: Text('Annuel'),
+                                  ),
+                                ],
+                                selected: {_plan},
+                                onSelectionChanged: _acting
+                                    ? null
+                                    : (s) => setState(() => _plan = s.first),
+                              ),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _TelecomChip(
+                                    label: 'M-Pesa',
+                                    selected: _telecom == 'MP',
+                                    recommended: true,
+                                    onTap: () => setState(() => _telecom = 'MP'),
+                                  ),
+                                  _TelecomChip(
+                                    label: 'Airtel Money',
+                                    selected: _telecom == 'AM',
+                                    recommended: true,
+                                    onTap: () => setState(() => _telecom = 'AM'),
+                                  ),
+                                  _TelecomChip(
+                                    label: 'Orange Money',
+                                    selected: _telecom == 'OM',
+                                    recommended: false,
+                                    onTap: () => setState(() => _telecom = 'OM'),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _phoneCtrl,
+                                keyboardType: TextInputType.phone,
+                                decoration: InputDecoration(
+                                  labelText: 'Numéro Mobile Money',
+                                  hintText: '0970… ou +243…',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton(
-                                  onPressed: _acting ? null : _activateTest,
+                                  onPressed: (_acting || _polling)
+                                      ? null
+                                      : _payMobileMoney,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.teal,
                                     foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _polling
+                                        ? 'En attente de confirmation…'
+                                        : _acting
+                                            ? 'Envoi…'
+                                            : 'Payer ${_plan == 'yearly' ? yearlyCdf : cdf} CDF',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Préférez M-Pesa ou Airtel Money. Confirmez ensuite '
+                                'sur votre téléphone (USSD / notification).',
+                                style: TextStyle(fontSize: 11, color: AppColors.gris),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                            if (testOk)
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed: _acting ? null : _activateTest,
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.bleuFonce,
+                                    side: const BorderSide(color: Color(0xFFDDDDDD)),
                                     padding: const EdgeInsets.symmetric(vertical: 14),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
@@ -265,33 +429,11 @@ class _PremiumScreenState extends State<PremiumScreen> {
                                   ),
                                 ),
                               ),
-                            if (testOk) const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                onPressed: _acting ? null : _tryCheckout,
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.bleuFonce,
-                                  side: const BorderSide(color: Color(0xFFDDDDDD)),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                child: Text(
-                                  checkoutOk
-                                      ? 'Payer avec Stripe'
-                                      : 'Paiement en ligne (bientôt)',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
+                            if (!mmOk && !testOk)
+                              const Text(
+                                'Paiement bientôt disponible. Demandez un accès à un administrateur.',
+                                style: TextStyle(fontSize: 12, color: AppColors.gris),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Sans paiement configuré, utilisez l\'activation test '
-                              '(environnement de test) ou demandez un accès à un administrateur.',
-                              style: TextStyle(fontSize: 11, color: AppColors.gris),
-                            ),
                           ],
                           if (!enabled)
                             const Text(
@@ -321,5 +463,36 @@ class _PremiumScreenState extends State<PremiumScreen> {
     } catch (_) {
       return iso;
     }
+  }
+}
+
+class _TelecomChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool recommended;
+  final VoidCallback onTap;
+
+  const _TelecomChip({
+    required this.label,
+    required this.selected,
+    required this.recommended,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(
+        recommended ? '$label ★' : label,
+        style: TextStyle(
+          fontSize: 12,
+          color: selected ? Colors.white : AppColors.bleuFonce,
+        ),
+      ),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      selectedColor: AppColors.teal,
+      backgroundColor: const Color(0xFFF5F7F7),
+    );
   }
 }
