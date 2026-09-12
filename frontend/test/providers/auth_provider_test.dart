@@ -371,12 +371,15 @@ void main() {
       expect(fakeApi.lastBody!['idToken'], 'id-token');
     });
 
-    test('cancelled Google sign-in does not set an error', () async {
+    test('cancelled Google sign-in still shows a non-blank diagnostic', () async {
       final ok = await provider.loginWithGoogle(obtainIdToken: () async => null);
 
       expect(ok, false);
       expect(provider.isAuthenticated, false);
-      expect(provider.error, isNull);
+      // Credential Manager often disguises OAuth/SHA failures as cancel —
+      // never leave the login screen with a silent no-op.
+      expect(provider.error, isNotNull);
+      expect(provider.error, contains('Google'));
     });
 
     test('Google-only user can save a PIN with user id', () async {
