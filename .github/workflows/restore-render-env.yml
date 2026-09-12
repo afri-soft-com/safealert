@@ -1,4 +1,4 @@
-# Restore / set individual Render env keys (never full PUT — secrets get blanked).
+# Restore / set individual Render env keys (never full PUT â€” secrets get blanked).
 name: Restore Render env keys
 
 on:
@@ -78,7 +78,7 @@ jobs:
             put_key AFRISOFT_PAY_HUB_API_KEY "$AFRISOFT_PAY_HUB_API_KEY"
             put_key AFRISOFT_PAY_HUB_WEBHOOK_SECRET "${AFRISOFT_PAY_HUB_WEBHOOK_SECRET:-$AFRISOFT_PAY_HUB_API_KEY}"
           else
-            echo "WARN: AFRISOFT_PAY_HUB_API_KEY GitHub secret missing — hub keys not updated"
+            echo "WARN: AFRISOFT_PAY_HUB_API_KEY GitHub secret missing â€” hub keys not updated"
           fi
 
       - name: List env keys (names only)
