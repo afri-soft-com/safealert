@@ -112,7 +112,7 @@ services:
         sync: false
       - key: FCM_CLIENT_EMAIL
         sync: false
-      # Align with frontend/pubspec.yaml (version name) after each Play upload
+      # Align with frontend/pubspec.yaml (version name) after each Play upload (1.0.25)
       - key: APP_LATEST_VERSION
         value: "1.0.25"
       # Align with admin-web/package.json
