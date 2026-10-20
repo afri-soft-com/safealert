@@ -275,15 +275,15 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFFE8ECEF)),
             boxShadow: [
               BoxShadow(
-                color: accent.withValues(alpha: 0.08),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
+                color: accent.withValues(alpha: 0.07),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
@@ -293,19 +293,18 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width: 28,
+                height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(icon, style: const TextStyle(fontSize: 16)),
+                child: Text(icon, style: const TextStyle(fontSize: 14)),
               ),
-              const SizedBox(height: 8),
-              Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.bleuFonce), maxLines: 2, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 2),
-              Text(sub, style: const TextStyle(fontSize: 10, color: AppColors.gris, height: 1.25), maxLines: 2, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 4),
+              Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.bleuFonce), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(sub, style: const TextStyle(fontSize: 9, color: AppColors.gris, height: 1.2), maxLines: 1, overflow: TextOverflow.ellipsis),
             ],
           ),
         ),
