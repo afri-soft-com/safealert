@@ -1,65 +1,102 @@
-# Guide App Store iOS — SafeAlert
+# Guide App Store iOS — SafeAlert (via GitHub Actions)
 
-Bundle ID : **`com.safealert.safealert`** (aligné Android / Firebase).  
-Projet Firebase : `safealert-prod` (voir `docs/FIREBASE_SETUP.md` § iOS).
+Bundle ID : **`com.safealert.safealert`**  
+Workflow : [`.github/workflows/mobile-ios.yml`](../.github/workflows/mobile-ios.yml)  
+Release rolling : tag GitHub **`ipa-main`**
 
-## Prérequis (une fois)
+## Flux CI
 
-1. **Apple Developer Program** (compte payant) — Team ID noté
-2. Mac avec **Xcode** récent + CocoaPods
-3. App créée dans [App Store Connect](https://appstoreconnect.apple.com) : SafeAlert, bundle `com.safealert.safealert`
-4. **Clé APNs** (.p8) → Firebase → Cloud Messaging → Apple
-5. OAuth Google : client iOS dans Cloud Console (`GOOGLE_IOS_CLIENT_ID` côté Render si utilisé)
+```
+Actions → Mobile iOS → Run workflow
+  → macOS runner
+  → flutter build ipa (signé)
+  → artifact + release ipa-main
+  → xcrun altool → TestFlight (si clés ASC présentes)
+```
 
-## Build local (IPA / Archive)
+Déclencheurs :
+
+| Événement | Comportement |
+|-----------|----------------|
+| **Run workflow** (manuel) | Build + TestFlight si `upload_testflight=true` |
+| Push `main` sur `frontend/**` | Build + TestFlight (échoue clairement si secrets absents) |
+
+## Secrets GitHub à créer
+
+Repo → **Settings → Secrets and variables → Actions** :
+
+### Signature (obligatoire pour le build)
+
+| Secret | Contenu |
+|--------|---------|
+| `IOS_TEAM_ID` | Team ID Apple (10 caractères) |
+| `IOS_BUILD_CERTIFICATE_BASE64` | Certificat **Apple Distribution** exporté `.p12` → base64 |
+| `IOS_P12_PASSWORD` | Mot de passe du `.p12` |
+| `IOS_PROVISION_PROFILE_BASE64` | Profil **App Store** `.mobileprovision` → base64 |
+| `IOS_KEYCHAIN_PASSWORD` | (optionnel) mot de passe keychain CI |
+
+Encoder (Mac / Linux) :
+
+```bash
+base64 -i distribution.p12 | pbcopy          # → IOS_BUILD_CERTIFICATE_BASE64
+base64 -i SafeAlert_AppStore.mobileprovision | pbcopy  # → IOS_PROVISION_PROFILE_BASE64
+```
+
+Windows (PowerShell) :
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("distribution.p12")) | Set-Clipboard
+```
+
+### TestFlight / App Store Connect (upload)
+
+Créer une clé API : [App Store Connect → Users and Access → Integrations → App Store Connect API](https://appstoreconnect.apple.com/access/integrations/api)
+
+| Secret | Contenu |
+|--------|---------|
+| `APP_STORE_CONNECT_KEY_ID` | Key ID |
+| `APP_STORE_CONNECT_ISSUER_ID` | Issuer ID |
+| `APP_STORE_CONNECT_API_KEY_BASE64` | Fichier `.p8` en base64 |
+
+Rôle clé : **Developer** ou **App Manager** (upload builds).
+
+### Variable déjà utilisée (Android)
+
+| Variable | Rôle |
+|----------|------|
+| `GOOGLE_SERVER_CLIENT_ID` | Web client OAuth (`--dart-define`) |
+| `API_BASE_URL` | `https://safealert-api.onrender.com/api` |
+
+## Une fois côté Apple (hors CI)
+
+1. **Apple Developer** — app ID `com.safealert.safealert` + Push Notifications
+2. **Certificat Distribution** + **Provisioning Profile App Store**
+3. **App Store Connect** — créer l’app SafeAlert (même bundle)
+4. **APNs .p8** → Firebase Cloud Messaging (push)
+5. Remplir les secrets GitHub ci-dessus
+6. **Actions → Mobile iOS → Run workflow**
+
+## Build local (optionnel, Mac)
 
 ```bash
 cd frontend
-flutter pub get
-cd ios && pod install && cd ..
+flutter pub get && cd ios && pod install && cd ..
 flutter build ipa --release \
+  --export-options-plist=ios/ExportOptions.plist \
   --dart-define=API_BASE_URL=https://safealert-api.onrender.com/api \
   --dart-define=GOOGLE_SERVER_CLIENT_ID=<WEB_CLIENT_ID>.apps.googleusercontent.com
 ```
-
-Ou ouvrir `frontend/ios/Runner.xcworkspace` → **Product → Archive** → Distribute App → App Store Connect.
-
-## Signing
-
-- Xcode → Runner → **Signing & Capabilities**
-  - Team Apple
-  - Push Notifications
-  - Background Modes : Location + Remote notifications
-- Pour TestFlight / prod : `Runner.entitlements` → `aps-environment` = **`production`**
 
 ## Checklist fiche App Store
 
 - [ ] Icône 1024×1024 (sans alpha)
 - [ ] Captures iPhone 6.7" / 6.1" (FR)
-- [ ] Politique confidentialité HTTPS (`https://safealert-admin.onrender.com/privacy.html`)
-- [ ] CGU (`…/cgu.html`)
-- [ ] Catégorie : Utilitaires / Style de vie
-- [ ] Âge 17+ si SOS / contenu sensible
-- [ ] Privacy Nutrition Labels : localisation, contacts, identifiants, données d’usage
-- [ ] Compte démo testeur si login requis (OTP / Google)
+- [ ] Privacy : `https://safealert-admin.onrender.com/privacy.html`
+- [ ] CGU : `https://safealert-admin.onrender.com/cgu.html`
+- [ ] Privacy Nutrition Labels (localisation, etc.)
+- [ ] Compte démo testeur si besoin
 
 ## Versions
 
-Aligner `frontend/pubspec.yaml` (`version: x.y.z+build`) avec Android à chaque soumission.  
-CFBundleShortVersionString / CFBundleVersion suivent Flutter (`FLUTTER_BUILD_NAME` / `FLUTTER_BUILD_NUMBER`).
-
-## CI (à venir)
-
-Pas encore de job `mobile-ipa` dans `.github/workflows/ci.yml`. Prochaine étape possible :
-
-- Secrets : `APP_STORE_CONNECT_KEY_*`, certs distribution
-- Job `flutter build ipa` + upload TestFlight (`xcrun altool` / `fastlane deliver`)
-
-En attendant : archive manuelle depuis un Mac.
-
-## Après première soumission
-
-1. TestFlight interne → testeurs
-2. Soumission Review App Store
-3. Mettre `APP_LATEST_VERSION` Render à la version iOS/Android publiée
-4. Lien App Store dans `APP_STORE_URL` (ou URL séparée iOS côté app si besoin)
+Aligner `frontend/pubspec.yaml` avec Android à chaque soumission.  
+Le job CI met `aps-environment` à **production** pour le build release (le fichier repo reste `development` pour le debug local).

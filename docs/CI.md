@@ -5,6 +5,7 @@
 | Workflow | Fichier | Déclencheurs |
 |----------|---------|--------------|
 | **CI** (tests + Render + AAB) | `.github/workflows/ci.yml` | push `main`/`develop`, PR → `main`, **Run workflow** manuel |
+| **Mobile iOS** (IPA + TestFlight) | `.github/workflows/mobile-ios.yml` | push `main` (`frontend/**`), **Run workflow** manuel |
 | **Deploy** (GHCR + SSH VPS) | `.github/workflows/deploy.yml` | tags `v*`, **Run workflow** manuel |
 
 ## Ordre des jobs (CI sur `main`)
@@ -68,6 +69,8 @@ Les runners GitHub Actions sont **hors** du réseau privé Render. Il faut l’*
 | `PRODUCTION_URL` | Smoke test (défaut `https://safealert-api.onrender.com`) |
 | `ANDROID_KEYSTORE_BASE64` + `ANDROID_KEY_PROPERTIES` | Signature Play de l’AAB |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Upload Play **internal,production** (un seul edit, `status: completed`) |
+| `IOS_TEAM_ID` / `IOS_BUILD_CERTIFICATE_BASE64` / `IOS_P12_PASSWORD` / `IOS_PROVISION_PROFILE_BASE64` | Signature IPA (voir `docs/IOS_APP_STORE.md`) |
+| `APP_STORE_CONNECT_KEY_ID` / `APP_STORE_CONNECT_ISSUER_ID` / `APP_STORE_CONNECT_API_KEY_BASE64` | Upload TestFlight |
 | `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_SSH_KEY` | Deploy SSH (workflow Deploy) |
 
 **Variable (pas un secret)** : `GOOGLE_SERVER_CLIENT_ID` — Web OAuth client ID public, passé en `--dart-define` (AAB) et `VITE_GOOGLE_CLIENT_ID` (admin-web). Pas de client secret.
@@ -79,6 +82,12 @@ GitHub → **Actions** → **CI** → **Run workflow** :
 - `force_deploy_web` (défaut **true**) — force backend + admin + deploy Render
 - `force_mobile_aab` (défaut **false**) — force build AAB
 
+GitHub → **Actions** → **Mobile iOS** → **Run workflow** :
+
+- `upload_testflight` (défaut **true**) — upload IPA après build (nécessite secrets ASC)
+
+Détail secrets iOS : [`docs/IOS_APP_STORE.md`](IOS_APP_STORE.md).
+
 Restore dry-run (hors CI obligatoire) : [`docs/DR_RESTORE.md`](DR_RESTORE.md) + `scripts/db-restore-dry-run.sh`.
 
 ## Vérifier
@@ -88,3 +97,4 @@ Restore dry-run (hors CI obligatoire) : [`docs/DR_RESTORE.md`](DR_RESTORE.md) + 
 3. Sans secret : warning jaune « skipping DB backup », deploy non bloqué.
 4. Frontend : `mobile-aab` vert uniquement si `frontend` est **success**.
 5. Manuel : **Run workflow** avec `force_deploy_web` pour re-déployer sans nouveau commit applicatif.
+6. iOS : run `Mobile iOS` vert + release GitHub **`ipa-main`** + build visible dans TestFlight.
