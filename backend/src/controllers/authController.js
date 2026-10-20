@@ -174,10 +174,23 @@ const requestCode = async (req, res) => {
       isDevOtpBypassEnabled() && process.env.OTP_BYPASS_CODE
         ? String(process.env.OTP_BYPASS_CODE).replace(/\D/g, "").slice(0, 6)
         : "";
+    // App Store / Play review: fixed OTP for one dedicated phone only (no global leak)
+    const reviewPhone = normalizePhone(
+      (process.env.APP_STORE_REVIEW_PHONE || "").trim()
+    );
+    const reviewOtp = String(process.env.APP_STORE_REVIEW_OTP || "")
+      .replace(/\D/g, "")
+      .slice(0, 6);
+    const reviewFixed =
+      reviewPhone && reviewOtp.length === 6 && phone === reviewPhone
+        ? reviewOtp
+        : "";
     const code =
-      bypassFixed.length === 6
-        ? bypassFixed
-        : String(Math.floor(100000 + Math.random() * 900000));
+      reviewFixed.length === 6
+        ? reviewFixed
+        : bypassFixed.length === 6
+          ? bypassFixed
+          : String(Math.floor(100000 + Math.random() * 900000));
     const codeHash = await bcrypt.hash(code, 10);
     const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
 
