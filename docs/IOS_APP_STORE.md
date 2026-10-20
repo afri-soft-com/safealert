@@ -1,6 +1,7 @@
 # Guide App Store iOS — SafeAlert (via GitHub Actions)
 
-Bundle ID : **`com.safealert.safealert`**  
+Bundle ID iOS : **`com.kakiranya.safealert`** (Android Play reste `com.safealert.safealert`)  
+Team ID : **`SW53MG3W9P`**  
 Workflow : [`.github/workflows/mobile-ios.yml`](../.github/workflows/mobile-ios.yml)  
 Release rolling : tag GitHub **`ipa-main`**
 
@@ -69,9 +70,9 @@ Rôle clé : **Developer** ou **App Manager** (upload builds).
 
 ## Une fois côté Apple (hors CI)
 
-1. **Apple Developer** — app ID `com.safealert.safealert` + Push Notifications
-2. **Certificat Distribution** + **Provisioning Profile App Store**
-3. **App Store Connect** — créer l’app SafeAlert (même bundle)
+1. **Apple Developer** — app ID `com.kakiranya.safealert` + Push Notifications (déjà enregistré)
+2. **Certificat Distribution** + **Provisioning Profile App Store** pour `com.kakiranya.safealert`
+3. **App Store Connect** — créer l’app SafeAlert (bundle `com.kakiranya.safealert`)
 4. **APNs .p8** → Firebase Cloud Messaging (push)
 5. Remplir les secrets GitHub ci-dessus
 6. **Actions → Mobile iOS → Run workflow**

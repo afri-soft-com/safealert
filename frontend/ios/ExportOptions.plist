@@ -16,7 +16,7 @@
 	<string>$(IOS_TEAM_ID)</string>
 	<key>provisioningProfiles</key>
 	<dict>
-		<key>com.safealert.safealert</key>
+		<key>com.kakiranya.safealert</key>
 		<string>$(IOS_PROVISION_PROFILE_NAME)</string>
 	</dict>
 </dict>

@@ -40,6 +40,6 @@ class DefaultFirebaseOptions {
     messagingSenderId: '844603867770',
     projectId: 'safealert-prod',
     storageBucket: 'safealert-prod.firebasestorage.app',
-    iosBundleId: 'com.safealert.safealert',
+    iosBundleId: 'com.kakiranya.safealert',
   );
 }

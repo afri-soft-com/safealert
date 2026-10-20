@@ -118,7 +118,7 @@ jobs:
           sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' ios/Runner.xcodeproj/project.pbxproj || true
           # Inject DEVELOPMENT_TEAM if missing in Release configs
           if ! grep -q "DEVELOPMENT_TEAM = ${IOS_TEAM_ID};" ios/Runner.xcodeproj/project.pbxproj; then
-            sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = com.safealert.safealert;/PRODUCT_BUNDLE_IDENTIFIER = com.safealert.safealert;\n\t\t\t\tDEVELOPMENT_TEAM = ${IOS_TEAM_ID};/g" ios/Runner.xcodeproj/project.pbxproj
+            sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = com.kakiranya.safealert;/PRODUCT_BUNDLE_IDENTIFIER = com.kakiranya.safealert;\n\t\t\t\tDEVELOPMENT_TEAM = ${IOS_TEAM_ID};/g" ios/Runner.xcodeproj/project.pbxproj
           fi
 
       - name: Build IPA

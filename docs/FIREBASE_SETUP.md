@@ -90,7 +90,8 @@ Cela régénère `frontend/lib/firebase_options.dart`. L’init dans `fcm_servic
 
 ## 4. iOS
 
-L'app iOS est enregistrée dans Firebase (`safealert-prod`, app **SafeAlert iOS**) avec le bundle ID **`com.safealert.safealert`**.
+L'app iOS doit être enregistrée dans Firebase avec le bundle ID **`com.kakiranya.safealert`** (Android reste `com.safealert.safealert`).  
+Si l'ancienne app iOS utilisait `com.safealert.safealert`, ajoutez une **nouvelle** app iOS dans Firebase et remplacez `GoogleService-Info.plist` + la section `ios` de `firebase_options.dart`.
 
 ### Fichiers configurés dans le dépôt
 
@@ -102,11 +103,11 @@ L'app iOS est enregistrée dans Firebase (`safealert-prod`, app **SafeAlert iOS*
 | `frontend/ios/Runner/Runner.entitlements` | Push Notifications (`aps-environment: development`) |
 | `frontend/ios/Runner/Info.plist` | `UIBackgroundModes` : `remote-notification` |
 
-> **Attention :** un `GoogleService-Info.plist` trouvé dans `Downloads` peut appartenir à un **autre projet** (ex. AutoDiag). Vérifiez `PROJECT_ID` = `safealert-prod` et `BUNDLE_ID` = `com.safealert.safealert`.
+> **Attention :** un `GoogleService-Info.plist` trouvé dans `Downloads` peut appartenir à un **autre projet**. Vérifiez `BUNDLE_ID` = `com.kakiranya.safealert`.
 
 ### Étapes manuelles restantes (Apple + push prod)
 
-1. **Compte Apple Developer** — certificat / provisioning pour `com.safealert.safealert`
+1. **Compte Apple Developer** — certificat / provisioning pour `com.kakiranya.safealert`
 2. **Clé APNs** (.p8) — [Apple Developer → Keys](https://developer.apple.com/account/resources/authkeys/list)
 3. **Firebase Console** → Paramètres → **Cloud Messaging** → **Configuration Apple** → téléverser la clé APNs (Key ID, Team ID, .p8)
 4. **Xcode** (Mac) → target Runner → **Signing & Capabilities** → Push Notifications + Background Modes (*Remote notifications*)
