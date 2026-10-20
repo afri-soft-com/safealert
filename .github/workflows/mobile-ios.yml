@@ -114,12 +114,24 @@ jobs:
       - name: Configure Xcode signing (manual)
         run: |
           set -euo pipefail
-          # Disable automatic signing for CI manual profiles
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' ios/Runner.xcodeproj/project.pbxproj || true
-          # Inject DEVELOPMENT_TEAM if missing in Release configs
-          if ! grep -q "DEVELOPMENT_TEAM = ${IOS_TEAM_ID};" ios/Runner.xcodeproj/project.pbxproj; then
-            sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = com.kakiranya.safealert;/PRODUCT_BUNDLE_IDENTIFIER = com.kakiranya.safealert;\n\t\t\t\tDEVELOPMENT_TEAM = ${IOS_TEAM_ID};/g" ios/Runner.xcodeproj/project.pbxproj
+          PBX=ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBX"
+          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = "iPhone Developer";/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";/g' "$PBX"
+          if ! grep -q "DEVELOPMENT_TEAM = ${IOS_TEAM_ID};" "$PBX"; then
+            sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = com.kakiranya.safealert;/PRODUCT_BUNDLE_IDENTIFIER = com.kakiranya.safealert;\n\t\t\t\tDEVELOPMENT_TEAM = ${IOS_TEAM_ID};/g" "$PBX"
           fi
+          # Write Release.xcconfig overrides for CI signing
+          cat > ios/Flutter/Release-CI.xcconfig <<EOF
+          #include "Release.xcconfig"
+          CODE_SIGN_STYLE=Manual
+          CODE_SIGN_IDENTITY=iPhone Distribution
+          DEVELOPMENT_TEAM=${IOS_TEAM_ID}
+          PROVISIONING_PROFILE_SPECIFIER=${PROVISION_NAME}
+          EOF
+          # Point project Release configs at Release-CI.xcconfig if using standard Flutter layout
+          echo "PROVISION_NAME=${PROVISION_NAME}"
+          echo "TEAM=${IOS_TEAM_ID}"
+          grep -E "CODE_SIGN_STYLE|DEVELOPMENT_TEAM|CODE_SIGN_IDENTITY" "$PBX" | head -30
 
       - name: Build IPA
         timeout-minutes: 45
@@ -130,10 +142,16 @@ jobs:
           set -euo pipefail
           BASE="${API_BASE_URL:-https://safealert-api.onrender.com/api}"
           GOOGLE_ID="${GOOGLE_SERVER_CLIENT_ID:-}"
+          # Archive with explicit manual Distribution signing (App Store profile)
           flutter build ipa --release \
             --export-options-plist=ios/ExportOptions.plist \
             --dart-define=API_BASE_URL="$BASE" \
-            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_ID"
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_ID" \
+            -- \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="${IOS_TEAM_ID}" \
+            PROVISIONING_PROFILE_SPECIFIER="${PROVISION_NAME}" \
+            CODE_SIGN_IDENTITY="iPhone Distribution"
           ls -la build/ios/ipa/
 
       - name: Upload IPA artifact
