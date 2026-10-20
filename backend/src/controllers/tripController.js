@@ -42,7 +42,10 @@ const startTrip = async (req, res) => {
   const {
     origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
     eta_minutes, escort_contact_ids, notify_on_delay, transport_mode,
+    vehicle_plate, vehicle_note,
   } = req.body;
+  const plate = vehicle_plate != null ? String(vehicle_plate).trim().slice(0, 32) : null;
+  const vNote = vehicle_note != null ? String(vehicle_note).trim().slice(0, 200) : null;
 
   const originLat = Number(origin_lat);
   const originLng = Number(origin_lng);
@@ -128,9 +131,21 @@ const startTrip = async (req, res) => {
     const insertParams = [
       req.userId, originLat, originLng, destLat, destLng,
       destLabel, minutes, escorts, notify_on_delay !== false,
-      shareToken, shareHours, mode,
+      shareToken, shareHours, mode, plate || null, vNote || null,
     ];
     const insertFull = () =>
+      pool.query(
+        `INSERT INTO safe_trips
+           (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
+            eta_at, last_lat, last_lng, last_ping_at, escort_contact_ids, notify_on_delay,
+            share_token, share_expires_at, transport_mode, vehicle_plate, vehicle_note)
+         VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7::int * INTERVAL '1 minute'), $2,$3, NOW(), $8, $9,
+                 $10, CASE WHEN $11::int IS NOT NULL THEN NOW() + ($11::int * INTERVAL '1 hour') ELSE NULL END,
+                 $12, $13, $14)
+         RETURNING *`,
+        insertParams
+      );
+    const insertWithModeNoVehicle = () =>
       pool.query(
         `INSERT INTO safe_trips
            (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
@@ -140,7 +155,7 @@ const startTrip = async (req, res) => {
                  $10, CASE WHEN $11::int IS NOT NULL THEN NOW() + ($11::int * INTERVAL '1 hour') ELSE NULL END,
                  $12)
          RETURNING *`,
-        insertParams
+        insertParams.slice(0, 12)
       );
     const insertNoMode = () =>
       pool.query(
@@ -167,12 +182,17 @@ const startTrip = async (req, res) => {
     try {
       result = await insertFull();
     } catch (insertErr) {
-      if (!isRetryableInsert(insertErr)) throw insertErr;
+      if (!isRetryableInsert(insertErr) && insertErr.code !== "42703") throw insertErr;
       try {
-        result = await insertNoMode();
-      } catch (insertErr2) {
-        if (!isRetryableInsert(insertErr2)) throw insertErr2;
-        result = await insertMinimal();
+        result = await insertWithModeNoVehicle();
+      } catch (insertErrVeh) {
+        if (!isRetryableInsert(insertErrVeh) && insertErrVeh.code !== "42703") throw insertErrVeh;
+        try {
+          result = await insertNoMode();
+        } catch (insertErr2) {
+          if (!isRetryableInsert(insertErr2)) throw insertErr2;
+          result = await insertMinimal();
+        }
       }
     }
     const trip = result.rows[0];

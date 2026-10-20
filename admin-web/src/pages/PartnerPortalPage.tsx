@@ -10,6 +10,8 @@ type PartnerMe = {
   webhook_url: string | null;
   webhook_events: string;
   rate_limit: number;
+  channel_label?: string | null;
+  sla_ack_minutes?: number | null;
 };
 
 function partnerPlanLabel(rateLimit: number): string {
@@ -50,6 +52,8 @@ export default function PartnerPortalPage() {
   const [me, setMe] = useState<PartnerMe | null>(null);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [channelLabel, setChannelLabel] = useState("");
+  const [slaMinutes, setSlaMinutes] = useState("5");
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -65,6 +69,8 @@ export default function PartnerPortalPage() {
       const profile = await partnerRequest<PartnerMe>("/partner/me", apiKey.trim());
       setMe(profile);
       setWebhookUrl(profile.webhook_url || "");
+      setChannelLabel(profile.channel_label || profile.partner_name || "");
+      setSlaMinutes(String(profile.sla_ack_minutes ?? 5));
       const d = await partnerRequest<Delivery[] | { data?: Delivery[] }>(
         "/partner/webhook/deliveries",
         apiKey.trim()
@@ -81,9 +87,14 @@ export default function PartnerPortalPage() {
     try {
       await partnerRequest("/partner/webhook", apiKey.trim(), {
         method: "PUT",
-        body: JSON.stringify({ webhook_url: webhookUrl, webhook_events: "sos,incident,cancel" }),
+        body: JSON.stringify({
+          webhook_url: webhookUrl,
+          webhook_events: "sos,incident,cancel",
+          channel_label: channelLabel,
+          sla_ack_minutes: Number.parseInt(slaMinutes, 10) || 5,
+        }),
       });
-      setMsg("Adresse de notification enregistrée.");
+      setMsg("Canal partenaire enregistré.");
       await connect();
     } catch (e) {
       setError(userFacingError(e, "Enregistrement impossible. Réessayez."));
@@ -142,10 +153,36 @@ export default function PartnerPortalPage() {
                   {me.rate_limit}
                 </div>
               </div>
+              <div className="stat-card">
+                <div className="label">SLA ack cible</div>
+                <div className="value" style={{ fontSize: 18 }}>
+                  {me.sla_ack_minutes ?? 5} min
+                </div>
+              </div>
             </div>
 
             <div className="form-card" style={{ marginTop: 20, maxWidth: 520 }}>
-              <label htmlFor="webhook">Adresse de notification (URL)</label>
+              <label htmlFor="channel">Libellé canal</label>
+              <input
+                id="channel"
+                value={channelLabel}
+                onChange={(e) => setChannelLabel(e.target.value)}
+                placeholder="Ex. Sécurité site Gombe"
+              />
+              <label htmlFor="sla" style={{ marginTop: 12, display: "block" }}>
+                SLA prise en charge (minutes)
+              </label>
+              <input
+                id="sla"
+                type="number"
+                min={1}
+                max={120}
+                value={slaMinutes}
+                onChange={(e) => setSlaMinutes(e.target.value)}
+              />
+              <label htmlFor="webhook" style={{ marginTop: 12, display: "block" }}>
+                Adresse de notification (URL)
+              </label>
               <input
                 id="webhook"
                 type="url"

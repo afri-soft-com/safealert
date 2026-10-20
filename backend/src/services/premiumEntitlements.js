@@ -47,6 +47,8 @@ const FREE = {
   trip_eta_max_minutes: 120,
   history_limit: 30,
   sos_priority: false,
+  sos_mediation: false,
+  live_circles_max: 1,
 };
 
 const PREMIUM = {
@@ -55,6 +57,8 @@ const PREMIUM = {
   trip_eta_max_minutes: 12 * 60,
   history_limit: 100,
   sos_priority: true,
+  sos_mediation: true,
+  live_circles_max: 5,
 };
 
 /** Legacy caps when monetization flag is off. */
@@ -64,6 +68,8 @@ const LEGACY = {
   trip_eta_max_minutes: 24 * 60,
   history_limit: 100,
   sos_priority: false,
+  sos_mediation: true,
+  live_circles_max: 5,
 };
 
 const BENEFIT_KEYS = [
@@ -72,6 +78,8 @@ const BENEFIT_KEYS = [
   "contacts_elargis",
   "historique_etendu",
   "sos_prioritaire",
+  "sos_mediation",
+  "live_circles",
 ];
 
 const partnerPlanFromRateLimit = (rateLimit) => {

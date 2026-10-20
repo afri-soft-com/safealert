@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/app_feedback.dart';
@@ -11,6 +15,7 @@ import '../providers/auth_provider.dart';
 import '../services/share_helper.dart';
 import '../services/location_service.dart';
 import '../services/app_config_service.dart';
+import '../services/api_service.dart';
 import '../utils/location_format.dart';
 
 class SOSScreen extends StatefulWidget {
@@ -31,6 +36,7 @@ class _SOSScreenState extends State<SOSScreen> {
   bool _queued = false;
   bool _positionApprox = false;
   String? _incidentId;
+  String? _shareUrl;
   String? _statusMsg;
   String? _zoneName;
   double? _sosLat;
@@ -182,7 +188,8 @@ class _SOSScreenState extends State<SOSScreen> {
 
     final note = result['positionNote']?.toString();
     final incident = result['incident'] as Map<String, dynamic>?;
-    _incidentId = incident?['id'] as String?;
+    _incidentId = incident?['id']?.toString();
+    _shareUrl = result['share_url']?.toString();
     final approx = note != null && note.isNotEmpty;
 
     setState(() {
@@ -208,9 +215,77 @@ class _SOSScreenState extends State<SOSScreen> {
           });
           _startLiveStatus();
           _pollDispatch();
+          _offerSosAudio();
         }
       }
     });
+  }
+
+  Future<void> _offerSosAudio() async {
+    if (!mounted || _incidentId == null) return;
+    if (!AppConfigService().sosAudioEnabled) return;
+    final prefs = await SharedPreferences.getInstance();
+    final consented = prefs.getBool('sos_audio_consent') == true;
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clip audio SOS'),
+        content: const Text(
+          'Joindre un court enregistrement audio à cette alerte ? '
+          'Rétention 7 jours. Vous pouvez refuser.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Non')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Oui')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    if (!consented) {
+      await prefs.setBool('sos_audio_consent', true);
+    }
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['m4a', 'aac', 'mp3', 'wav', 'ogg', '3gp'],
+    );
+    final path = result?.files.single.path;
+    if (path == null || !mounted) return;
+    try {
+      final bytes = await File(path).readAsBytes();
+      if (bytes.length > 2 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Fichier trop volumineux (max 2 Mo)')),
+          );
+        }
+        return;
+      }
+      final ext = path.split('.').last.toLowerCase();
+      final mime = switch (ext) {
+        'mp3' => 'audio/mpeg',
+        'wav' => 'audio/wav',
+        'ogg' => 'audio/ogg',
+        '3gp' => 'audio/3gpp',
+        _ => 'audio/mp4',
+      };
+      final b64 = base64Encode(bytes);
+      await ApiService().post('/sos/$_incidentId/evidence', {
+        'consent_evidence': true,
+        'evidence': [
+          {'media_type': 'audio', 'data_url': 'data:$mime;base64,$b64'},
+        ],
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Audio joint à l\'alerte')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(context, e, isError: true, fallback: 'Envoi audio impossible');
+      }
+    }
   }
 
   void _pollDispatch() {
@@ -237,13 +312,17 @@ class _SOSScreenState extends State<SOSScreen> {
       lng = pos?.longitude ?? 0.0;
       approx = true;
     }
-    return ShareHelper.sosMessage(
+    var text = ShareHelper.sosMessage(
       lat: lat,
       lng: lng,
       pseudo: pseudo,
       zoneName: zone,
       approximate: approx,
     );
+    if (_shareUrl != null && _shareUrl!.isNotEmpty) {
+      text = '$text\nSuivi live : $_shareUrl';
+    }
+    return text;
   }
 
   Future<void> _shareSos() async {

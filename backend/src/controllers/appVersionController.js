@@ -2,7 +2,7 @@ const features = require("../config/features");
 const { getMaintenance } = require("../services/appSettings");
 
 /** Keep in sync with frontend/pubspec.yaml (version name, before +build). */
-const DEFAULT_MOBILE_VERSION = "1.0.24";
+const DEFAULT_MOBILE_VERSION = "1.0.25";
 /** Keep in sync with admin-web/package.json. */
 const DEFAULT_ADMIN_WEB_VERSION = "1.0.4";
 
@@ -60,6 +60,16 @@ async function configPayload() {
       corridors: features.corridors(),
       premium: features.premium(),
       heatmap: features.heatmap(),
+      fakeCall: features.fakeCall(),
+      arrivalTimer: features.arrivalTimer(),
+      sosAudio: features.sosAudio(),
+      sosPublicShare: features.sosPublicShare(),
+      communeBroadcast: features.communeBroadcast(),
+      liveCircles: features.liveCircles(),
+      sosMediation: features.sosMediation(),
+      neighborhoodWatch: features.neighborhoodWatch(),
+      witnessEvidence: features.witnessEvidence(),
+      reliabilityScore: features.reliabilityScore(),
     },
   };
 }

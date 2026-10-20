@@ -1,6 +1,7 @@
 const { pool } = require("../config/database");
 const { sendPush } = require("../config/firebase");
 const { neighborhoodWatch } = require("../config/features");
+const { sendSMS, isSMSConfigured } = require("../services/sms");
 
 /** Parse digest hour 0–23. `0` is valid (midnight). Invalid → null. */
 function parseDigestHour(value) {
@@ -10,12 +11,32 @@ function parseDigestHour(value) {
   return n;
 }
 
+/** Current hour in Africa/Kinshasa (UTC+1, no DST). */
+function kinshasaHour(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Kinshasa",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const raw = parts.find((p) => p.type === "hour")?.value;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n % 24 : 0;
+}
+
+/** Normalize free-text quartier for ILIKE matching. */
+function normalizeQuartier(q) {
+  return String(q || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 const subscribe = async (req, res) => {
   if (!neighborhoodWatch()) {
     return res.status(503).json({ error: "Veille de quartier désactivée" });
   }
   const { quartier, digest_hour } = req.body;
-  if (!quartier || String(quartier).trim().length < 2) {
+  const q = normalizeQuartier(quartier);
+  if (!q || q.length < 2) {
     return res.status(400).json({ error: "Nom de quartier requis" });
   }
   const hour = digest_hour === undefined || digest_hour === null || digest_hour === ""
@@ -30,7 +51,7 @@ const subscribe = async (req, res) => {
        VALUES ($1, $2, $3)
        ON CONFLICT (user_id, quartier) DO UPDATE SET digest_hour = EXCLUDED.digest_hour
        RETURNING *`,
-      [req.userId, String(quartier).trim(), hour]
+      [req.userId, q, hour]
     );
     return res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -95,12 +116,12 @@ const listSubscriptions = async (req, res) => {
   }
 };
 
-/** Send daily digests for subscriptions matching current hour. */
+/** Send daily digests for subscriptions matching Kinshasa hour. */
 const sendDigests = async () => {
   if (!neighborhoodWatch()) return { sent: 0 };
-  const hour = new Date().getHours();
+  const hour = kinshasaHour();
   const subs = await pool.query(
-    `SELECT ns.*, u.fcm_token FROM neighborhood_subscriptions ns
+    `SELECT ns.*, u.fcm_token, u.phone FROM neighborhood_subscriptions ns
      JOIN users u ON u.id = ns.user_id
      WHERE ns.digest_hour = $1
        AND (ns.last_digest_at IS NULL OR ns.last_digest_at < NOW() - INTERVAL '20 hours')`,
@@ -109,31 +130,51 @@ const sendDigests = async () => {
 
   let sent = 0;
   for (const sub of subs.rows) {
+    const q = normalizeQuartier(sub.quartier);
     const stats = await pool.query(
       `SELECT COUNT(*)::int AS total,
               COUNT(*) FILTER (WHERE severity = 'alert')::int AS sos
        FROM incidents
        WHERE zone_name ILIKE $1
          AND created_at > NOW() - INTERVAL '24 hours'`,
-      [`%${sub.quartier}%`]
+      [`%${q}%`]
     );
     const { total, sos } = stats.rows[0];
+    const title = `Digest — ${q}`;
+    const body = `${total} incident(s) dont ${sos} SOS sur 24h.`;
+    let delivered = false;
+
     if (sub.fcm_token) {
-      await sendPush(sub.fcm_token, {
-        notification: {
-          title: `🏘️ Digest — ${sub.quartier}`,
-          body: `${total} incident(s) dont ${sos} SOS sur 24h.`,
-        },
-        data: { type: "neighborhood_digest", quartier: sub.quartier },
-      });
-      sent += 1;
+      try {
+        await sendPush(sub.fcm_token, {
+          notification: { title: `🏘️ ${title}`, body },
+          data: { type: "neighborhood_digest", quartier: q },
+        });
+        delivered = true;
+        sent += 1;
+      } catch (err) {
+        console.error("neighborhood push error:", err.message);
+      }
     }
-    await pool.query(
-      `UPDATE neighborhood_subscriptions SET last_digest_at = NOW() WHERE id = $1`,
-      [sub.id]
-    );
+
+    if (!delivered && isSMSConfigured() && sub.phone) {
+      try {
+        await sendSMS(sub.phone, `SafeAlert ${title}: ${body}`);
+        delivered = true;
+        sent += 1;
+      } catch (err) {
+        console.error("neighborhood sms error:", err.message);
+      }
+    }
+
+    if (delivered) {
+      await pool.query(
+        `UPDATE neighborhood_subscriptions SET last_digest_at = NOW() WHERE id = $1`,
+        [sub.id]
+      );
+    }
   }
-  return { sent };
+  return { sent, hour };
 };
 
 module.exports = {
@@ -143,4 +184,6 @@ module.exports = {
   listSubscriptions,
   sendDigests,
   parseDigestHour,
+  kinshasaHour,
+  normalizeQuartier,
 };

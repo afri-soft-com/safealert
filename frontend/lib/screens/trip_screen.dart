@@ -38,6 +38,8 @@ class _TripScreenState extends State<TripScreen> {
   final _destLngCtrl = TextEditingController();
   final _etaCtrl = TextEditingController(text: '30');
   final _followIdCtrl = TextEditingController();
+  final _plateCtrl = TextEditingController();
+  final _vehicleNoteCtrl = TextEditingController();
   final MapController _mapController = MapController();
   final Set<String> _selectedEscorts = {};
 
@@ -78,6 +80,8 @@ class _TripScreenState extends State<TripScreen> {
     _destLngCtrl.dispose();
     _etaCtrl.dispose();
     _followIdCtrl.dispose();
+    _plateCtrl.dispose();
+    _vehicleNoteCtrl.dispose();
     super.dispose();
   }
 
@@ -323,6 +327,8 @@ class _TripScreenState extends State<TripScreen> {
       etaMinutes: int.tryParse(_etaCtrl.text) ?? 30,
       transportMode: _transportMode.apiValue,
       escortContactIds: _selectedEscorts.isEmpty ? null : _selectedEscorts.toList(),
+      vehiclePlate: _plateCtrl.text,
+      vehicleNote: _vehicleNoteCtrl.text,
     );
     if (!mounted) return;
     if (trip == null) {
@@ -641,6 +647,28 @@ class _TripScreenState extends State<TripScreen> {
             );
           }).toList(),
         ),
+        if (_transportMode == TripTransportMode.moto ||
+            _transportMode == TripTransportMode.car) ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: _plateCtrl,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              labelText: 'Plaque (optionnel)',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _vehicleNoteCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Description véhicule (couleur, modèle…)',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
         TextField(
           controller: _etaCtrl,

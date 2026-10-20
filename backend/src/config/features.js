@@ -53,7 +53,22 @@ module.exports = {
   /** Corridors / repères locaux + suggestion d'itinéraire */
   corridors: () => isEnabled("FEATURE_CORRIDORS", true),
   /** Carte de chaleur (UI mobile) — API reste disponible */
-  heatmap: () => isEnabled("FEATURE_HEATMAP", false),
+  heatmap: () => isEnabled("FEATURE_HEATMAP", true),
+
+  /** Faux appel entrant (camouflage) */
+  fakeCall: () => isEnabled("FEATURE_FAKE_CALL", true),
+  /** Timer « je rentre » (UX safety ping) */
+  arrivalTimer: () => isEnabled("FEATURE_ARRIVAL_TIMER", true),
+  /** Clip audio court au SOS */
+  sosAudio: () => isEnabled("FEATURE_SOS_AUDIO", true),
+  /** Lien public live SOS */
+  sosPublicShare: () => isEnabled("FEATURE_SOS_PUBLIC_SHARE", true),
+  /** Broadcast admin par commune */
+  communeBroadcast: () => isEnabled("FEATURE_COMMUNE_BROADCAST", true),
+  /** Cercles famille position live */
+  liveCircles: () => isEnabled("FEATURE_LIVE_CIRCLES", true),
+  /** Médiation humaine SOS (file ops Premium) */
+  sosMediation: () => isEnabled("FEATURE_SOS_MEDIATION", true),
 
   /** Mode maintenance / bannière dégradée (kill switch soft) */
   maintenanceMode: () => isEnabled("FEATURE_MAINTENANCE_MODE", false),

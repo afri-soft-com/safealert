@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const rateLimit = require("express-rate-limit");
 const { getPublicTrip } = require("../controllers/publicTripController");
+const { getPublicSos } = require("../controllers/publicSosController");
 
 const router = Router();
 
@@ -14,5 +15,6 @@ const publicTripLimiter = rateLimit({
 });
 
 router.get("/trips/:token", publicTripLimiter, getPublicTrip);
+router.get("/sos/:token", publicTripLimiter, getPublicSos);
 
 module.exports = router;

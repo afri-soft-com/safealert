@@ -18,6 +18,9 @@ type QueueItem = {
   assignee_pseudo: string | null;
   lat: number;
   lng: number;
+  mediation_requested?: boolean;
+  mediation_status?: string | null;
+  priority_boost?: boolean;
 };
 
 type OpsPayload = {
@@ -36,10 +39,11 @@ export default function OpsPage() {
   const [error, setError] = useState("");
   const [exportMsg, setExportMsg] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [mediationOnly, setMediationOnly] = useState(false);
 
   const load = () => {
     api
-      .getOpsQueue()
+      .getOpsQueue({ mediation: mediationOnly })
       .then((payload) => {
         setData(payload);
         setError("");
@@ -53,7 +57,16 @@ export default function OpsPage() {
     load();
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
-  }, []);
+  }, [mediationOnly]);
+
+  const setMediation = async (id: string, status: "in_progress" | "closed") => {
+    try {
+      await api.updateMediation(id, status);
+      load();
+    } catch (err) {
+      setError(userFacingError(err, "Mise à jour médiation impossible."));
+    }
+  };
 
   const exportReport = async (format: "csv" | "pdf") => {
     setExporting(true);
@@ -100,6 +113,14 @@ export default function OpsPage() {
           </div>
 
           <h3 style={{ marginTop: 24 }}>File d&apos;attente</h3>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <input
+              type="checkbox"
+              checked={mediationOnly}
+              onChange={(e) => setMediationOnly(e.target.checked)}
+            />
+            Médiation Premium uniquement
+          </label>
           <div className="table-wrap">
             <table>
               <thead>
@@ -111,12 +132,16 @@ export default function OpsPage() {
                   <th>Signalant</th>
                   <th>Assigné</th>
                   <th>Statut</th>
+                  <th>Médiation</th>
                 </tr>
               </thead>
               <tbody>
                 {data.queue.map((q) => (
                   <tr key={q.id}>
-                    <td>{INCIDENT_TYPE_LABELS[q.incident_type] ?? q.incident_type}</td>
+                    <td>
+                      {INCIDENT_TYPE_LABELS[q.incident_type] ?? q.incident_type}
+                      {q.priority_boost ? " ★" : ""}
+                    </td>
                     <td>{q.zone_name || "—"}</td>
                     <td>{Math.round(q.age_seconds / 60)} min</td>
                     <td>
@@ -127,11 +152,30 @@ export default function OpsPage() {
                     <td>{q.reporter}</td>
                     <td>{q.assignee_pseudo || "—"}</td>
                     <td>{INCIDENT_STATUS_LABELS[q.status] ?? q.status}</td>
+                    <td>
+                      {q.mediation_requested ? (
+                        <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
+                          <span>{q.mediation_status || "requested"}</span>
+                          {q.mediation_status !== "in_progress" && (
+                            <button type="button" className="btn btn-sm" onClick={() => setMediation(q.id, "in_progress")}>
+                              Prendre
+                            </button>
+                          )}
+                          {q.mediation_status !== "closed" && (
+                            <button type="button" className="btn btn-sm" onClick={() => setMediation(q.id, "closed")}>
+                              Clôturer
+                            </button>
+                          )}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {data.queue.length === 0 && (
                   <tr>
-                    <td colSpan={7}>Aucun SOS actif</td>
+                    <td colSpan={8}>Aucun SOS actif</td>
                   </tr>
                 )}
               </tbody>

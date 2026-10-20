@@ -5,7 +5,7 @@
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>Safealert</string>
+		<string>SafeAlert</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
@@ -45,6 +45,12 @@
 		<true/>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
+		<key>NSCameraUsageDescription</key>
+		<string>SafeAlert utilise la caméra pour joindre une photo à un signalement témoin.</string>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>SafeAlert peut enregistrer un court clip audio lors d’un SOS ou d’un signalement, avec votre consentement.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>SafeAlert accède à vos photos uniquement pour joindre une preuve à un signalement.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>SafeAlert utilise votre position pour les alertes SOS, la carte des incidents et le suivi de trajet sécurisé.</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

@@ -364,7 +364,7 @@ export const api = {
     );
   },
 
-  getOpsQueue: () =>
+  getOpsQueue: (opts?: { mediation?: boolean }) =>
     request<{
       queue: Array<{
         id: string;
@@ -377,6 +377,9 @@ export const api = {
         assignee_pseudo: string | null;
         lat: number;
         lng: number;
+        mediation_requested?: boolean;
+        mediation_status?: string | null;
+        priority_boost?: boolean;
       }>;
       sla: {
         open_sos: number;
@@ -390,13 +393,43 @@ export const api = {
         avg_lng: number;
       }>;
       generated_at: string;
-    }>("/ops/queue"),
+    }>(`/ops/queue${opts?.mediation ? "?mediation=1" : ""}`),
 
   downloadOpsReport: (format: "csv" | "pdf" = "csv", days = 7) =>
     downloadAuthenticated(
       `/ops/reports/sector?format=${format}&days=${days}`,
       `rapport-secteur-${days}j.${format}`
     ),
+
+  listBroadcasts: () =>
+    request<
+      Array<{
+        id: string;
+        title: string;
+        body: string;
+        zone_name: string;
+        channels: string;
+        sent_count: number;
+        created_at: string;
+      }>
+    >("/admin/broadcasts"),
+
+  createBroadcast: (payload: {
+    title: string;
+    body: string;
+    zone_name: string;
+    channels?: string;
+  }) =>
+    request<{ broadcast: unknown; sent: number; targeted: number }>("/admin/broadcasts", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  updateMediation: (id: string, status: "requested" | "in_progress" | "closed") =>
+    request<{ id: string; mediation_status: string }>(`/admin/incidents/${id}/mediation`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
 };
 
 export interface UserRow {

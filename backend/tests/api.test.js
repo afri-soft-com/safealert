@@ -1102,6 +1102,15 @@ describe("Heatmap slots", () => {
 });
 
 describe("Neighborhood veille", () => {
+  it("kinshasaHour returns 0–23", () => {
+    const { kinshasaHour } = require("../src/controllers/neighborhoodController");
+    const h = kinshasaHour(new Date("2026-06-15T12:00:00.000Z"));
+    expect(h).toBeGreaterThanOrEqual(0);
+    expect(h).toBeLessThanOrEqual(23);
+    // Kinshasa = UTC+1 → 13:00
+    expect(h).toBe(13);
+  });
+
   it("POST /api/neighborhood/subscribe stores chosen digest_hour including 0", async () => {
     mockQuery.mockResolvedValueOnce({
       rows: [{ id: "sub-1", quartier: "Gombe", digest_hour: 0 }],

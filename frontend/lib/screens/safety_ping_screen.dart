@@ -37,11 +37,25 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: 'Contrôle « Tu es OK ? »', onBackTap: widget.onBack),
+          TopBar(title: 'Je rentre / Tu es OK ?', onBackTap: widget.onBack),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.vert.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.vert.withValues(alpha: 0.3)),
+                  ),
+                  child: const Text(
+                    'Timer d\'arrivée : choisissez dans combien de temps vous devez '
+                    'confirmer « Je suis OK ». Sinon vos proches sont alertés.',
+                    style: TextStyle(fontSize: 12, color: AppColors.bleuFonce, height: 1.4),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 const Text(
                   'Planifiez un rappel. Si vous ne confirmez pas à temps, '
                   'vos proches (et éventuellement vos groupes) seront prévenus.',

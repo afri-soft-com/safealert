@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 const NAV = [
   { to: "/", label: "Tableau de bord", end: true },
   { to: "/ops", label: "Ops temps réel" },
+  { to: "/broadcasts", label: "Broadcast commune" },
   { to: "/utilisateurs", label: "Utilisateurs" },
   { to: "/abonnements", label: "Abonnements" },
   { to: "/tresorerie", label: "Trésorerie" },

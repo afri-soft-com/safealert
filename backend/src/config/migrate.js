@@ -599,6 +599,53 @@ const migrate = async () => {
         ON platform_wallet_withdrawals(created_at DESC);
     `);
 
+    // ── Wave 1–3 extensions (vehicle, SOS share, broadcasts, circles, mediation) ──
+    await client.query(`
+      ALTER TABLE safe_trips ADD COLUMN IF NOT EXISTS vehicle_plate VARCHAR(32);
+      ALTER TABLE safe_trips ADD COLUMN IF NOT EXISTS vehicle_note TEXT;
+
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS share_token VARCHAR(32);
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS share_expires_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS mediation_requested BOOLEAN DEFAULT false;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS mediation_status VARCHAR(20);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_incidents_share_token
+        ON incidents(share_token) WHERE share_token IS NOT NULL;
+
+      ALTER TABLE partner_api_keys ADD COLUMN IF NOT EXISTS channel_label VARCHAR(80);
+      ALTER TABLE partner_api_keys ADD COLUMN IF NOT EXISTS sla_ack_minutes INTEGER DEFAULT 5;
+
+      CREATE TABLE IF NOT EXISTS commune_broadcasts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        title VARCHAR(120) NOT NULL,
+        body TEXT NOT NULL,
+        zone_name VARCHAR(120) NOT NULL,
+        channels VARCHAR(40) NOT NULL DEFAULT 'fcm',
+        sent_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_commune_broadcasts_created
+        ON commune_broadcasts(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS live_circles (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(80) NOT NULL,
+        invite_code VARCHAR(12) UNIQUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS live_circle_members (
+        circle_id UUID NOT NULL REFERENCES live_circles(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role VARCHAR(20) NOT NULL DEFAULT 'member',
+        share_until TIMESTAMP WITH TIME ZONE,
+        joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        PRIMARY KEY (circle_id, user_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_live_circle_members_user
+        ON live_circle_members(user_id);
+    `);
+
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;
     if (adminPhone) {
       const normalized = normalizePhone(adminPhone.trim()) || adminPhone.trim();

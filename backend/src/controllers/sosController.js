@@ -7,8 +7,21 @@ const { deliverEvent } = require("../services/partnerWebhooks");
 const { notifyLeadersForSOS } = require("../services/sectorNotify");
 const { findMatchingZones } = require("./trustZoneController");
 const { sendPush } = require("../config/firebase");
-const { sosEnabled, maintenanceMode } = require("../config/features");
+const crypto = require("crypto");
+const {
+  sosEnabled,
+  maintenanceMode,
+  sosAudio,
+  sosPublicShare,
+  sosMediation,
+  witnessEvidence,
+} = require("../config/features");
 const { getEntitlementsForUser } = require("../services/premiumEntitlements");
+
+const PUBLIC_BASE =
+  process.env.PUBLIC_APP_URL ||
+  process.env.CORS_ORIGIN?.split(",")[0]?.trim() ||
+  "https://safealert-api.onrender.com";
 
 const CANCEL_WINDOW_MS = 2 * 60 * 1000;
 
@@ -65,13 +78,50 @@ const triggerSOS = async (req, res) => {
     const zoneName = await resolveZoneName(lat, lng);
     const ents = await getEntitlementsForUser(req.userId);
     const priorityBoost = !!ents.sos_priority;
+    const wantMediation =
+      sosMediation() && (!!ents.sos_mediation || !!ents.sos_priority) && req.body.request_mediation !== false;
+    const shareToken = sosPublicShare() ? crypto.randomBytes(12).toString("hex") : null;
     const result = await pool.query(
-      `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name, priority_boost)
-       VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, 'alert', $8, $9)
+      `INSERT INTO incidents (
+         user_id, incident_type, lat, lng, location, description, severity, zone_name,
+         priority_boost, mediation_requested, mediation_status, share_token, share_expires_at
+       )
+       VALUES (
+         $1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, 'alert', $8,
+         $9, $10, $11, $12, CASE WHEN $12::text IS NOT NULL THEN NOW() + INTERVAL '6 hours' ELSE NULL END
+       )
        RETURNING *`,
-      [req.userId, incident_type || "sos", lat, lng, lng, lat, description, zoneName, priorityBoost]
+      [
+        req.userId,
+        incident_type || "sos",
+        lat,
+        lng,
+        lng,
+        lat,
+        description,
+        zoneName,
+        priorityBoost,
+        wantMediation,
+        wantMediation ? "requested" : null,
+        shareToken,
+      ]
     );
     const incident = result.rows[0];
+
+    // Optional evidence attached at trigger (SOS audio / photo)
+    if (witnessEvidence() && sosAudio() && req.body.consent_evidence === true && req.body.evidence) {
+      const items = Array.isArray(req.body.evidence) ? req.body.evidence : [req.body.evidence];
+      for (const item of items.slice(0, 3)) {
+        const mediaType = item.media_type === "photo" ? "photo" : "audio";
+        const key = item.data_url || item.storage_key;
+        if (!key || String(key).length < 20) continue;
+        await pool.query(
+          `INSERT INTO incident_evidence (incident_id, user_id, media_type, storage_key, retention_until)
+           VALUES ($1, $2, $3, $4, NOW() + INTERVAL '7 days')`,
+          [incident.id, req.userId, mediaType, String(key).slice(0, 500000)]
+        );
+      }
+    }
 
     const notification = await sendAlert(
       req.userId,
@@ -149,10 +199,125 @@ const triggerSOS = async (req, res) => {
       });
     }
 
-    return res.status(201).json({ incident, notification });
+    const shareUrl = shareToken
+      ? `${PUBLIC_BASE.replace(/\/$/, "")}/s/${shareToken}`
+      : null;
+
+    return res.status(201).json({
+      incident,
+      notification,
+      share_url: shareUrl,
+      mediation_requested: !!wantMediation,
+      sos_audio_enabled: sosAudio(),
+    });
   } catch (err) {
     console.error("triggerSOS error:", err);
+    // Fallback without new columns (pre-migration)
+    if (err.code === "42703") {
+      try {
+        const zoneName = await resolveZoneName(lat, lng);
+        const result = await pool.query(
+          `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name)
+           VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, 'alert', $8)
+           RETURNING *`,
+          [req.userId, incident_type || "sos", lat, lng, lng, lat, description, zoneName]
+        );
+        return res.status(201).json({ incident: result.rows[0], notification: { degraded: true } });
+      } catch (e2) {
+        console.error("triggerSOS fallback error:", e2);
+      }
+    }
     return res.status(500).json({ error: "Erreur lors de l'envoi de l'alerte" });
+  }
+};
+
+/** Attach evidence (audio/photo) to an active SOS owned by the user. */
+const attachEvidence = async (req, res) => {
+  if (!witnessEvidence() || !sosAudio()) {
+    return res.status(503).json({ error: "Preuves SOS désactivées" });
+  }
+  if (req.body.consent_evidence !== true) {
+    return res.status(400).json({ error: "Consentement requis" });
+  }
+  const items = Array.isArray(req.body.evidence) ? req.body.evidence : [req.body.evidence];
+  if (!items.length || !items[0]) {
+    return res.status(400).json({ error: "Preuve manquante" });
+  }
+  try {
+    const owned = await pool.query(
+      `SELECT id FROM incidents WHERE id = $1 AND user_id = $2 AND status = 'active'`,
+      [req.params.id, req.userId]
+    );
+    if (owned.rows.length === 0) {
+      return res.status(404).json({ error: "Alerte introuvable" });
+    }
+    const inserted = [];
+    for (const item of items.slice(0, 3)) {
+      const mediaType = item.media_type === "photo" ? "photo" : "audio";
+      const key = item.data_url || item.storage_key;
+      if (!key) continue;
+      const r = await pool.query(
+        `INSERT INTO incident_evidence (incident_id, user_id, media_type, storage_key, retention_until)
+         VALUES ($1, $2, $3, $4, NOW() + INTERVAL '7 days') RETURNING id, media_type, created_at`,
+        [req.params.id, req.userId, mediaType, String(key).slice(0, 500000)]
+      );
+      inserted.push(r.rows[0]);
+    }
+    return res.status(201).json({ evidence: inserted });
+  } catch (err) {
+    console.error("attachEvidence error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
+/** Create or refresh public SOS live share link. */
+const createSosShare = async (req, res) => {
+  if (!sosPublicShare()) {
+    return res.status(503).json({ error: "Partage public SOS désactivé" });
+  }
+  try {
+    const token = crypto.randomBytes(12).toString("hex");
+    const result = await pool.query(
+      `UPDATE incidents SET
+         share_token = $3,
+         share_expires_at = NOW() + INTERVAL '6 hours'
+       WHERE id = $1 AND user_id = $2 AND status = 'active'
+       RETURNING id, share_token, share_expires_at`,
+      [req.params.id, req.userId, token]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Alerte introuvable" });
+    }
+    const shareUrl = `${PUBLIC_BASE.replace(/\/$/, "")}/s/${token}`;
+    return res.json({ ...result.rows[0], share_url: shareUrl });
+  } catch (err) {
+    console.error("createSosShare error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
+/** Ops: update mediation status. */
+const updateMediation = async (req, res) => {
+  if (!sosMediation()) {
+    return res.status(503).json({ error: "Médiation désactivée" });
+  }
+  const status = String(req.body.status || "").trim();
+  if (!["requested", "in_progress", "closed"].includes(status)) {
+    return res.status(400).json({ error: "Statut médiation invalide" });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE incidents SET mediation_status = $2, mediation_requested = true
+       WHERE id = $1 RETURNING id, mediation_requested, mediation_status, status`,
+      [req.params.id, status]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Incident introuvable" });
+    }
+    return res.json(result.rows[0]);
+  } catch (err) {
+    console.error("updateMediation error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -276,4 +441,13 @@ const getMyAlerts = async (req, res) => {
   }
 };
 
-module.exports = { triggerSOS, cancelSOS, cancelLatestSOS, getMyAlerts, CANCEL_WINDOW_MS };
+module.exports = {
+  triggerSOS,
+  cancelSOS,
+  cancelLatestSOS,
+  getMyAlerts,
+  attachEvidence,
+  createSosShare,
+  updateMediation,
+  CANCEL_WINDOW_MS,
+};

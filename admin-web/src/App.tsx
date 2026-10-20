@@ -21,6 +21,7 @@ import SettingsPage from "./pages/SettingsPage";
 import CguPage from "./pages/CguPage";
 import ManuelPage from "./pages/ManuelPage";
 import IncidentTypesPage from "./pages/IncidentTypesPage";
+import BroadcastsPage from "./pages/BroadcastsPage";
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
               <Route element={<Layout />}>
                 <Route index element={<DashboardPage />} />
                 <Route path="ops" element={<OpsPage />} />
+                <Route path="broadcasts" element={<BroadcastsPage />} />
                 <Route path="utilisateurs" element={<UsersPage />} />
                 <Route path="abonnements" element={<SubscriptionsPage />} />
                 <Route path="tresorerie" element={<TreasuryPage />} />

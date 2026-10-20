@@ -37,14 +37,30 @@ const registerPartner = async (req, res) => {
 /** Partner portal: profile + webhook config (API key auth). */
 const getPartnerMe = async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT id, partner_name, is_active, rate_limit, webhook_url, webhook_events,
-              created_at, expires_at
-       FROM partner_api_keys WHERE id = $1`,
-      [req.partnerId]
-    );
+    let result;
+    try {
+      result = await pool.query(
+        `SELECT id, partner_name, is_active, rate_limit, webhook_url, webhook_events,
+                channel_label, sla_ack_minutes, created_at, expires_at
+         FROM partner_api_keys WHERE id = $1`,
+        [req.partnerId]
+      );
+    } catch (colErr) {
+      if (colErr.code !== "42703") throw colErr;
+      result = await pool.query(
+        `SELECT id, partner_name, is_active, rate_limit, webhook_url, webhook_events,
+                created_at, expires_at
+         FROM partner_api_keys WHERE id = $1`,
+        [req.partnerId]
+      );
+    }
     if (result.rows.length === 0) return res.status(404).json({ error: "Partenaire non trouvé" });
-    return res.json(result.rows[0]);
+    const row = result.rows[0];
+    return res.json({
+      ...row,
+      channel_label: row.channel_label || row.partner_name,
+      sla_ack_minutes: row.sla_ack_minutes ?? 5,
+    });
   } catch (err) {
     console.error("getPartnerMe error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
@@ -52,9 +68,8 @@ const getPartnerMe = async (req, res) => {
 };
 
 const updateWebhook = async (req, res) => {
-  const { webhook_url, webhook_events, rotate_secret } = req.body;
+  const { webhook_url, webhook_events, rotate_secret, channel_label, sla_ack_minutes } = req.body;
   try {
-    let secretUpdate = "";
     const params = [req.partnerId];
     let i = 2;
     const sets = [];
@@ -65,6 +80,18 @@ const updateWebhook = async (req, res) => {
     if (webhook_events !== undefined) {
       sets.push(`webhook_events = $${i++}`);
       params.push(webhook_events);
+    }
+    if (channel_label !== undefined) {
+      sets.push(`channel_label = $${i++}`);
+      params.push(String(channel_label || "").trim().slice(0, 80) || null);
+    }
+    if (sla_ack_minutes !== undefined) {
+      const n = Number.parseInt(sla_ack_minutes, 10);
+      if (!Number.isFinite(n) || n < 1 || n > 120) {
+        return res.status(400).json({ error: "SLA ack invalide (1–120 min)" });
+      }
+      sets.push(`sla_ack_minutes = $${i++}`);
+      params.push(n);
     }
     let newSecret = null;
     if (rotate_secret) {
@@ -77,7 +104,7 @@ const updateWebhook = async (req, res) => {
     }
     const result = await pool.query(
       `UPDATE partner_api_keys SET ${sets.join(", ")} WHERE id = $1
-       RETURNING id, partner_name, webhook_url, webhook_events`,
+       RETURNING id, partner_name, webhook_url, webhook_events, channel_label, sla_ack_minutes`,
       params
     );
     return res.json({

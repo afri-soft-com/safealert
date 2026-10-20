@@ -37,6 +37,8 @@ Débloqué via `users.premium_until` (après paiement, grant admin, ou activatio
 | Contacts élargis | Jusqu’à **25** contacts de confiance |
 | Historique étendu | **100** dernières alertes |
 | Priorité SOS | Flag `priority_boost` → remonte dans la file ops |
+| Médiation SOS | File ops dédiée (`mediation_requested`) — prise en charge humaine admin |
+| Cercles famille | Jusqu’à **5** cercles live (Free : **1**) |
 
 Pas de publicité dans l’app aujourd’hui (pas de bénéfice « sans pubs » à vendre).
 

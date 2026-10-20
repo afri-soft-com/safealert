@@ -199,6 +199,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildCard('🏘', 'Groupes voisins', 'Voisins & entraide', () => widget.onNavigate('groups'), AppColors.bleuFonce),
                     _buildCard('🏠', 'Zones confiance', 'Domicile / travail', () => widget.onNavigate('trust_zones'), AppColors.bleuFonce),
                     _buildCard('🏘️', 'Veille quartier', 'Résumé quotidien', () => widget.onNavigate('neighborhood'), AppColors.orange),
+                    _buildCard('⏱', 'Je rentre', 'Timer d\'arrivée', () => widget.onNavigate('safety_ping'), AppColors.vert),
+                    if (AppConfigService().liveCirclesEnabled)
+                      _buildCard('👨‍👩‍👧', 'Cercles famille', 'Position live', () => widget.onNavigate('live_circles'), AppColors.bleuFonce),
+                    if (AppConfigService().fakeCallEnabled)
+                      _buildCard('📞', 'Faux appel', 'Sortie discrète', () => widget.onNavigate('fake_call'), AppColors.gris),
                     _buildCard('🛡', 'Conseils sécurité', 'Astuces hors-ligne', () => widget.onNavigate('safety'), AppColors.rouge),
                     if (AppConfigService().heatmapEnabled)
                       _buildCard('🔥', 'Carte chaleur', 'Densité incidents', () => widget.onNavigate('heatmap'), AppColors.orange),

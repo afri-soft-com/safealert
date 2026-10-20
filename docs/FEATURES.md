@@ -29,9 +29,23 @@ Variables `FEATURE_*=true|1|yes` — voir `backend/src/config/features.js`.
 | `FEATURE_SAFETY_PING` | on | Contrôle planifié « Tu es OK ? » |
 | `FEATURE_STRUCTURED_GROUP_ALERTS` | on | Alertes utilitaires (électricité, eau, inondation, rue) |
 | `FEATURE_CORRIDORS` | on | Repères / suggestion d'itinéraire (MVP) |
-| `FEATURE_HEATMAP` | **off** | Carte de chaleur (UI mobile) ; endpoints API inchangés |
+| `FEATURE_HEATMAP` | **on** | Carte de chaleur (UI mobile) ; endpoints API inchangés |
+| `FEATURE_FAKE_CALL` | on | Faux appel entrant (sortie discrète) |
+| `FEATURE_ARRIVAL_TIMER` | on | Timer « Je rentre » (UX safety ping) |
+| `FEATURE_SOS_AUDIO` | on | Clip audio joint au SOS (+ `POST /api/sos/:id/evidence`) |
+| `FEATURE_SOS_PUBLIC_SHARE` | on | Lien public live SOS `/s/:token` |
+| `FEATURE_COMMUNE_BROADCAST` | on | Broadcast admin par commune (`/api/admin/broadcasts`) |
+| `FEATURE_LIVE_CIRCLES` | on | Cercles famille position live (`/api/live-circles`) |
+| `FEATURE_SOS_MEDIATION` | on | Médiation Premium (file ops + `mediation_requested`) |
 | `FEATURE_MAINTENANCE_MODE` | **off** | Bannière maintenance + mode dégradé |
 | `FEATURE_SOS_ENABLED` | on | Kill switch SOS (`false` = SOS API/app off) |
+
+### Notes v2 (veille / trajets / ops)
+
+- Digests veille : heure **Africa/Kinshasa** ; `last_digest_at` seulement si push ou SMS réussi.
+- Trajets : champs optionnels `vehicle_plate` / `vehicle_note`.
+- Ops : filtre médiation ; PDF secteur enrichi (synthèse + détail).
+- Partenaires : `channel_label` + `sla_ack_minutes` sur le portail.
 
 Endpoint public : `GET /api/app/config` (flags + bannière + versions).
 

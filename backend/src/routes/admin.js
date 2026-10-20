@@ -3,6 +3,8 @@ const { authenticate, requireStaff, requireSuperAdmin } = require("../middleware
 const ctrl = require("../controllers/adminController");
 const types = require("../controllers/incidentTypesController");
 const treasury = require("../controllers/treasuryController");
+const broadcasts = require("../controllers/broadcastController");
+const sosCtrl = require("../controllers/sosController");
 
 const router = Router();
 
@@ -32,5 +34,9 @@ router.get("/incident-types", types.listStaff);
 router.post("/incident-types", requireSuperAdmin, types.createType);
 router.patch("/incident-types/:id", requireSuperAdmin, types.updateType);
 router.delete("/incident-types/:id", requireSuperAdmin, types.deleteType);
+
+router.get("/broadcasts", broadcasts.listBroadcasts);
+router.post("/broadcasts", requireSuperAdmin, broadcasts.createBroadcast);
+router.patch("/incidents/:id/mediation", sosCtrl.updateMediation);
 
 module.exports = router;

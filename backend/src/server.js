@@ -52,6 +52,7 @@ const corridorsRoutes = require("./routes/corridors");
 const publicRoutes = require("./routes/public");
 const incidentTypesRoutes = require("./routes/incidentTypes");
 const appRoutes = require("./routes/app");
+const liveCirclesRoutes = require("./routes/liveCircles");
 
 const app = express();
 const server = http.createServer(app);
@@ -185,6 +186,7 @@ app.use("/api/corridors", corridorsRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/incident-types", incidentTypesRoutes);
 app.use("/api/app", appRoutes);
+app.use("/api/live-circles", liveCirclesRoutes);
 
 // Ephemeral public trip follow page (short token, read-only map)
 const followTripHtml = path.join(__dirname, "public", "follow-trip.html");
@@ -194,6 +196,15 @@ app.get("/t/:token", (req, res) => {
   }
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.sendFile(followTripHtml);
+});
+
+const followSosHtml = path.join(__dirname, "public", "follow-sos.html");
+app.get("/s/:token", (req, res) => {
+  if (!fs.existsSync(followSosHtml)) {
+    return res.status(404).send("Page indisponible");
+  }
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.sendFile(followSosHtml);
 });
 
 // Deep-link landing for circle invites (opens app or shows code)

@@ -146,6 +146,8 @@ class TripProvider extends ChangeNotifier {
     int etaMinutes = 30,
     String transportMode = 'moto',
     List<String>? escortContactIds,
+    String? vehiclePlate,
+    String? vehicleNote,
   }) async {
     _loading = true;
     _error = null;
@@ -174,6 +176,10 @@ class TripProvider extends ChangeNotifier {
         'transport_mode': transportMode,
         if (escortContactIds != null && escortContactIds.isNotEmpty)
           'escort_contact_ids': escortContactIds,
+        if (vehiclePlate != null && vehiclePlate.trim().isNotEmpty)
+          'vehicle_plate': vehiclePlate.trim(),
+        if (vehicleNote != null && vehicleNote.trim().isNotEmpty)
+          'vehicle_note': vehicleNote.trim(),
       });
       _activeTrip = res['trip'] as Map<String, dynamic>?;
       _shareUrl = res['share_url'] as String?;

@@ -13,6 +13,8 @@ router.post("/trigger", authenticate, sosLimiter, [
 ], ctrl.triggerSOS);
 
 router.post("/:id/cancel", authenticate, ctrl.cancelSOS);
+router.post("/:id/evidence", authenticate, ctrl.attachEvidence);
+router.post("/:id/share", authenticate, ctrl.createSosShare);
 router.post("/cancel", authenticate, ctrl.cancelLatestSOS);
 router.get("/my", authenticate, ctrl.getMyAlerts);
 

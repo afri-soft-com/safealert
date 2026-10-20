@@ -36,6 +36,11 @@ class AppConfigService {
 
   bool get canSendSos => sosEnabled && !maintenance;
 
-  /// Carte de chaleur — masquée par défaut (`FEATURE_HEATMAP=false`).
-  bool get heatmapEnabled => features['heatmap'] == true;
+  /// Carte de chaleur (`FEATURE_HEATMAP`, défaut on).
+  bool get heatmapEnabled => features['heatmap'] != false;
+  bool get fakeCallEnabled => features['fakeCall'] != false;
+  bool get arrivalTimerEnabled => features['arrivalTimer'] != false;
+  bool get sosAudioEnabled => features['sosAudio'] != false;
+  bool get sosPublicShareEnabled => features['sosPublicShare'] != false;
+  bool get liveCirclesEnabled => features['liveCircles'] != false;
 }

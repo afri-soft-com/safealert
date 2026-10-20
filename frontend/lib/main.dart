@@ -50,6 +50,8 @@ import 'screens/trip_screen.dart';
 import 'screens/escort_map_screen.dart';
 import 'screens/trust_zones_screen.dart';
 import 'screens/neighborhood_screen.dart';
+import 'screens/fake_call_screen.dart';
+import 'screens/live_circles_screen.dart';
 import 'services/volume_sos_service.dart';
 import 'services/shake_sos_service.dart';
 import 'services/fcm_service.dart';
@@ -512,6 +514,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         screen = OfflineQueueScreen(onBack: _goBack);
       case 'safety_ping':
         screen = SafetyPingScreen(onBack: _goBack);
+      case 'fake_call':
+        screen = FakeCallScreen(onEnd: _goBack);
+      case 'live_circles':
+        screen = LiveCirclesScreen(onBack: _goBack);
       case 'help':
         screen = HelpManualScreen(onBack: _goBack, role: auth.role);
       case 'terms':

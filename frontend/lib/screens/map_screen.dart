@@ -203,23 +203,35 @@ class _MapScreenState extends State<MapScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Text('Preuves témoin (optionnel)',
+                  const Text('J\'ai vu — photo ou audio (optionnel)',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
+                  const SizedBox(height: 4),
+                  const Text('1 tap caméra, ou galerie / audio. Consentement requis ci-dessous.',
+                      style: TextStyle(fontSize: 10, color: AppColors.gris)),
                   const SizedBox(height: 6),
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton.icon(
+                        child: ElevatedButton.icon(
                           onPressed: () async {
                             final shot = await picker.pickImage(
                               source: ImageSource.camera,
                               maxWidth: 1280,
                               imageQuality: 70,
                             );
-                            if (shot != null) setSheetState(() => photoPath = shot.path);
+                            if (shot != null) {
+                              setSheetState(() {
+                                photoPath = shot.path;
+                                consentEvidence = true;
+                              });
+                            }
                           },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.bleu,
+                            foregroundColor: Colors.white,
+                          ),
                           icon: const Icon(Icons.photo_camera, size: 16),
-                          label: Text(photoPath == null ? 'Photo' : 'Photo ajoutée', style: const TextStyle(fontSize: 11)),
+                          label: Text(photoPath == null ? 'Photo rapide' : 'Photo OK', style: const TextStyle(fontSize: 11)),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -262,9 +274,9 @@ class _MapScreenState extends State<MapScreen> {
                         });
                       }
                     },
-                    icon: const Icon(Icons.audiotrack, size: 16),
+                    icon: const Icon(Icons.mic, size: 16),
                     label: Text(
-                      audioPath == null ? 'Choisir un audio' : 'Audio ajouté',
+                      audioPath == null ? 'Joindre un audio' : 'Audio ajouté',
                       style: const TextStyle(fontSize: 11),
                     ),
                   ),
@@ -416,11 +428,20 @@ class _MapScreenState extends State<MapScreen> {
       final color = _colorForSeverity(inc['severity'] as String?);
       final verifications = inc['verified_by'] ?? inc['verifications'] ?? 0;
       final selected = _selectedId == id;
+      final badge = inc['reliability_badge'];
+      final tier = badge is Map ? badge['tier']?.toString() : null;
+      final pinBorder = switch (tier) {
+        'gold' => const Color(0xFFFFD700),
+        'silver' => const Color(0xFFC0C0C0),
+        'bronze' => const Color(0xFFCD7F32),
+        'low' => AppColors.orange,
+        _ => Colors.white,
+      };
 
       return Marker(
         point: LatLng(lat, lng),
-        width: 36,
-        height: 36,
+        width: 40,
+        height: 40,
         child: GestureDetector(
           onTap: () => setState(() => _selectedId = selected ? null : id),
           child: AnimatedContainer(
@@ -428,12 +449,14 @@ class _MapScreenState extends State<MapScreen> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: color,
-              border: Border.all(color: Colors.white, width: selected ? 3 : 2),
+              border: Border.all(color: pinBorder, width: selected ? 3 : 2.5),
               boxShadow: selected ? [BoxShadow(color: color, blurRadius: 6)] : null,
             ),
             child: Center(
-              child: Text('$verifications',
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+              child: Text(
+                tier == 'gold' ? '★' : '$verifications',
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+              ),
             ),
           ),
         ),
