@@ -41,13 +41,22 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     super.dispose();
   }
 
+  List<Map<String, dynamic>> _asMapList(dynamic raw) {
+    final list = raw is List
+        ? raw
+        : (raw is Map && raw['data'] is List ? raw['data'] as List : null);
+    if (list == null) return [];
+    return list
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
   Future<void> _refresh() async {
     setState(() => _loading = true);
     try {
       final res = await _api.get('/live-circles');
-      final list = (res is List)
-          ? res.cast<Map<String, dynamic>>()
-          : (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      final list = _asMapList(res['data'] ?? res);
       if (!mounted) return;
       setState(() {
         _circles = list;
@@ -66,18 +75,14 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     setState(() => _selectedId = id);
     try {
       final res = await _api.get('/live-circles/$id/members');
-      final list = (res is List)
-          ? res.cast<Map<String, dynamic>>()
-          : (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      final list = _asMapList(res['data'] ?? res);
       if (!mounted) return;
       setState(() => _members = list);
       _poll = Timer.periodic(const Duration(seconds: 20), (_) async {
         if (!mounted || _selectedId == null) return;
         try {
           final r = await _api.get('/live-circles/$_selectedId/members');
-          final m = (r is List)
-              ? r.cast<Map<String, dynamic>>()
-              : (r['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+          final m = _asMapList(r['data'] ?? r);
           if (mounted) setState(() => _members = m);
         } catch (_) {}
       });
