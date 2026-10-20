@@ -48,7 +48,12 @@ dependencies:
   in_app_update: ^4.2.5
   package_info_plus: ^8.1.2
   uuid: ^4.5.1
-  google_sign_in: ^6.2.2
+  # Pin below GoogleSignIn iOS 8.x — Firebase 10.x needs GoogleUtilities 7.x
+  google_sign_in: 6.2.2
+
+# google_sign_in_ios ≥5.8 pulls GoogleSignIn 8 → GoogleUtilities 8 (breaks Firebase 10)
+dependency_overrides:
+  google_sign_in_ios: 5.7.8
 
 dev_dependencies:
   flutter_test:
