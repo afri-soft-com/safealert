@@ -24,23 +24,54 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.grisClair,
       colorScheme: ColorScheme.light(
         primary: AppColors.rouge,
-        secondary: AppColors.bleuFonce,
+        secondary: AppColors.teal,
         surface: AppColors.blanc,
+        onPrimary: AppColors.blanc,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.rouge,
+        backgroundColor: AppColors.tealDeep,
         foregroundColor: AppColors.blanc,
         elevation: 0,
+        centerTitle: false,
+      ),
+      cardTheme: CardThemeData(
+        color: AppColors.blanc,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: Color(0xFFE8ECEF)),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.blanc,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE0E4E8)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFE0E4E8)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.teal, width: 1.5),
+        ),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AppColors.blanc,
-        selectedItemColor: AppColors.rouge,
-        unselectedItemColor: Color(0xFFAAAAAA),
+        selectedItemColor: AppColors.teal,
+        unselectedItemColor: Color(0xFF9AA3AF),
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.rouge,
           foregroundColor: AppColors.blanc,
+          elevation: 2,
+          shadowColor: AppColors.rouge.withValues(alpha: 0.35),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 40),
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),

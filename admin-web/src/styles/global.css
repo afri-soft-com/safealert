@@ -2,6 +2,9 @@
   --rouge: #cc1c1c;
   --rouge-dark: #991515;
   --rouge-glow: rgba(204, 28, 28, 0.25);
+  --teal: #0b6e6e;
+  --teal-deep: #063d3d;
+  --teal-glow: rgba(11, 110, 110, 0.28);
   --bleu-fonce: #0d1b2a;
   --bleu-card: #152535;
   --bleu-border: #243447;
@@ -11,8 +14,9 @@
   --vert: #3b6d11;
   --orange: #e86a1a;
   --sidebar-w: 240px;
-  --radius: 10px;
+  --radius: 12px;
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
 *,
@@ -294,10 +298,17 @@ button {
 }
 
 .stat-card {
-  background: var(--bleu-card);
+  background: linear-gradient(160deg, #1a2f42 0%, var(--bleu-card) 100%);
   border: 1px solid var(--bleu-border);
   border-radius: var(--radius);
   padding: 1.25rem;
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.stat-card:hover {
+  border-color: var(--teal);
+  transform: translateY(-1px);
 }
 
 .stat-card .label {
@@ -315,7 +326,11 @@ button {
 }
 
 .stat-card.accent .value {
-  color: var(--rouge);
+  color: #ff6b6b;
+}
+
+.stat-card.accent {
+  border-color: rgba(204, 28, 28, 0.35);
 }
 
 /* Table */
@@ -466,7 +481,9 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: radial-gradient(ellipse at top, #1a2a3a 0%, var(--bleu-fonce) 60%);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, var(--teal-glow), transparent 55%),
+    radial-gradient(ellipse at top, #1a2a3a 0%, var(--bleu-fonce) 65%);
 }
 
 .login-card {
@@ -474,14 +491,26 @@ textarea:focus {
   max-width: 400px;
   background: var(--bleu-card);
   border: 1px solid var(--bleu-border);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 2rem;
+  box-shadow: var(--shadow-card);
 }
 
 .login-card h1 {
   margin: 0 0 0.25rem;
-  font-size: 1.5rem;
-  color: var(--rouge);
+  font-size: 1.55rem;
+  color: var(--blanc);
+  letter-spacing: 0.02em;
+}
+
+.login-card h1::after {
+  content: "";
+  display: block;
+  width: 2.5rem;
+  height: 3px;
+  margin-top: 0.55rem;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--teal), var(--rouge));
 }
 
 .login-card .subtitle {

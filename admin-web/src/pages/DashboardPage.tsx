@@ -22,7 +22,7 @@ export default function DashboardPage() {
     <>
       <header className="page-header">
         <h2>Tableau de bord</h2>
-        <p>Vue d'ensemble de la plateforme SafeAlert</p>
+        <p>Vue d&apos;ensemble de la plateforme SafeAlert — incidents, utilisateurs et partenaires</p>
       </header>
 
       {error && <div className="form-error">{error}</div>}

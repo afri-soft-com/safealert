@@ -115,23 +115,54 @@ jobs:
         run: |
           set -euo pipefail
           PBX=ios/Runner.xcodeproj/project.pbxproj
+          echo "Using profile: ${PROVISION_NAME} team=${IOS_TEAM_ID}"
+          # Patch Generated.xcconfig + Release.xcconfig — Flutter reads these for xcodebuild
+          for cfg in ios/Flutter/Generated.xcconfig ios/Flutter/Release.xcconfig ios/Flutter/Debug.xcconfig ios/Flutter/Profile.xcconfig; do
+            if [ -f "$cfg" ]; then
+              # strip prior CI lines then append
+              grep -v 'CODE_SIGN_STYLE\|CODE_SIGN_IDENTITY\|DEVELOPMENT_TEAM\|PROVISIONING_PROFILE_SPECIFIER' "$cfg" > "${cfg}.tmp" || true
+              mv "${cfg}.tmp" "$cfg"
+              {
+                echo "CODE_SIGN_STYLE=Manual"
+                echo "CODE_SIGN_IDENTITY=iPhone Distribution"
+                echo "DEVELOPMENT_TEAM=${IOS_TEAM_ID}"
+                echo "PROVISIONING_PROFILE_SPECIFIER=${PROVISION_NAME}"
+              } >> "$cfg"
+            fi
+          done
           sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBX"
           sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = "iPhone Developer";/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";/g' "$PBX"
-          if ! grep -q "DEVELOPMENT_TEAM = ${IOS_TEAM_ID};" "$PBX"; then
-            sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = com.kakiranya.safealert;/PRODUCT_BUNDLE_IDENTIFIER = com.kakiranya.safealert;\n\t\t\t\tDEVELOPMENT_TEAM = ${IOS_TEAM_ID};/g" "$PBX"
-          fi
-          # Write Release.xcconfig overrides for CI signing
-          cat > ios/Flutter/Release-CI.xcconfig <<EOF
-          #include "Release.xcconfig"
-          CODE_SIGN_STYLE=Manual
-          CODE_SIGN_IDENTITY=iPhone Distribution
-          DEVELOPMENT_TEAM=${IOS_TEAM_ID}
-          PROVISIONING_PROFILE_SPECIFIER=${PROVISION_NAME}
-          EOF
-          # Point project Release configs at Release-CI.xcconfig if using standard Flutter layout
-          echo "PROVISION_NAME=${PROVISION_NAME}"
-          echo "TEAM=${IOS_TEAM_ID}"
-          grep -E "CODE_SIGN_STYLE|DEVELOPMENT_TEAM|CODE_SIGN_IDENTITY" "$PBX" | head -30
+          # Inject team + profile on every Runner product bundle id block
+          python3 <<PY
+          import os, re
+          path = "ios/Runner.xcodeproj/project.pbxproj"
+          team = os.environ["IOS_TEAM_ID"]
+          profile = os.environ["PROVISION_NAME"].replace('"', '\\"')
+          with open(path) as f:
+              text = f.read()
+          text = text.replace("CODE_SIGN_STYLE = Automatic;", "CODE_SIGN_STYLE = Manual;")
+          # Ensure DEVELOPMENT_TEAM and PROVISIONING_PROFILE_SPECIFIER near each bundle id
+          def inject(m):
+              block = m.group(0)
+              if "DEVELOPMENT_TEAM" not in block:
+                  block += f"\n\t\t\t\tDEVELOPMENT_TEAM = {team};"
+              if "PROVISIONING_PROFILE_SPECIFIER" not in block:
+                  block += f'\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profile}";'
+              if "CODE_SIGN_IDENTITY = " not in block:
+                  block += '\n\t\t\t\t"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";'
+              return block
+          text2 = re.sub(
+              r"PRODUCT_BUNDLE_IDENTIFIER = com\.kakiranya\.safealert;",
+              inject,
+              text,
+          )
+          with open(path, "w") as f:
+              f.write(text2)
+          print("pbxproj patched")
+          PY
+          grep -E "CODE_SIGN_STYLE|PROVISIONING_PROFILE|DEVELOPMENT_TEAM" "$PBX" | head -40
+          echo "--- Release.xcconfig ---"
+          cat ios/Flutter/Release.xcconfig
 
       - name: Build IPA
         timeout-minutes: 45
@@ -142,16 +173,10 @@ jobs:
           set -euo pipefail
           BASE="${API_BASE_URL:-https://safealert-api.onrender.com/api}"
           GOOGLE_ID="${GOOGLE_SERVER_CLIENT_ID:-}"
-          # Archive with explicit manual Distribution signing (App Store profile)
           flutter build ipa --release \
             --export-options-plist=ios/ExportOptions.plist \
             --dart-define=API_BASE_URL="$BASE" \
-            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_ID" \
-            -- \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="${IOS_TEAM_ID}" \
-            PROVISIONING_PROFILE_SPECIFIER="${PROVISION_NAME}" \
-            CODE_SIGN_IDENTITY="iPhone Distribution"
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_ID"
           ls -la build/ios/ipa/
 
       - name: Upload IPA artifact

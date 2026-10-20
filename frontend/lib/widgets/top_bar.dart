@@ -13,7 +13,7 @@ class TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: dark ? AppColors.bleuFonce : AppColors.rouge,
+      color: dark ? AppColors.bleuFonce : AppColors.tealDeep,
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
