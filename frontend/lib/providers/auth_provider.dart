@@ -9,6 +9,7 @@ import '../services/location_service.dart';
 import '../services/socket_service.dart';
 import '../services/trip_tracking_service.dart';
 import '../services/google_sign_in_service.dart';
+import '../services/apple_auth_service.dart';
 
 /// Routes nécessitant une authentification (US-14 mode invité).
 const kAuthRequiredScreens = {
@@ -72,6 +73,17 @@ class AuthProvider extends ChangeNotifier {
   String? get phone => _phone;
   /// OTP de test renvoyé par l'API en dev quand SMS n'est pas configuré.
   String? get devCode => _devCode;
+
+  /// Surface a gate message (e.g. CGU not accepted) without starting a network call.
+  void setLoginGateError(String message) {
+    _error = message;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
   bool get hasLocalPin => _hasLocalPin;
   bool get pinUnlocked => _pinUnlocked;
   bool get needsPinSetup => _needsPinSetup;
@@ -152,7 +164,11 @@ class AuthProvider extends ChangeNotifier {
     try {
       final res = await _api.post('/auth/request-code', {'phone': normalized});
       _phone = normalized;
-      _devCode = res['devCode'] as String?;
+      final exposed = res['devCode'] ?? res['codeOtp'];
+      _devCode = exposed?.toString();
+      if (res['smsEnvoye'] == false && _devCode != null && _devCode!.isNotEmpty) {
+        _error = 'SMS indisponible — votre code : $_devCode';
+      }
       _loading = false;
       notifyListeners();
       return true;
@@ -278,6 +294,62 @@ class AuthProvider extends ChangeNotifier {
       if (mapped == null &&
           (e.toString().toLowerCase().contains('cancel') ||
               e.toString().toLowerCase().contains('12501'))) {
+        _error = null;
+      }
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Sign in with Apple (iOS — App Store guideline 4.8 when Google is offered).
+  Future<bool> loginWithApple() async {
+    if (!AppleAuthService.isAvailable) {
+      _error = 'Connexion Apple disponible uniquement sur iOS';
+      notifyListeners();
+      return false;
+    }
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final cred = await AppleAuthService.obtainCredentials();
+      if (cred == null) {
+        _error = 'Connexion Apple annulée ou indisponible';
+        _loading = false;
+        notifyListeners();
+        return false;
+      }
+      final deviceId = await _api.ensureDeviceId();
+      final res = await _api.post('/auth/apple', {
+        'identityToken': cred.identityToken,
+        if (cred.fullName != null && cred.fullName!.isNotEmpty) 'fullName': cred.fullName,
+        'device_id': deviceId,
+        'device_label': defaultTargetPlatform.name,
+      });
+      await _api.setToken(res['token'] as String);
+      _user = res['user'] as Map<String, dynamic>;
+      _phone = _user?['phone'] as String?;
+      _isAuthenticated = true;
+      _isGuest = false;
+      await _refreshPinState();
+      final identity = _pinIdentity;
+      final stored = _pinPhone;
+      if (stored != null && identity != null && stored != identity) {
+        await _pin.clear();
+        await _refreshPinState();
+      }
+      _needsPinSetup = true;
+      _pinUnlocked = false;
+      _loading = false;
+      notifyListeners();
+      FCMService().uploadToken();
+      _applyPrivacySettings();
+      _startRealtimeServices();
+      return true;
+    } catch (e) {
+      _error = AppleAuthService.errorMessage(e);
+      if (_error!.toLowerCase().contains('annul')) {
         _error = null;
       }
       _loading = false;

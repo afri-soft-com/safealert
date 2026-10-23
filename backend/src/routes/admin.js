@@ -30,6 +30,8 @@ router.get("/groups", ctrl.listGroups);
 router.get("/audit-logs", ctrl.listAuditLogs);
 router.get("/settings", ctrl.getSettings);
 router.put("/settings/maintenance", requireSuperAdmin, ctrl.setMaintenanceSetting);
+router.get("/settings/privacy", requireSuperAdmin, ctrl.getPrivacySetting);
+router.put("/settings/privacy", requireSuperAdmin, ctrl.setPrivacySetting);
 router.get("/incident-types", types.listStaff);
 router.post("/incident-types", requireSuperAdmin, types.createType);
 router.patch("/incident-types/:id", requireSuperAdmin, types.updateType);

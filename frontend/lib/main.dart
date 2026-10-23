@@ -474,6 +474,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           },
           onHelp: () => _navigate('help'),
           onTerms: () => _navigate('terms'),
+          onPrivacy: () => _navigate('privacy'),
         );
       case 'calculator':
         screen = CalculatorScreen(

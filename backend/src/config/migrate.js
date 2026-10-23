@@ -528,6 +528,12 @@ const migrate = async () => {
         ON users (LOWER(email)) WHERE email IS NOT NULL AND BTRIM(email) <> '';
     `);
 
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_id VARCHAR(128);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_apple_id
+        ON users (apple_id) WHERE apple_id IS NOT NULL;
+    `);
+
     // ── AfriSoft pay hub: premium intents + platform treasury ──
     await client.query(`
       CREATE TABLE IF NOT EXISTS payment_intents (

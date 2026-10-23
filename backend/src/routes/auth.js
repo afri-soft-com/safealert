@@ -25,6 +25,17 @@ router.post(
   ctrl.googleLogin
 );
 router.post(
+  "/apple",
+  authVerifyLimiter,
+  [
+    body("identityToken").optional().isString(),
+    body("identity_token").optional().isString(),
+    body("fullName").optional().isString(),
+    body("nom").optional().isString(),
+  ],
+  ctrl.appleLogin
+);
+router.post(
   "/link-phone",
   authenticate,
   authVerifyLimiter,

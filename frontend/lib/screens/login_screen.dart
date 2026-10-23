@@ -4,6 +4,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/auth_provider.dart';
+import '../services/apple_auth_service.dart';
+import '../services/otp_sms_autofill.dart';
 import '../widgets/app_logo.dart';
 
 enum _LoginStep { phone, otp, pinUnlock, pinCreate }
@@ -13,12 +15,14 @@ class LoginScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onHelp;
   final VoidCallback? onTerms;
+  final VoidCallback? onPrivacy;
   const LoginScreen({
     super.key,
     required this.onSuccess,
     this.onBack,
     this.onHelp,
     this.onTerms,
+    this.onPrivacy,
   });
 
   @override
@@ -33,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _pinConfirmCtrl = TextEditingController();
   _LoginStep _step = _LoginStep.phone;
   bool _isNew = false;
+  bool _accepteCgu = false;
   bool _bootstrapped = false;
   AuthProvider? _auth;
   String _appVersionLabel = '';
@@ -96,6 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    stopOtpSmsListen();
     _auth?.removeListener(_onAuthTick);
     _phoneCtrl.dispose();
     _codeCtrl.dispose();
@@ -121,7 +127,30 @@ class _LoginScreenState extends State<LoginScreen> {
     return '•••• ${phone.substring(phone.length - 4)}';
   }
 
+  void _applyExposedCode(AuthProvider auth) {
+    final code = auth.devCode;
+    if (code != null && code.isNotEmpty) {
+      _codeCtrl.text = code;
+    }
+  }
+
+  Future<void> _enterOtpStep() async {
+    stopOtpSmsListen();
+    setState(() => _step = _LoginStep.otp);
+    // Start User Consent before SMS arrives when possible.
+    startOtpSmsListen(
+      onCode: (code) {
+        if (!mounted) return;
+        setState(() => _codeCtrl.text = code);
+      },
+    );
+  }
+
   Future<void> _continueWithGoogle() async {
+    if (!_accepteCgu) {
+      _showCguRequired();
+      return;
+    }
     final auth = context.read<AuthProvider>();
     final ok = await auth.loginWithGoogle();
     if (ok && mounted) {
@@ -131,17 +160,36 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _continueWithApple() async {
+    if (!_accepteCgu) {
+      _showCguRequired();
+      return;
+    }
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.loginWithApple();
+    if (ok && mounted) {
+      _pinCtrl.clear();
+      _pinConfirmCtrl.clear();
+      setState(() => _step = _LoginStep.pinCreate);
+    }
+  }
+
+  void _showCguRequired() {
+    context.read<AuthProvider>().setLoginGateError(
+      'Veuillez accepter les CGU et la Politique de confidentialité pour continuer',
+    );
+  }
+
   Future<void> _sendCode() async {
+    if (!_accepteCgu) {
+      _showCguRequired();
+      return;
+    }
     final auth = context.read<AuthProvider>();
     final ok = await auth.requestCode(_phoneCtrl.text.trim());
     if (ok && mounted) {
-      if (!kReleaseMode) {
-        final code = auth.devCode;
-        if (code != null && code.isNotEmpty) {
-          _codeCtrl.text = code;
-        }
-      }
-      setState(() => _step = _LoginStep.otp);
+      _applyExposedCode(auth);
+      await _enterOtpStep();
     }
   }
 
@@ -153,6 +201,7 @@ class _LoginScreenState extends State<LoginScreen> {
       isNewAccount: _isNew,
     );
     if (ok && mounted) {
+      stopOtpSmsListen();
       _pinCtrl.clear();
       _pinConfirmCtrl.clear();
       setState(() => _step = _LoginStep.pinCreate);
@@ -171,13 +220,8 @@ class _LoginScreenState extends State<LoginScreen> {
         auth.error!.contains('Session expirée')) {
       final sent = await auth.requestForgotPinCode();
       if (sent && mounted) {
-        if (!kReleaseMode) {
-          final code = auth.devCode;
-          if (code != null && code.isNotEmpty) {
-            _codeCtrl.text = code;
-          }
-        }
-        setState(() => _step = _LoginStep.otp);
+        _applyExposedCode(auth);
+        await _enterOtpStep();
       }
     }
   }
@@ -185,6 +229,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _switchPhone() async {
     final auth = context.read<AuthProvider>();
     await auth.switchPhone();
+    stopOtpSmsListen();
     _phoneCtrl.clear();
     _codeCtrl.clear();
     _pinCtrl.clear();
@@ -205,13 +250,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     final ok = await auth.requestForgotPinCode();
     if (ok && mounted) {
-      if (!kReleaseMode) {
-        final code = auth.devCode;
-        if (code != null && code.isNotEmpty) {
-          _codeCtrl.text = code;
-        }
-      }
-      setState(() => _step = _LoginStep.otp);
+      _applyExposedCode(auth);
+      await _enterOtpStep();
       return;
     }
     if (mounted && auth.pinPhone == null && auth.phone == null) {
@@ -225,6 +265,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (auth.hasLocalPin && !auth.pinUnlocked) return _LoginStep.pinUnlock;
     return _step;
   }
+
+  bool get _showApple =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS && AppleAuthService.isAvailable;
 
   @override
   Widget build(BuildContext context) {
@@ -299,7 +342,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: const TextStyle(color: AppColors.rouge, fontSize: 12),
                             ),
                           ],
-                          if (widget.onHelp != null || widget.onTerms != null) ...[
+                          if (widget.onHelp != null || widget.onTerms != null || widget.onPrivacy != null) ...[
                             const SizedBox(height: 20),
                             Wrap(
                               alignment: WrapAlignment.center,
@@ -319,6 +362,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                     onPressed: widget.onTerms,
                                     child: const Text(
                                       'CGU',
+                                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                                    ),
+                                  ),
+                                if (widget.onPrivacy != null)
+                                  TextButton(
+                                    onPressed: widget.onPrivacy,
+                                    child: const Text(
+                                      'Confidentialité',
                                       style: TextStyle(color: Colors.white70, fontSize: 12),
                                     ),
                                   ),
@@ -358,12 +409,66 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Widget _cguCheckbox() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Checkbox(
+          value: _accepteCgu,
+          onChanged: (v) => setState(() => _accepteCgu = v ?? false),
+          fillColor: WidgetStateProperty.resolveWith((_) => Colors.white54),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                const Text("J'accepte les ", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                GestureDetector(
+                  onTap: widget.onTerms,
+                  child: Text(
+                    'CGU',
+                    style: TextStyle(
+                      color: widget.onTerms != null ? AppColors.vert : Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+                const Text(' et la ', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                GestureDetector(
+                  onTap: widget.onPrivacy,
+                  child: Text(
+                    'Politique de confidentialité',
+                    style: TextStyle(
+                      color: widget.onPrivacy != null ? AppColors.vert : Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   List<Widget> _phoneFields(AuthProvider auth) {
+    final showApple = _showApple;
     return [
+      _cguCheckbox(),
+      const SizedBox(height: 16),
       SizedBox(
         width: double.infinity,
         child: OutlinedButton.icon(
-          onPressed: auth.loading ? null : _continueWithGoogle,
+          onPressed: auth.loading || !_accepteCgu ? null : _continueWithGoogle,
           icon: const Icon(Icons.g_mobiledata, color: Colors.white, size: 28),
           label: auth.loading
               ? const SizedBox(
@@ -383,6 +488,26 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+      if (showApple) ...[
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: auth.loading || !_accepteCgu ? null : _continueWithApple,
+            icon: const Icon(Icons.apple, color: Colors.white, size: 22),
+            label: const Text(
+              'Continuer avec Apple',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.white54),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+      ],
       const SizedBox(height: 16),
       const Row(
         children: [
@@ -412,7 +537,7 @@ class _LoginScreenState extends State<LoginScreen> {
           button: true,
           label: 'Envoyer le code de connexion',
           child: ElevatedButton(
-            onPressed: auth.loading ? null : _sendCode,
+            onPressed: auth.loading || !_accepteCgu ? null : _sendCode,
             child: auth.loading
                 ? const SizedBox(
                     height: 20,
@@ -428,7 +553,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   List<Widget> _otpFields(AuthProvider auth) {
     return [
-      if (!kReleaseMode && auth.devCode != null) ...[
+      if (auth.devCode != null) ...[
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(12),
@@ -438,7 +563,7 @@ class _LoginScreenState extends State<LoginScreen> {
             border: Border.all(color: AppColors.orange.withValues(alpha: 0.5)),
           ),
           child: Text(
-            'Code de test : ${auth.devCode}',
+            'Code : ${auth.devCode}',
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -447,13 +572,16 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: 12),
       ],
-      TextField(
-        controller: _codeCtrl,
-        keyboardType: TextInputType.number,
-        maxLength: 6,
-        buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
-        decoration: _fieldDecoration(hint: 'Code à 6 chiffres', icon: Icons.lock),
-        style: const TextStyle(color: Colors.white, fontSize: 16),
+      AutofillGroup(
+        child: TextField(
+          controller: _codeCtrl,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          autofillHints: const [AutofillHints.oneTimeCode],
+          buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+          decoration: _fieldDecoration(hint: 'Code à 6 chiffres', icon: Icons.lock),
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+        ),
       ),
       const SizedBox(height: 12),
       Row(

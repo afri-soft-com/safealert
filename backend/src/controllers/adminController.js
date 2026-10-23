@@ -9,6 +9,10 @@ const {
   setMaintenance,
   isSuperAdmin,
 } = require("../services/appSettings");
+const {
+  getPublishedPrivacy,
+  savePrivacy,
+} = require("../services/privacySettings");
 
 const VALID_ROLES = ["citizen", "leader", "agent", "admin", "platform_admin"];
 const STAFF_ASSIGNABLE = ["citizen", "leader", "agent", "admin"];
@@ -185,6 +189,39 @@ const setMaintenanceSetting = async (req, res) => {
     });
   } catch (err) {
     return fail(res, err, "Impossible de modifier le mode maintenance.");
+  }
+};
+
+const getPrivacySetting = async (req, res) => {
+  try {
+    const doc = await getPublishedPrivacy();
+    return res.json(doc);
+  } catch (err) {
+    return fail(res, err, "Impossible de charger la politique de confidentialité.");
+  }
+};
+
+const setPrivacySetting = async (req, res) => {
+  try {
+    const doc = await savePrivacy({
+      title: req.body?.title,
+      version: req.body?.version,
+      body: req.body?.body,
+      format: req.body?.format,
+    });
+    await writeAudit({
+      actorId: req.userId,
+      action: "settings.privacy.update",
+      entityType: "app_settings",
+      entityId: "LEGAL_PRIVACY_BODY",
+      ip: clientIp(req),
+    });
+    return res.json(doc);
+  } catch (err) {
+    if (err.status === 400) {
+      return res.status(400).json({ error: err.message });
+    }
+    return fail(res, err, "Impossible d'enregistrer la politique de confidentialité.");
   }
 };
 
@@ -594,6 +631,8 @@ module.exports = {
   updateUserSector,
   getSettings,
   setMaintenanceSetting,
+  getPrivacySetting,
+  setPrivacySetting,
   listPartners,
   createPartner,
   revokePartner,

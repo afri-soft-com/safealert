@@ -1,10 +1,87 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../services/api_service.dart';
 import '../theme.dart';
 import '../widgets/status_bar.dart';
 
-class PrivacyScreen extends StatelessWidget {
+class PrivacyScreen extends StatefulWidget {
   final VoidCallback onBack;
   const PrivacyScreen({super.key, required this.onBack});
+
+  @override
+  State<PrivacyScreen> createState() => _PrivacyScreenState();
+}
+
+class _PrivacyScreenState extends State<PrivacyScreen> {
+  String _title = 'Politique de confidentialité';
+  String _version = '';
+  String _body = '';
+  bool _loading = true;
+  bool _fromApi = false;
+
+  static const _fallbackBody = '''SafeAlert — Politique de confidentialité
+
+Dernière mise à jour : août 2026
+
+1. Données collectées
+SafeAlert collecte votre numéro de téléphone, pseudo, position GPS (lors des alertes ou mises à jour volontaires), contacts de confiance, et historique d'incidents que vous signalez ou recevez. Connexion Google / Apple : e-mail et identifiant le cas échéant.
+
+2. Utilisation des données
+Vos données servent à authentifier votre compte, envoyer des alertes SOS à vos contacts et voisins proches, afficher les incidents sur la carte communautaire, et améliorer la sécurité de votre quartier.
+
+3. Partage des données
+Vos alertes SOS sont partagées avec vos contacts de confiance et les utilisateurs à proximité. Les signalements anonymes masquent votre identité. Nous ne vendons pas vos données à des tiers.
+
+4. Localisation
+La position GPS n'est transmise que lorsque vous déclenchez une alerte, signalez un incident, ou lorsque l'application met à jour votre position (si autorisé).
+
+5. Conservation
+Les incidents sont conservés pour l'historique communautaire. Vous pouvez supprimer votre compte depuis les paramètres.
+
+6. Sécurité
+Communications HTTPS, OTP hashés (expiration 5 min), jetons stockés localement.
+
+7. Vos droits
+Accès, rectification ou suppression via « Supprimer le compte » ou le support store.
+
+8. Contact
+Canal de contact de la fiche store SafeAlert.''';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final uri = Uri.parse('${ApiService.baseUrl}/legal/privacy');
+      final res = await http.get(uri).timeout(const Duration(seconds: 20));
+      if (res.statusCode == 200) {
+        final json = jsonDecode(res.body) as Map<String, dynamic>;
+        final body = (json['body'] as String?)?.trim() ?? '';
+        if (body.isNotEmpty && mounted) {
+          setState(() {
+            _title = (json['title'] as String?)?.trim().isNotEmpty == true
+                ? json['title'] as String
+                : _title;
+            _version = (json['version'] as String?)?.trim() ?? '';
+            _body = body;
+            _fromApi = true;
+            _loading = false;
+          });
+          return;
+        }
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _body = _fallbackBody;
+      _loading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +96,7 @@ class PrivacyScreen extends StatelessWidget {
             child: Row(
               children: [
                 GestureDetector(
-                  onTap: onBack,
+                  onTap: widget.onBack,
                   child: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
                 ),
                 const SizedBox(width: 12),
@@ -35,76 +112,38 @@ class PrivacyScreen extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: const [
-                Text('SafeAlert — Politique de confidentialité (MVP)',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
-                SizedBox(height: 12),
-                Text('Dernière mise à jour : juin 2026',
-                    style: TextStyle(fontSize: 11, color: AppColors.gris)),
-                SizedBox(height: 16),
-                _Section(
-                  title: '1. Données collectées',
-                  body: 'SafeAlert collecte votre numéro de téléphone, pseudo, position GPS (lors des alertes ou mises à jour volontaires), contacts de confiance, et historique d\'incidents que vous signalez ou recevez.',
-                ),
-                _Section(
-                  title: '2. Utilisation des données',
-                  body: 'Vos données servent à authentifier votre compte, envoyer des alertes SOS à vos contacts et voisins proches, afficher les incidents sur la carte communautaire, et améliorer la sécurité de votre quartier.',
-                ),
-                _Section(
-                  title: '3. Partage des données',
-                  body: 'Vos alertes SOS sont partagées avec vos contacts de confiance et les utilisateurs à proximité (rayon ~500 m). Les signalements anonymes masquent votre identité. Nous ne vendons pas vos données à des tiers.',
-                ),
-                _Section(
-                  title: '4. Localisation',
-                  body: 'La position GPS n\'est transmise que lorsque vous déclenchez une alerte, signalez un incident, ou lorsque l\'application met à jour votre position en arrière-plan (si autorisé). Vous pouvez refuser l\'accès à la localisation dans les paramètres de votre appareil.',
-                ),
-                _Section(
-                  title: '5. Conservation',
-                  body: 'Les incidents sont conservés pour permettre l\'historique et les statistiques communautaires. Vous pouvez supprimer votre compte depuis les paramètres, ce qui efface vos données personnelles associées.',
-                ),
-                _Section(
-                  title: '6. Sécurité',
-                  body: 'Les communications avec nos serveurs sont chiffrées (HTTPS). Les codes OTP expirent après 5 minutes. Les tokens d\'authentification sont stockés localement sur votre appareil.',
-                ),
-                _Section(
-                  title: '7. Vos droits',
-                  body: 'Vous pouvez accéder à vos données, les corriger ou demander leur suppression en contactant l\'équipe SafeAlert ou via la fonction « Supprimer le compte » dans l\'application.',
-                ),
-                _Section(
-                  title: '8. Contact',
-                  body: 'Pour toute question : contact@safealert.app (adresse à configurer pour la production).',
-                ),
-                SizedBox(height: 24),
-                Text(
-                  'En utilisant SafeAlert, vous acceptez cette politique. Une version complète sera publiée avant le déploiement public.',
-                  style: TextStyle(fontSize: 11, color: AppColors.gris, fontStyle: FontStyle.italic),
-                ),
-              ],
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      Text(
+                        _title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.bleuFonce,
+                        ),
+                      ),
+                      if (_version.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Version $_version${_fromApi ? '' : ' (hors ligne)'}',
+                          style: const TextStyle(fontSize: 11, color: AppColors.gris),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Text(
+                        _body,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.bleuFonce,
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Section extends StatelessWidget {
-  final String title;
-  final String body;
-  const _Section({required this.title, required this.body});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
-          const SizedBox(height: 4),
-          Text(body, style: const TextStyle(fontSize: 12, color: AppColors.bleuFonce, height: 1.4)),
         ],
       ),
     );

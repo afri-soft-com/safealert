@@ -50,6 +50,8 @@ dependencies:
   uuid: ^4.5.1
   # Pin below GoogleSignIn iOS 8.x — Firebase 10.x needs GoogleUtilities 7.x
   google_sign_in: 6.2.2
+  sign_in_with_apple: ^6.1.4
+  smart_auth: ^3.2.0
 
 # google_sign_in_ios ≥5.8 pulls GoogleSignIn 8 → GoogleUtilities 8 (breaks Firebase 10)
 dependency_overrides:

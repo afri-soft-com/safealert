@@ -3,12 +3,14 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { pool } = require("../config/database");
 const { sendSMS, isSMSConfigured } = require("../services/sms");
+const { sanitizeSmsPourSerdiPay } = require("../services/smsSanitize");
 const { normalizePhone, phoneLookupVariants } = require("../utils/phone");
 const { log } = require("../utils/logger");
 const { incrPhoneOtp } = require("../config/redis");
 const { otpPhoneLimit } = require("../config/features");
 const { writeAudit } = require("../services/audit");
 const { verifyGoogleIdToken } = require("../services/googleAuth");
+const { verifyAppleIdentityToken } = require("../services/appleAuth");
 
 const promoteIfPlatformAdminPhone = async (user) => {
   const adminPhone = (process.env.PLATFORM_ADMIN_PHONE || "").trim();
@@ -199,33 +201,56 @@ const requestCode = async (req, res) => {
       [phone, codeHash, expiresAt]
     );
 
-    // Never let SMS failures block OTP when bypass is on (testers still get devCode)
+    // Plain GSM text — SerdiPay rejects `<#>`, `@host #hash`, and sentence punctuation.
+    // Autofill: Android SMS User Consent + iOS AutofillHints.oneTimeCode (no WebOTP lines).
+    const otpMessage = sanitizeSmsPourSerdiPay(
+      `SafeAlert ${code} est votre code Valide 5 min`
+    );
+
+    let smsSent = false;
+    let smsFailed = false;
     try {
-      await sendSMS(phone, `Votre code SafeAlert: ${code}. Valide 5 minutes.`);
+      const smsResult = await sendSMS(phone, otpMessage);
+      if (smsResult && !smsResult.simulated && !smsResult.failed) {
+        smsSent = true;
+      } else if (isSMSConfigured()) {
+        // Providers configured but fell through to simulation / failed flag.
+        smsFailed = true;
+      }
     } catch (smsErr) {
+      smsFailed = true;
       console.error("requestCode SMS error (continuing):", smsErr.message || smsErr);
     }
 
-    const exposeDevOtp = shouldExposeDevOtp();
+    // Expose code when ALLOW_DEV_OTP, or when hub/provider failed (Reserva codeOtp pattern).
+    const exposeDevOtp = shouldExposeDevOtp() || smsFailed;
 
     if (exposeDevOtp) {
-      const smsNote = isSMSConfigured()
-        ? "SMS aussi configuré — code exposé via ALLOW_DEV_OTP (désactiver dès que SMS fiable)."
-        : "SMS non configuré — bypass temporaire (ALLOW_DEV_OTP).";
-      // console.warn so Render (and other hosts) always surface this in logs
+      const smsNote = smsFailed
+        ? "SMS hub/provider en échec — code exposé à l'écran (mode dégradé)."
+        : isSMSConfigured()
+          ? "SMS aussi configuré — code exposé via ALLOW_DEV_OTP (désactiver dès que SMS fiable)."
+          : "SMS non configuré — bypass temporaire (ALLOW_DEV_OTP).";
       console.warn("");
       console.warn("══════════════════════════════════════════════");
       console.warn(`  [DEV OTP] ${phone} → ${code}  (valide 5 min)`);
       console.warn(`  ${smsNote}`);
-      console.warn("  DÉSACTIVER ALLOW_DEV_OTP / OTP_BYPASS_CODE en prod réelle.");
+      if (!smsFailed) {
+        console.warn("  DÉSACTIVER ALLOW_DEV_OTP / OTP_BYPASS_CODE en prod réelle.");
+      }
       console.warn("══════════════════════════════════════════════");
       console.warn("");
       log(`[DEV OTP] ${phone} → ${code}`);
     }
 
-    const payload = { message: "Code envoyé", expiresIn: OTP_TTL_SECONDS };
+    const payload = {
+      message: smsSent ? "Code envoyé" : smsFailed ? "SMS indisponible — code affiché" : "Code envoyé",
+      expiresIn: OTP_TTL_SECONDS,
+      smsEnvoye: smsSent,
+    };
     if (exposeDevOtp) {
       payload.devCode = code;
+      payload.codeOtp = code;
     }
 
     return res.json(payload);
@@ -337,6 +362,127 @@ const googleAuthErrorMessage = (code) => {
       return "Connexion Google refusée. Réessayez.";
     default:
       return "Connexion Google impossible. Réessayez.";
+  }
+};
+
+const appleAuthErrorStatus = (code) => {
+  switch (code) {
+    case "not_configured":
+      return 503;
+    case "bad_aud":
+    case "invalid_token":
+    case "unknown_kid":
+      return 401;
+    case "jwks_unavailable":
+    case "jwks_empty":
+      return 502;
+    default:
+      return 401;
+  }
+};
+
+const appleAuthErrorMessage = (code) => {
+  switch (code) {
+    case "not_configured":
+      return "Connexion Apple non configurée sur le serveur.";
+    case "bad_aud":
+      return "Identifiant Apple non autorisé pour cette application.";
+    case "invalid_token":
+    case "unknown_kid":
+      return "Connexion Apple refusée. Réessayez.";
+    default:
+      return "Connexion Apple impossible. Réessayez.";
+  }
+};
+
+/**
+ * POST /api/auth/apple { identityToken, fullName? }
+ * Sign in with Apple (App Store 4.8 when Google is offered).
+ */
+const appleLogin = async (req, res) => {
+  const identityToken = String(
+    req.body?.identityToken || req.body?.identity_token || ""
+  ).trim();
+  const displayName = String(req.body?.fullName || req.body?.nom || "").trim() || null;
+  if (!identityToken) {
+    return res.status(400).json({ error: "Jeton Apple requis" });
+  }
+
+  try {
+    const profil = await verifyAppleIdentityToken(identityToken, displayName);
+    const appleId = String(profil.appleId);
+    const email = profil.email ? String(profil.email).trim().toLowerCase() : null;
+    const name = profil.name || (email ? email.split("@")[0] : "Citoyen");
+
+    let isNew = false;
+    let user = null;
+
+    const byApple = await pool.query("SELECT * FROM users WHERE apple_id = $1 LIMIT 1", [appleId]);
+    user = byApple.rows[0] || null;
+
+    if (!user && email) {
+      const byEmail = await pool.query("SELECT * FROM users WHERE LOWER(email) = $1 LIMIT 1", [email]);
+      user = byEmail.rows[0] || null;
+      if (user) {
+        if (user.apple_id && user.apple_id !== appleId) {
+          return res.status(409).json({
+            error: "Cet e-mail est déjà lié à un autre compte Apple.",
+          });
+        }
+        const linked = await pool.query(
+          `UPDATE users SET
+             apple_id = COALESCE(apple_id, $1),
+             email = COALESCE(email, $2),
+             updated_at = NOW()
+           WHERE id = $3
+           RETURNING *`,
+          [appleId, email, user.id]
+        );
+        user = linked.rows[0] || user;
+      }
+    }
+
+    if (!user) {
+      const pseudo = await uniquePseudo(name);
+      const created = await pool.query(
+        `INSERT INTO users (phone, pseudo, role, email, apple_id)
+         VALUES (NULL, $1, 'citizen', $2, $3)
+         RETURNING *`,
+        [pseudo, email, appleId]
+      );
+      user = created.rows[0];
+      isNew = true;
+    } else if (email && !user.email) {
+      const updated = await pool.query(
+        `UPDATE users SET email = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+        [email, user.id]
+      );
+      user = updated.rows[0] || user;
+    }
+
+    const { device_id, device_label, fcm_token } = req.body || {};
+    const { token, deviceId } = await createSessionToken(user, {
+      deviceId: device_id,
+      deviceLabel: device_label,
+      fcmToken: fcm_token,
+    });
+
+    return res.json({
+      token,
+      deviceId,
+      isNew,
+      needsPinSetup: true,
+      user: publicSessionUser(user),
+    });
+  } catch (err) {
+    if (err && err.code) {
+      return res.status(appleAuthErrorStatus(err.code)).json({
+        error: appleAuthErrorMessage(err.code),
+        code: err.code,
+      });
+    }
+    console.error("appleLogin error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
 
@@ -685,6 +831,7 @@ module.exports = {
   requestCode,
   verifyCode,
   googleLogin,
+  appleLogin,
   linkPhone,
   getProfile,
   updateProfile,

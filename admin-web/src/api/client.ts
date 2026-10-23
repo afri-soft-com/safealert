@@ -129,7 +129,13 @@ async function downloadAuthenticated(path: string, filename: string): Promise<vo
 
 export const api = {
   requestCode: (phone: string) =>
-    request<{ message: string; devCode?: string }>("/auth/request-code", {
+    request<{
+      message: string;
+      expiresIn?: number;
+      smsEnvoye?: boolean;
+      devCode?: string;
+      codeOtp?: string;
+    }>("/auth/request-code", {
       method: "POST",
       body: JSON.stringify({ phone }),
     }),
@@ -181,6 +187,34 @@ export const api = {
       "/admin/settings/maintenance",
       { method: "PUT", body: JSON.stringify({ enabled, message }) }
     ),
+
+  getPrivacyAdmin: () =>
+    request<{
+      slug: string;
+      title: string;
+      version: string;
+      body: string;
+      format: string;
+      source: string;
+    }>("/admin/settings/privacy"),
+
+  setPrivacyAdmin: (payload: {
+    title?: string;
+    version?: string;
+    body: string;
+    format?: string;
+  }) =>
+    request<{
+      slug: string;
+      title: string;
+      version: string;
+      body: string;
+      format: string;
+      source: string;
+    }>("/admin/settings/privacy", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
 
   getUsers: (page = 1, limit = 20, q = "") => {
     const params = new URLSearchParams({

@@ -95,7 +95,7 @@ describe("SMS service", () => {
     const { initSMS, sendSMS } = require("../src/services/sms");
     initSMS();
 
-    const result = await sendSMS("+243811111111", "Votre code SafeAlert: 123456. Valide 5 minutes.");
+    const result = await sendSMS("+243811111111", "SafeAlert 123456 est votre code Valide 5 min");
     expect(result.transport).toBe("afrisoft");
     expect(result.status).toBe("SENT");
     expect(result.sms_id).toBe("sms_1");
@@ -111,6 +111,7 @@ describe("SMS service", () => {
     expect(body.app_id).toBe("afrisoft-partenaire");
     expect(body.phone).toBe("243811111111");
     expect(body.text).toContain("123456");
+    expect(body.text).not.toMatch(/[.:;!?]/);
     expect(body.reference).toMatch(/^afrisoft-partenaire_otp_/);
     expect(body.idempotency_key).toMatch(/^afrisoft-partenaire:otp:243811111111:/);
 

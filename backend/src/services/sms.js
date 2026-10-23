@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { log, warn, error: logError } = require("../utils/logger");
+const { sanitizeSmsPourSerdiPay } = require("./smsSanitize");
 
 let twilioClient = null;
 let africasTalkingConfigured = false;
@@ -202,11 +203,13 @@ const sendViaAfricasTalking = async (to, body) => {
 
 const sendSMS = async (to, body) => {
   const preferred = (process.env.SMS_PROVIDER || "auto").toLowerCase();
+  // SerdiPay rejects sentence punctuation and WebOTP hash lines — sanitize once for all providers.
+  const text = sanitizeSmsPourSerdiPay(String(body || ""));
 
-  const tryHub = async () => sendViaAfriSoftHub(to, body);
-  const trySerdi = async () => sendViaSerdiPay(to, body);
-  const tryTwilio = async () => sendViaTwilio(to, body);
-  const tryAt = async () => sendViaAfricasTalking(to, body);
+  const tryHub = async () => sendViaAfriSoftHub(to, text);
+  const trySerdi = async () => sendViaSerdiPay(to, text);
+  const tryTwilio = async () => sendViaTwilio(to, text);
+  const tryAt = async () => sendViaAfricasTalking(to, text);
 
   if (preferred === "afrisoft" || preferred === "afrisofthub") {
     const r = await tryHub();
@@ -231,8 +234,8 @@ const sendSMS = async (to, body) => {
     if (atResult) return atResult;
   }
 
-  log(`[SMS simulated] To: ${to}, Body: ${body}`);
-  return { simulated: true };
+  log(`[SMS simulated] To: ${to}, Body: ${text}`);
+  return { simulated: true, failed: Boolean(afrisoftHubConfigured || serdipayConfigured || twilioClient || africasTalkingConfigured) };
 };
 
 const isSMSConfigured = () =>
@@ -247,4 +250,5 @@ module.exports = {
   sendViaTwilio,
   sendViaAfricasTalking,
   normalizeHubPhone,
+  sanitizeSmsPourSerdiPay,
 };

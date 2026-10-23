@@ -67,11 +67,11 @@
 <body>
   <header>
     <div class="wrap">
-      <h1>Politique de confidentialité</h1>
-      <p class="subtitle">SafeAlert — Application de sécurité citoyenne</p>
+      <h1 id="privacy-title">Politique de confidentialité</h1>
+      <p class="subtitle" id="privacy-subtitle">SafeAlert — Application de sécurité citoyenne</p>
     </div>
   </header>
-  <main>
+  <main id="privacy-body">
     <p>
       La présente politique décrit comment <strong>SafeAlert</strong> collecte, utilise et protège
       vos données lorsque vous utilisez l’application mobile et les services associés
@@ -163,5 +163,60 @@
       </p>
     </div>
   </main>
+  <script>
+    (function () {
+      var endpoints = [
+        "/api/legal/privacy",
+        "https://safealert-api.onrender.com/api/legal/privacy"
+      ];
+      function esc(s) {
+        return String(s || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+      function renderMarkdown(body) {
+        var blocks = String(body || "").split(/\n{2,}/);
+        return blocks.map(function (block) {
+          var line = block.trim();
+          if (!line) return "";
+          if (line.indexOf("## ") === 0) return "<h2>" + esc(line.slice(3)) + "</h2>";
+          if (line.indexOf("# ") === 0) return "<h2>" + esc(line.slice(2)) + "</h2>";
+          if (line.indexOf("- ") === 0) {
+            return "<ul>" + line.split(/\n/).filter(function (l) {
+              return l.trim().indexOf("- ") === 0;
+            }).map(function (item) {
+              return "<li>" + esc(item.replace(/^-\s+/, "").replace(/\*\*(.*?)\*\*/g, "$1")) + "</li>";
+            }).join("") + "</ul>";
+          }
+          return "<p>" + esc(line).replace(/\n/g, "<br>") + "</p>";
+        }).join("");
+      }
+      function apply(doc) {
+        if (!doc || !doc.body) return;
+        var titleEl = document.getElementById("privacy-title");
+        var subEl = document.getElementById("privacy-subtitle");
+        var bodyEl = document.getElementById("privacy-body");
+        if (titleEl && doc.title) titleEl.textContent = doc.title;
+        if (subEl) {
+          subEl.textContent = (doc.version ? "Version " + doc.version + " — " : "") + "SafeAlert";
+        }
+        if (!bodyEl) return;
+        var format = (doc.format || "markdown").toLowerCase();
+        var html = format === "html" ? doc.body : renderMarkdown(doc.body);
+        bodyEl.innerHTML = html +
+          '<div class="meta"><p>Source : ' + esc(doc.source || "api") +
+          '</p><p><a href="/manuel.html">Manuel utilisateur</a> · <a href="/cgu.html">CGU</a> · <a href="/">Console</a></p></div>';
+      }
+      function tryFetch(i) {
+        if (i >= endpoints.length) return;
+        fetch(endpoints[i], { credentials: "omit" })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+          .then(apply)
+          .catch(function () { tryFetch(i + 1); });
+      }
+      tryFetch(0);
+    })();
+  </script>
 </body>
 </html>

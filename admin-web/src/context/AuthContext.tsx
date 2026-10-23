@@ -33,7 +33,7 @@ interface AuthContextValue {
   switchPhone: () => void;
   setLocalPin: (pin: string, confirm: string) => Promise<void>;
   unlockWithPin: (pin: string) => Promise<boolean>;
-  requestForgotPinCode: () => Promise<{ devCode?: string }>;
+  requestForgotPinCode: () => Promise<{ devCode?: string; codeOtp?: string; smsEnvoye?: boolean }>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);

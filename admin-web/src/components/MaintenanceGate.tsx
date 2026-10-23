@@ -10,6 +10,7 @@ const LEGAL_PATHS = new Set([
   "/connexion",
   "/portail-partenaire",
   "/cgu",
+  "/privacy",
   "/manuel",
   "/cgu.html",
   "/manuel.html",

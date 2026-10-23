@@ -41,6 +41,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [devHint, setDevHint] = useState("");
+  const [accepteCgu, setAccepteCgu] = useState(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
@@ -54,6 +55,10 @@ export default function LoginPage() {
   }, [ready, needsPinSetup, user, hasLocalPin]);
 
   const handleGoogleCredential = async (idToken: string) => {
+    if (!accepteCgu) {
+      setError("Veuillez accepter les CGU et la Politique de confidentialité pour continuer");
+      return;
+    }
     setError("");
     setLoading(true);
     try {
@@ -69,7 +74,10 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
-    if (!ready || step !== "phone" || !googleClientId) return;
+    if (!ready || step !== "phone" || !googleClientId || !accepteCgu) {
+      if (googleBtnRef.current) googleBtnRef.current.innerHTML = "";
+      return;
+    }
     let cancelled = false;
 
     const render = () => {
@@ -114,13 +122,17 @@ export default function LoginPage() {
     };
     // GIS callback closes over the latest login handler.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, step, googleClientId]);
+  }, [ready, step, googleClientId, accepteCgu]);
 
   if (!ready) return <div className="loading">Chargement…</div>;
   if (isAuthenticated) return <Navigate to="/" replace />;
 
   const handleRequestCode = async (e: FormEvent) => {
     e.preventDefault();
+    if (!accepteCgu) {
+      setError("Veuillez accepter les CGU et la Politique de confidentialité pour continuer");
+      return;
+    }
     setError("");
     setDevHint("");
     setNeedPseudo(false);
@@ -128,9 +140,14 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await api.requestCode(phone.trim());
-      if (!import.meta.env.PROD && res.devCode) {
-        setDevHint(`Code de test : ${res.devCode}`);
-        setCode(res.devCode);
+      const exposed = res.devCode || res.codeOtp;
+      if (exposed) {
+        setDevHint(
+          res.smsEnvoye === false
+            ? `SMS indisponible — votre code : ${exposed}`
+            : `Code de test : ${exposed}`
+        );
+        setCode(exposed);
       }
       setStep("code");
     } catch (err) {
@@ -198,9 +215,10 @@ export default function LoginPage() {
       const res = await requestForgotPinCode();
       const stored = pinPhone || user?.phone;
       if (stored) setPhone(stored);
-      if (!import.meta.env.PROD && res.devCode) {
-        setDevHint(`Code de test : ${res.devCode}`);
-        setCode(res.devCode);
+      const exposed = res.devCode || res.codeOtp;
+      if (exposed) {
+        setDevHint(`Code : ${exposed}`);
+        setCode(exposed);
       }
       setStep("code");
     } catch (err) {
@@ -243,9 +261,44 @@ export default function LoginPage() {
 
         {step === "phone" && (
           <>
+            <label
+              className="form-hint"
+              style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", marginBottom: "1rem" }}
+            >
+              <input
+                type="checkbox"
+                checked={accepteCgu}
+                onChange={(e) => setAccepteCgu(e.target.checked)}
+                style={{ marginTop: 3 }}
+              />
+              <span>
+                J&apos;accepte les{" "}
+                <a href="/cgu.html" target="_blank" rel="noreferrer">
+                  CGU
+                </a>{" "}
+                et la{" "}
+                <a href="/privacy.html" target="_blank" rel="noreferrer">
+                  Politique de confidentialité
+                </a>
+              </span>
+            </label>
             {googleClientId ? (
               <>
-                <div ref={googleBtnRef} style={{ display: "flex", justifyContent: "center", marginBottom: "1rem" }} />
+                <div
+                  ref={googleBtnRef}
+                  style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    marginBottom: "1rem",
+                    opacity: accepteCgu ? 1 : 0.45,
+                    pointerEvents: accepteCgu ? "auto" : "none",
+                  }}
+                />
+                {!accepteCgu && (
+                  <p className="form-hint" style={{ textAlign: "center", marginBottom: "0.75rem" }}>
+                    Cochez les CGU pour activer Google
+                  </p>
+                )}
                 <p className="form-hint" style={{ textAlign: "center", marginBottom: "1rem" }}>
                   ou
                 </p>
@@ -263,7 +316,12 @@ export default function LoginPage() {
                 required
               />
             </div>
-            <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={loading}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: "100%" }}
+              disabled={loading || !accepteCgu}
+            >
               {loading ? "Envoi…" : "Recevoir le code"}
             </button>
           </form>

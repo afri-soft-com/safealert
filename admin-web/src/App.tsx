@@ -19,6 +19,7 @@ import HelpPage from "./pages/HelpPage";
 import AuditPage from "./pages/AuditPage";
 import SettingsPage from "./pages/SettingsPage";
 import CguPage from "./pages/CguPage";
+import PrivacyPage from "./pages/PrivacyPage";
 import ManuelPage from "./pages/ManuelPage";
 import IncidentTypesPage from "./pages/IncidentTypesPage";
 import BroadcastsPage from "./pages/BroadcastsPage";
@@ -31,6 +32,7 @@ export default function App() {
         <MaintenanceGate>
           <Routes>
             <Route path="/cgu" element={<CguPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/manuel" element={<ManuelPage />} />
             <Route path="/connexion" element={<LoginPage />} />
             <Route path="/portail-partenaire" element={<PartnerPortalPage />} />
