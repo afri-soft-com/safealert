@@ -472,7 +472,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               _navStack..clear()..add('splash');
             });
           },
-          onHelp: () => _navigate('help'),
           onTerms: () => _navigate('terms'),
           onPrivacy: () => _navigate('privacy'),
         );

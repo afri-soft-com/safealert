@@ -13,14 +13,12 @@ enum _LoginStep { phone, otp, pinUnlock, pinCreate }
 class LoginScreen extends StatefulWidget {
   final VoidCallback onSuccess;
   final VoidCallback? onBack;
-  final VoidCallback? onHelp;
   final VoidCallback? onTerms;
   final VoidCallback? onPrivacy;
   const LoginScreen({
     super.key,
     required this.onSuccess,
     this.onBack,
-    this.onHelp,
     this.onTerms,
     this.onPrivacy,
   });
@@ -342,40 +340,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: const TextStyle(color: AppColors.rouge, fontSize: 12),
                             ),
                           ],
-                          if (widget.onHelp != null || widget.onTerms != null || widget.onPrivacy != null) ...[
-                            const SizedBox(height: 20),
-                            Wrap(
-                              alignment: WrapAlignment.center,
-                              spacing: 12,
-                              runSpacing: 4,
-                              children: [
-                                if (widget.onHelp != null)
-                                  TextButton(
-                                    onPressed: widget.onHelp,
-                                    child: const Text(
-                                      'Manuel',
-                                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                                    ),
-                                  ),
-                                if (widget.onTerms != null)
-                                  TextButton(
-                                    onPressed: widget.onTerms,
-                                    child: const Text(
-                                      'CGU',
-                                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                                    ),
-                                  ),
-                                if (widget.onPrivacy != null)
-                                  TextButton(
-                                    onPressed: widget.onPrivacy,
-                                    child: const Text(
-                                      'Confidentialité',
-                                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
+                          // CGU / confidentialité : liens dans la case à cocher uniquement.
+                          // Manuel : accessible après connexion (Aide).
                           if (_appVersionLabel.isNotEmpty) ...[
                             const SizedBox(height: 16),
                             Text(
