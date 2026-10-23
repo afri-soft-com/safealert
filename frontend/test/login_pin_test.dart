@@ -39,6 +39,14 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// First-login CGU gate — required before SMS / Google.
+  Future<void> acceptCgu(WidgetTester tester) async {
+    final boxes = find.byType(Checkbox);
+    expect(boxes, findsWidgets);
+    await tester.tap(boxes.first);
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('returning user with PIN sees unlock, not SMS send', (tester) async {
     await LocalPinService(store: pinStore).setPin('123456', phone: '+243811234567');
 
@@ -124,6 +132,7 @@ void main() {
     ));
 
     await pumpLogin(tester);
+    await acceptCgu(tester);
     await tester.enterText(find.byType(TextField).first, '+243812345678');
     await tester.tap(find.text('Envoyer le code'));
     await tester.pumpAndSettle();
@@ -150,6 +159,7 @@ void main() {
     await pumpLogin(tester);
 
     expect(find.text('Envoyer le code'), findsOneWidget);
+    await acceptCgu(tester);
     await tester.enterText(find.byType(TextField).first, '+243812345678');
     await tester.tap(find.text('Envoyer le code'));
     await tester.pumpAndSettle();
@@ -179,6 +189,7 @@ void main() {
     });
 
     await pumpLogin(tester);
+    await acceptCgu(tester);
     await tester.enterText(find.byType(TextField).first, '+243812345678');
     await tester.tap(find.text('Envoyer le code'));
     await tester.pumpAndSettle();

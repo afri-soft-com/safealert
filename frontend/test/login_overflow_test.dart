@@ -63,6 +63,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.byType(Checkbox).first);
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '+243812345678');
     await tester.tap(find.text('Envoyer le code'));
     await tester.pump();
@@ -70,7 +72,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Vérifier'), findsOneWidget);
-    expect(find.textContaining('Code de test'), findsOneWidget);
+    expect(find.textContaining('Code :'), findsOneWidget);
 
     await tester.tap(find.text('Nouveau compte'));
     await tester.pumpAndSettle();
