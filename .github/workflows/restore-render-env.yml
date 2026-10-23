@@ -11,7 +11,11 @@ on:
       app_latest_version:
         description: APP_LATEST_VERSION
         required: true
-        default: "1.0.24"
+        default: "1.0.27"
+      apple_client_ids:
+        description: APPLE_CLIENT_IDS (bundle IDs, comma-separated)
+        required: true
+        default: "com.kakiranya.safealert"
       google_client_id:
         description: Web GOOGLE_CLIENT_ID
         required: true
