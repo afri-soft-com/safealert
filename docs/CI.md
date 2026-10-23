@@ -75,7 +75,9 @@ Les runners GitHub Actions sont **hors** du réseau privé Render. Il faut l’*
 
 **Variable (pas un secret)** : `GOOGLE_SERVER_CLIENT_ID` — Web OAuth client ID public, passé en `--dart-define` (AAB) et `VITE_GOOGLE_CLIENT_ID` (admin-web). Pas de client secret.
 
-**Sign in with Apple (iOS, App Store 4.8)** : si Google est proposé, Apple doit l’être aussi. Flutter : `sign_in_with_apple` + entitlement `com.apple.developer.applesignin`. Backend : `APPLE_CLIENT_IDS=com.kakiranya.safealert` (bundle ID, CSV si plusieurs) pour vérifier `POST /api/auth/apple`. Activer « Sign in with Apple » sur l’App ID dans le Developer Portal / Xcode.
+**Sign in with Apple (iOS, App Store 4.8)** : si Google est proposé, Apple doit l’être aussi. Flutter : `sign_in_with_apple` + entitlement `com.apple.developer.applesignin` dans `frontend/ios/Runner/Runner.entitlements`. Backend : `APPLE_CLIENT_IDS=com.kakiranya.safealert` (bundle ID, CSV si plusieurs) pour vérifier `POST /api/auth/apple`.
+
+**Portal (obligatoire pour IPA CI)** : Developer → Identifiers → App ID `com.kakiranya.safealert` → activer **Sign In with Apple** → régénérer le profil **SafeAlert App Store** (et mettre à jour le secret `IOS_*` / `.mobileprovision` GitHub si le profil est embarqué). Sans ça, Xcode échoue avec « Provisioning profile doesn't include the Sign In with Apple capability ».
 
 ## Déclenchement manuel (CI)
 
