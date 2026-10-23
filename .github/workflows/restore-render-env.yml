@@ -1,4 +1,4 @@
-# Restore / set individual Render env keys (never full PUT â€” secrets get blanked).
+# Restore / set individual Render env keys (never full PUT - secrets get blanked).
 name: Restore Render env keys
 
 on:
@@ -40,6 +40,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           RESTORE_JWT: ${{ inputs.restore_jwt }}
           APP_LATEST_VERSION: ${{ inputs.app_latest_version }}
+          APPLE_CLIENT_IDS: ${{ inputs.apple_client_ids }}
           GOOGLE_CLIENT_ID: ${{ inputs.google_client_id }}
           GOOGLE_ANDROID_CLIENT_ID: ${{ inputs.google_android_client_id }}
           AFRISOFT_PAY_HUB_API_KEY: ${{ secrets.AFRISOFT_PAY_HUB_API_KEY }}
@@ -70,6 +71,7 @@ jobs:
             put_key JWT_SECRET "$JWT_SECRET"
           fi
           put_key APP_LATEST_VERSION "$APP_LATEST_VERSION"
+          put_key APPLE_CLIENT_IDS "$APPLE_CLIENT_IDS"
           put_key GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID"
           put_key GOOGLE_ANDROID_CLIENT_ID "$GOOGLE_ANDROID_CLIENT_ID"
 
@@ -82,7 +84,7 @@ jobs:
             put_key AFRISOFT_PAY_HUB_API_KEY "$AFRISOFT_PAY_HUB_API_KEY"
             put_key AFRISOFT_PAY_HUB_WEBHOOK_SECRET "${AFRISOFT_PAY_HUB_WEBHOOK_SECRET:-$AFRISOFT_PAY_HUB_API_KEY}"
           else
-            echo "WARN: AFRISOFT_PAY_HUB_API_KEY GitHub secret missing â€” hub keys not updated"
+            echo "WARN: AFRISOFT_PAY_HUB_API_KEY GitHub secret missing - hub keys not updated"
           fi
 
       - name: List env keys (names only)
@@ -113,18 +115,11 @@ jobs:
           echo "Deploy HTTP ${code}"
           cat /tmp/deploy.json; echo
           case "$code" in 200|201|202) ;; *) exit 1 ;; esac
-          deploy_id=$(python3 -c '
-import json
-from pathlib import Path
-raw = Path("/tmp/deploy.json").read_text().strip()
-if raw:
-    d = json.loads(raw)
-    print(d.get("id") or d.get("deploy", {}).get("id") or "")
-')
+          deploy_id=$(python3 -c "import json; from pathlib import Path; raw=Path('/tmp/deploy.json').read_text().strip(); d=json.loads(raw) if raw else {}; print(d.get('id') or d.get('deploy',{}).get('id') or '')")
           if [ -z "$deploy_id" ]; then
             deploy_id=$(curl -fsS -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Accept: application/json" \
               "https://api.render.com/v1/services/${SERVICE_ID}/deploys?limit=1" \
-              | python3 -c 'import json,sys; rows=json.load(sys.stdin); d=rows[0] if isinstance(rows,list) and rows else {}; print((d.get("deploy") or d).get("id") or "")')
+              | python3 -c "import json,sys; rows=json.load(sys.stdin); d=rows[0] if isinstance(rows,list) and rows else {}; print((d.get('deploy') or d).get('id') or '')")
           fi
           echo "deploy_id=$deploy_id"
           if [ -z "$deploy_id" ]; then
