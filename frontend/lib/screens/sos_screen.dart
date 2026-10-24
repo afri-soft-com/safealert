@@ -428,8 +428,8 @@ class _SOSScreenState extends State<SOSScreen> {
                             child: CircularProgressIndicator(
                               value: _holding ? _holdProgress : 0,
                               strokeWidth: 6,
-                              color: Colors.white,
-                              backgroundColor: AppColors.rouge.withValues(alpha: 0.25),
+                              color: AppColors.rouge,
+                              backgroundColor: AppColors.rouge.withValues(alpha: 0.18),
                             ),
                           ),
                           AnimatedContainer(

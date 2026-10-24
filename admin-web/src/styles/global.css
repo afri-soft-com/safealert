@@ -55,17 +55,30 @@ a {
   align-items: center;
   gap: 0.75rem;
   padding: 0.7rem 1rem;
+  padding-top: max(0.7rem, env(safe-area-inset-top));
   background: #063d3d;
   border-bottom: 1px solid #0b6e6e;
   color: #f0f2f5;
+  animation: update-banner-in 220ms ease-out;
+}
+
+@keyframes update-banner-in {
+  from {
+    transform: translateY(-100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 body.has-update-banner {
-  padding-top: 3.5rem;
+  padding-top: calc(3.5rem + env(safe-area-inset-top, 0px));
 }
 
 body.has-update-banner .sidebar {
-  top: 3.5rem;
+  top: calc(3.5rem + env(safe-area-inset-top, 0px));
 }
 
 .update-banner-copy {

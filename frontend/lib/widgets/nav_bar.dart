@@ -23,39 +23,64 @@ class NavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.blanc,
-        border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
-      ),
-      padding: const EdgeInsets.fromLTRB(0, 6, 0, 4),
-      child: Row(
-        children: items.map((item) {
-          final isActive = active == item.id;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onTap(item.id),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(item.icon, style: const TextStyle(fontSize: 16)),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: isActive ? AppColors.rouge : const Color(0xFFAAAAAA),
-                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
-                    ),
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return Material(
+      color: AppColors.blanc,
+      elevation: 6,
+      shadowColor: Colors.black12,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(0, 6, 0, 4 + (bottom > 0 ? bottom * 0.35 : 0)),
+        child: Row(
+          children: items.map((item) {
+            final isActive = active == item.id;
+            return Expanded(
+              child: InkWell(
+                onTap: () => onTap(item.id),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOut,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isActive ? AppColors.teal.withValues(alpha: 0.12) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(item.icon, style: const TextStyle(fontSize: 16)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isActive ? AppColors.teal : const Color(0xFF9AA3AF),
+                          fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                        ),
+                      ),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        margin: const EdgeInsets.only(top: 3),
+                        height: 2.5,
+                        width: isActive ? 18 : 0,
+                        decoration: BoxDecoration(
+                          color: AppColors.teal,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
       ),
     );
   }

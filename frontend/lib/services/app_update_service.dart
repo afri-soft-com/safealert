@@ -12,6 +12,14 @@ import 'api_service.dart';
 bool get _isAndroid =>
     !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
+bool get _isIOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+/// Fallback store URLs when the API omits platform-specific fields.
+const _kPlayStoreUrl =
+    'https://play.google.com/store/apps/details?id=com.safealert.safealert';
+/// ASC / App Store numeric id for com.kakiranya.safealert (override via APP_STORE_URL_IOS).
+const _kAppStoreUrl = 'https://apps.apple.com/app/id6824983610';
+
 /// In-app updates: Google Play (Android release) + backend version fallback.
 class AppUpdateService {
   AppUpdateService._();
@@ -32,6 +40,7 @@ class AppUpdateService {
   bool _restartPromptShown = false;
 
   String? _storeUrl;
+  String? _iosStoreUrl;
   String? _latestVersion;
   bool _updateAvailable = false;
   bool _forceUpdate = false;
@@ -154,9 +163,11 @@ class AppUpdateService {
     final latest = (data['latestVersion'] as String?)?.trim() ?? '';
     final min = (data['minVersion'] as String?)?.trim() ?? '';
     final store = (data['storeUrl'] as String?)?.trim();
+    final iosStore = (data['iosStoreUrl'] as String?)?.trim();
     final forceFlag = data['forceUpdate'] == true;
 
     if (store != null && store.isNotEmpty) _storeUrl = store;
+    if (iosStore != null && iosStore.isNotEmpty) _iosStoreUrl = iosStore;
 
     final info = await PackageInfo.fromPlatform();
     final current = info.version;
@@ -241,10 +252,10 @@ class AppUpdateService {
       }
     }
 
-    final url = Uri.parse(
-      _storeUrl ??
-          'https://play.google.com/store/apps/details?id=com.safealert.safealert',
-    );
+    final preferred = _isIOS
+        ? (_iosStoreUrl ?? _storeUrl ?? _kAppStoreUrl)
+        : (_storeUrl ?? _kPlayStoreUrl);
+    final url = Uri.parse(preferred);
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }

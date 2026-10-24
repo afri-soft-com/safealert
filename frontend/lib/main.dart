@@ -559,6 +559,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         _currentScreen != 'splash' &&
         _currentScreen != 'calculator';
 
+    // Top system banners already consume the notch inset — zero it for screens
+    // below so StatusBar / SafeArea do not double-pad under the update banner.
+    final topBannerShown = showSoftBanner || (!cfg.sosEnabled && !cfg.maintenance);
+    final mq = MediaQuery.of(context);
+    final body = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: KeyedSubtree(key: ValueKey(_currentScreen), child: screen),
+    );
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -589,10 +600,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               onDismiss: () => setState(() => _softUpdateDismissed = true),
             ),
           Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: KeyedSubtree(key: ValueKey(_currentScreen), child: screen),
-            ),
+            child: topBannerShown
+                ? MediaQuery(
+                    data: mq.copyWith(
+                      padding: mq.padding.copyWith(top: 0),
+                    ),
+                    child: body,
+                  )
+                : body,
           ),
         ],
       ),

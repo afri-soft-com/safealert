@@ -112,12 +112,12 @@ services:
         sync: false
       - key: FCM_CLIENT_EMAIL
         sync: false
-      # Align with frontend/pubspec.yaml (version name) after each Play upload (1.0.28)
+      # Align with frontend/pubspec.yaml (version name) after each Play upload (1.0.29)
       - key: APP_LATEST_VERSION
-        value: "1.0.28"
+        value: "1.0.29"
       # Align with admin-web/package.json
       - key: ADMIN_WEB_VERSION
-        value: "1.0.5"
+        value: "1.0.6"
       - key: ADMIN_WEB_URL
         value: "https://safealert-admin.onrender.com"
 

@@ -314,20 +314,34 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: const TextStyle(color: Colors.white60, fontSize: 13),
                           ),
                           const SizedBox(height: 32),
-                          if (!_bootstrapped)
-                            const SizedBox(
-                              height: 28,
-                              width: 28,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
-                            )
-                          else if (step == _LoginStep.phone)
-                            ..._phoneFields(auth)
-                          else if (step == _LoginStep.otp)
-                            ..._otpFields(auth)
-                          else if (step == _LoginStep.pinUnlock)
-                            ..._pinUnlockFields(auth)
-                          else
-                            ..._pinCreateFields(auth),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 240),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            child: !_bootstrapped
+                                ? const SizedBox(
+                                    key: ValueKey('boot'),
+                                    height: 28,
+                                    width: 28,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white70,
+                                    ),
+                                  )
+                                : KeyedSubtree(
+                                    key: ValueKey(step),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: step == _LoginStep.phone
+                                          ? _phoneFields(auth)
+                                          : step == _LoginStep.otp
+                                              ? _otpFields(auth)
+                                              : step == _LoginStep.pinUnlock
+                                                  ? _pinUnlockFields(auth)
+                                                  : _pinCreateFields(auth),
+                                    ),
+                                  ),
+                          ),
                           if (auth.error != null) ...[
                             const SizedBox(height: 12),
                             Text(
