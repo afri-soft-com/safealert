@@ -106,15 +106,16 @@ void main() {
   });
 
   group('joinGroup', () {
-    test('sends join request and refreshes discoverable', () async {
-      fakeApi.onPost('/groups/join', () => {'message': 'Demande envoyée', 'status': 'pending'});
-      fakeApi.onGet('/groups/discover', () => {'data': []});
+    test('joins immediately via invite code and refreshes lists', () async {
+      fakeApi.onPost('/groups/join', () => {'message': 'Groupe rejoint', 'status': 'joined'});
+      fakeApi.onGet('/groups', () => {'data': <Map<String, dynamic>>[]});
+      fakeApi.onGet('/groups/discover', () => {'data': <Map<String, dynamic>>[]});
 
-      final result = await provider.joinGroup('ABCD12');
+      final result = await provider.joinGroup('safealert://group/ABCD1234');
 
       expect(result, true);
-      expect(fakeApi.lastBody!['invite_code'], 'ABCD12');
-      expect(provider.lastJoinMessage, 'Demande envoyée');
+      expect(fakeApi.lastBody!['invite_code'], 'ABCD1234');
+      expect(provider.lastJoinMessage, 'Groupe rejoint');
     });
 
     test('returns false on failure', () async {

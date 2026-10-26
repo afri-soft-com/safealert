@@ -13,6 +13,7 @@ router.put("/join-requests/:id/approve", authenticate, ctrl.approveJoinRequest);
 router.put("/join-requests/:id/reject", authenticate, ctrl.rejectJoinRequest);
 router.post("/:id/join", authenticate, ctrl.joinGroupById);
 router.get("/:id/members", authenticate, ctrl.getGroupMembers);
+router.patch("/:id/members/:userId", authenticate, ctrl.setMemberRole);
 router.get("/:id/messages", authenticate, ctrl.getGroupMessages);
 router.post("/:id/messages", authenticate, ctrl.postGroupMessage);
 router.get("/:id/alerts", authenticate, ctrl.getGroupAlerts);

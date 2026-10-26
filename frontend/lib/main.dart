@@ -193,10 +193,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       );
       if (ok) _navigate('contacts');
     } else if (kind == 'group') {
-      final ok = await context.read<GroupsProvider>().joinGroup(code);
+      final groups = context.read<GroupsProvider>();
+      final ok = await groups.joinGroup(code);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ok ? 'Groupe rejoint !' : 'Code de groupe invalide')),
+        SnackBar(
+          content: Text(
+            ok
+                ? (groups.lastJoinMessage ?? 'Groupe rejoint !')
+                : (groups.lastError ?? 'Code de groupe invalide'),
+          ),
+        ),
       );
       if (ok) _navigate('groups');
     }

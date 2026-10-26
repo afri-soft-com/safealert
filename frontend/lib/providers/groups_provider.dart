@@ -18,12 +18,23 @@ class GroupsProvider extends ChangeNotifier {
   bool _loading = false;
   bool _isOffline = false;
   String? _lastJoinMessage;
+  String? _lastError;
 
   List<Map<String, dynamic>> get myGroups => _myGroups;
   List<Map<String, dynamic>> get discoverable => _discoverable;
   bool get loading => _loading;
   bool get isOffline => _isOffline;
   String? get lastJoinMessage => _lastJoinMessage;
+  String? get lastError => _lastError;
+
+  /// Accepts raw code or deep-link URI (safealert://group/CODE).
+  static String normalizeInviteCode(String raw) {
+    final s = raw.trim();
+    if (s.isEmpty) return '';
+    final uriMatch = RegExp(r'(?:/|^)group/([A-Za-z0-9]+)', caseSensitive: false).firstMatch(s);
+    if (uriMatch != null) return uriMatch.group(1)!.toUpperCase();
+    return s.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  }
 
   int get totalPendingRequests => _myGroups.fold<int>(
         0,
@@ -181,12 +192,37 @@ class GroupsProvider extends ChangeNotifier {
 
   Future<bool> joinGroup(String code) async {
     _lastJoinMessage = null;
+    _lastError = null;
+    final invite = normalizeInviteCode(code);
+    if (invite.length < 6) {
+      _lastError = 'Code d\'invitation invalide';
+      notifyListeners();
+      return false;
+    }
     try {
-      final res = await _api.post('/groups/join', {'invite_code': code});
-      _lastJoinMessage = res['message'] as String? ?? 'Demande envoyée';
-      await fetchDiscoverable();
+      final res = await _api.post('/groups/join', {'invite_code': invite});
+      _lastJoinMessage = res['message'] as String? ?? 'Groupe rejoint';
+      await Future.wait([fetchMyGroups(), fetchDiscoverable()]);
       return true;
-    } catch (_) {
+    } catch (e) {
+      _lastError = e is ApiException
+          ? e.message
+          : 'Code invalide ou impossible de rejoindre';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> setMemberRole(String groupId, String userId, String role) async {
+    _lastError = null;
+    try {
+      await _api.patch('/groups/$groupId/members/$userId', {'role': role});
+      await fetchMembers(groupId);
+      await fetchMyGroups();
+      return true;
+    } catch (e) {
+      _lastError = e is ApiException ? e.message : 'Impossible de modifier le rôle';
+      notifyListeners();
       return false;
     }
   }

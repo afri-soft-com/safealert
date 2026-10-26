@@ -128,23 +128,72 @@ const createGroup = async (req, res) => {
   }
 };
 
+/** Accept pasted URI payloads like safealert://group/A1B2C3D4 or …/group/CODE. */
+function normalizeInviteCode(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const fromUri = s.match(/(?:\/|^)group\/([A-Za-z0-9]+)/i);
+  if (fromUri) return fromUri[1].toUpperCase();
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+/**
+ * Join via invite code = immediate membership (WhatsApp-style).
+ * Public discover without a code still uses pending join requests.
+ */
 const joinGroup = async (req, res) => {
-  const { invite_code } = req.body;
-  if (!invite_code) return res.status(400).json({ error: "Code d'invitation requis" });
+  const inviteCode = normalizeInviteCode(req.body?.invite_code);
+  if (!inviteCode || inviteCode.length < 6) {
+    return res.status(400).json({ error: "Code d'invitation requis" });
+  }
 
   try {
     const group = await pool.query(
       "SELECT id, name FROM neighborhood_groups WHERE invite_code = $1",
-      [invite_code.toUpperCase()]
+      [inviteCode]
     );
-    if (group.rows.length === 0) return res.status(404).json({ error: "Code invalide" });
+    if (group.rows.length === 0) {
+      return res.status(404).json({ error: "Code invalide" });
+    }
 
     const groupId = group.rows[0].id;
-    const result = await createJoinRequest(groupId, req.userId);
-    if (result.status === 201) {
-      result.body.group_name = group.rows[0].name;
+    const groupName = group.rows[0].name;
+
+    const already = await pool.query(
+      "SELECT id, role FROM group_members WHERE group_id = $1 AND user_id = $2",
+      [groupId, req.userId]
+    );
+    if (already.rows.length > 0) {
+      return res.status(200).json({
+        message: "Vous êtes déjà membre de ce groupe",
+        status: "already_member",
+        group_id: groupId,
+        group_name: groupName,
+        role: already.rows[0].role,
+      });
     }
-    return res.status(result.status).json(result.body);
+
+    await pool.query(
+      "INSERT INTO group_members (group_id, user_id, role) VALUES ($1, $2, 'member')",
+      [groupId, req.userId]
+    );
+    await pool.query(
+      "UPDATE neighborhood_groups SET member_count = member_count + 1 WHERE id = $1",
+      [groupId]
+    );
+    // Clear any leftover join request
+    await pool.query(
+      `DELETE FROM group_join_requests WHERE group_id = $1 AND user_id = $2`,
+      [groupId, req.userId]
+    );
+
+    return res.status(201).json({
+      message: "Groupe rejoint",
+      status: "joined",
+      group_id: groupId,
+      group_name: groupName,
+      role: "member",
+    });
   } catch (err) {
     console.error("joinGroup error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
@@ -280,6 +329,24 @@ const rejectJoinRequest = async (req, res) => {
 const leaveGroup = async (req, res) => {
   const { id } = req.params;
   try {
+    const me = await pool.query(
+      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [id, req.userId]
+    );
+    if (!me.rows[0]) {
+      return res.status(404).json({ error: "Vous n'êtes pas membre de ce groupe" });
+    }
+    if (me.rows[0].role === "admin") {
+      const admins = await pool.query(
+        `SELECT COUNT(*)::int AS c FROM group_members WHERE group_id = $1 AND role = 'admin'`,
+        [id]
+      );
+      if (admins.rows[0].c <= 1) {
+        return res.status(400).json({
+          error: "Désignez un autre administrateur avant de quitter le groupe.",
+        });
+      }
+    }
     await pool.query(
       "DELETE FROM group_members WHERE group_id = $1 AND user_id = $2",
       [id, req.userId]
@@ -291,6 +358,65 @@ const leaveGroup = async (req, res) => {
     return res.json({ message: "Quitté le groupe" });
   } catch (err) {
     console.error("leaveGroup error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
+/** Group admin (or creator) promotes / demotes a member — WhatsApp-style. */
+const setMemberRole = async (req, res) => {
+  const { id, userId } = req.params;
+  const role = String(req.body?.role || "").toLowerCase();
+  if (role !== "admin" && role !== "member") {
+    return res.status(400).json({ error: "Rôle invalide (admin|member)" });
+  }
+  try {
+    if (!(await isGroupAdmin(id, req.userId))) {
+      return res.status(403).json({ error: "Réservé aux administrateurs du groupe" });
+    }
+    if (String(userId) === String(req.userId) && role === "member") {
+      const admins = await pool.query(
+        `SELECT COUNT(*)::int AS c FROM group_members WHERE group_id = $1 AND role = 'admin'`,
+        [id]
+      );
+      if (admins.rows[0].c <= 1) {
+        return res.status(400).json({
+          error: "Impossible de retirer le dernier administrateur. Désignez quelqu'un d'autre d'abord.",
+        });
+      }
+    }
+    if (role === "member") {
+      const target = await pool.query(
+        `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+        [id, userId]
+      );
+      if (target.rows[0]?.role === "admin") {
+        const admins = await pool.query(
+          `SELECT COUNT(*)::int AS c FROM group_members WHERE group_id = $1 AND role = 'admin'`,
+          [id]
+        );
+        if (admins.rows[0].c <= 1) {
+          return res.status(400).json({
+            error: "Impossible de retirer le dernier administrateur du groupe.",
+          });
+        }
+      }
+    }
+
+    const result = await pool.query(
+      `UPDATE group_members SET role = $3
+        WHERE group_id = $1 AND user_id = $2
+        RETURNING user_id, role, joined_at`,
+      [id, userId, role]
+    );
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "Membre introuvable dans ce groupe" });
+    }
+    return res.json({
+      message: role === "admin" ? "Membre promu administrateur" : "Administrateur rétrogradé en membre",
+      member: result.rows[0],
+    });
+  } catch (err) {
+    console.error("setMemberRole error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
@@ -551,10 +677,12 @@ module.exports = {
   approveJoinRequest,
   rejectJoinRequest,
   leaveGroup,
+  setMemberRole,
   getGroupMembers,
   getGroupMessages,
   postGroupMessage,
   getGroupAlerts,
   postGroupAlert,
   discoverGroups,
+  normalizeInviteCode,
 };

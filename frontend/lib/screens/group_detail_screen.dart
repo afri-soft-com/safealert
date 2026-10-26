@@ -251,10 +251,32 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     );
   }
 
+  Future<void> _changeMemberRole(Map<String, dynamic> m, String role) async {
+    final userId = m['id']?.toString();
+    if (userId == null || userId.isEmpty) return;
+    final p = context.read<GroupsProvider>();
+    final ok = await p.setMemberRole(_groupId, userId, role);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? (role == 'admin'
+                  ? '${m['pseudo'] ?? 'Membre'} est maintenant admin'
+                  : '${m['pseudo'] ?? 'Membre'} n\'est plus admin')
+              : (p.lastError ?? 'Action impossible'),
+          style: const TextStyle(fontSize: 12),
+        ),
+        backgroundColor: ok ? AppColors.vert : AppColors.rouge,
+      ),
+    );
+  }
+
   Widget _memberTile(Map<String, dynamic> m) {
     final pseudo = m['pseudo'] as String? ?? 'Citoyen';
     final phone = m['phone'] as String? ?? '';
     final role = m['role'] as String? ?? 'member';
+    final userId = m['id']?.toString() ?? '';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
@@ -292,6 +314,29 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
                     color: role == 'admin' ? AppColors.bleuFonce : AppColors.gris)),
           ),
+          if (_isAdmin && userId.isNotEmpty)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, size: 18, color: AppColors.gris),
+              onSelected: (value) {
+                if (value == 'promote') {
+                  unawaited(_changeMemberRole(m, 'admin'));
+                } else if (value == 'demote') {
+                  unawaited(_changeMemberRole(m, 'member'));
+                }
+              },
+              itemBuilder: (ctx) => [
+                if (role != 'admin')
+                  const PopupMenuItem(
+                    value: 'promote',
+                    child: Text('Nommer administrateur', style: TextStyle(fontSize: 13)),
+                  ),
+                if (role == 'admin')
+                  const PopupMenuItem(
+                    value: 'demote',
+                    child: Text('Retirer le rôle admin', style: TextStyle(fontSize: 13)),
+                  ),
+              ],
+            ),
         ],
       ),
     );

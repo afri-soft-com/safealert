@@ -710,32 +710,32 @@ describe("Leader", () => {
 });
 
 describe("Groups join requests", () => {
-  it("POST /api/groups/join creates pending request", async () => {
+  it("POST /api/groups/join adds member immediately with invite code", async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ rows: [] }) // not already member
+      .mockResolvedValueOnce({ rows: [] }) // insert member
+      .mockResolvedValueOnce({ rows: [] }) // bump count
+      .mockResolvedValueOnce({ rows: [] }); // clear requests
     const res = await request(app)
       .post("/api/groups/join")
       .set("Authorization", `Bearer ${user2Token}`)
-      .send({ invite_code: "ABCD1234" });
+      .send({ invite_code: "safealert://group/ABCD1234" });
     expect(res.status).toBe(201);
-    expect(res.body.message).toMatch(/demande envoyée/i);
-    expect(res.body.status).toBe("pending");
+    expect(res.body.status).toBe("joined");
+    expect(res.body.group_name).toBe("Voisins");
   });
 
-  it("POST /api/groups/join rejects duplicate pending request", async () => {
+  it("POST /api/groups/join returns already_member when duplicate", async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: "r1", status: "pending" }] });
+      .mockResolvedValueOnce({ rows: [{ id: "m1", role: "member" }] });
     const res = await request(app)
       .post("/api/groups/join")
       .set("Authorization", `Bearer ${user2Token}`)
       .send({ invite_code: "ABCD1234" });
-    expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(/déjà en attente/i);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("already_member");
   });
 
   it("GET /api/groups/:id/join-requests rejects non-admin", async () => {
@@ -1004,7 +1004,7 @@ describe("App version", () => {
     delete process.env.ADMIN_WEB_VERSION;
     const res = await request(app).get("/api/app/version");
     expect(res.status).toBe(200);
-    expect(res.body.latestVersion).toBe("1.0.33");
+    expect(res.body.latestVersion).toBe("1.0.34");
     expect(res.body.adminWebVersion).toBe("1.0.11");
     expect(res.body.iosStoreUrl).toContain("apps.apple.com");
     expect(res.body.adminWebUrl).toContain("safealert-admin");

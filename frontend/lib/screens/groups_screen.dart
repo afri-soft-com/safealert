@@ -119,7 +119,9 @@ class _GroupsScreenState extends State<GroupsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Votre demande sera envoyée à l\'administrateur du groupe pour validation.',
+              'Collez le code (ex. A1B2C3D4) ou le lien safealert://group/…. '
+              'Avec un code valide vous entrez tout de suite. '
+              'Sinon, pour les groupes publics listés plus bas, une demande d\'admin est nécessaire.',
               style: TextStyle(fontSize: 11, color: AppColors.gris),
             ),
             const SizedBox(height: 12),
@@ -127,7 +129,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
               controller: codeCtrl,
               textCapitalization: TextCapitalization.characters,
               decoration: InputDecoration(
-                hintText: 'Code d\'invitation (ex: A1B2C3D4)',
+                hintText: 'Code ou lien d\'invitation',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 isDense: true,
@@ -149,7 +151,9 @@ class _GroupsScreenState extends State<GroupsScreen> {
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(
-                  ok ? (p.lastJoinMessage ?? 'Demande envoyée') : 'Code invalide ou demande déjà en cours',
+                  ok
+                      ? (p.lastJoinMessage ?? 'Groupe rejoint')
+                      : (p.lastError ?? 'Code invalide'),
                   style: const TextStyle(fontSize: 12),
                 ),
                 backgroundColor: ok ? AppColors.vert : AppColors.rouge,
@@ -160,7 +164,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Envoyer la demande', style: TextStyle(fontSize: 13)),
+            child: const Text('Rejoindre', style: TextStyle(fontSize: 13)),
           ),
         ],
       ),
@@ -433,6 +437,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
                                 style: const TextStyle(fontWeight: FontWeight.w700)),
                             const SizedBox(height: 8),
                             Text(code, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 2)),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Les autres scannent ce QR avec l\'appareil photo du téléphone '
+                              '(SafeAlert s\'ouvre si installé), ou saisissent le code.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 11, color: AppColors.gris),
+                            ),
                             QrImageView(data: 'safealert://group/$code', size: 140),
                             Row(
                               children: [
