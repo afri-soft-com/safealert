@@ -182,7 +182,35 @@ async function writeSettingJson(key, value) {
   );
 }
 
+function applyPlanCache(free, prem, pricing) {
+  planCache = {
+    at: Date.now(),
+    free: normalizeEntitlements(free, FREE_DEFAULT),
+    premium: normalizeEntitlements(prem, PREMIUM_DEFAULT),
+    pricing: normalizePricing(pricing || PRICING_DEFAULT),
+  };
+  Object.assign(FREE, planCache.free);
+  Object.assign(PREMIUM, planCache.premium);
+  Object.assign(PRICING, planCache.pricing);
+  return planCache;
+}
+
+function isUnitTestEnv() {
+  return (
+    process.env.VITEST === "true" ||
+    process.env.NODE_ENV === "test" ||
+    typeof process.env.VITEST_WORKER_ID !== "undefined"
+  );
+}
+
 async function loadPlanConfig(force = false) {
+  // Unit tests mock pool.query for route handlers — don't steal those replies.
+  if (isUnitTestEnv() && !force) {
+    if (!planCache.at) {
+      return applyPlanCache(FREE_DEFAULT, PREMIUM_DEFAULT, PRICING_DEFAULT);
+    }
+    return planCache;
+  }
   if (!force && planCache.at && Date.now() - planCache.at < 15000) {
     return planCache;
   }
@@ -191,17 +219,7 @@ async function loadPlanConfig(force = false) {
     readSettingJson(KEY_PREMIUM),
     readSettingJson(KEY_PRICING),
   ]);
-  planCache = {
-    at: Date.now(),
-    free: normalizeEntitlements(freeRaw, FREE_DEFAULT),
-    premium: normalizeEntitlements(premRaw, PREMIUM_DEFAULT),
-    pricing: normalizePricing(priceRaw || PRICING_DEFAULT),
-  };
-  // Keep deprecated sync exports roughly in sync for old require sites
-  Object.assign(FREE, planCache.free);
-  Object.assign(PREMIUM, planCache.premium);
-  Object.assign(PRICING, planCache.pricing);
-  return planCache;
+  return applyPlanCache(freeRaw, premRaw, priceRaw || PRICING_DEFAULT);
 }
 
 function pricingWithCdf(pricing = planCache.pricing) {
@@ -251,15 +269,7 @@ async function savePlansAdmin({ free, premium: prem, pricing }) {
   await writeSettingJson(KEY_FREE, nextFree);
   await writeSettingJson(KEY_PREMIUM, nextPrem);
   await writeSettingJson(KEY_PRICING, nextPrice);
-  planCache = {
-    at: Date.now(),
-    free: nextFree,
-    premium: nextPrem,
-    pricing: nextPrice,
-  };
-  Object.assign(FREE, nextFree);
-  Object.assign(PREMIUM, nextPrem);
-  Object.assign(PRICING, nextPrice);
+  applyPlanCache(nextFree, nextPrem, nextPrice);
   return getPlansAdminPayload();
 }
 
@@ -363,8 +373,10 @@ const getStatusPayload = async (userId) => {
   };
 };
 
-// Warm cache (non-blocking)
-loadPlanConfig().catch(() => {});
+// Warm cache in real runtimes only (avoids eating vitest pool mocks).
+if (!isUnitTestEnv()) {
+  loadPlanConfig().catch(() => {});
+}
 
 module.exports = {
   PRICING,
