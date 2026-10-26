@@ -25,7 +25,9 @@ const respondErr = (res, err, fallback) => {
 
 /** GET /api/payments/config */
 const getConfig = async (req, res) => {
-  const pricing = pricingWithCdf();
+  const { loadPlanConfig } = require("../services/premiumEntitlements");
+  const cfg = await loadPlanConfig();
+  const pricing = pricingWithCdf(cfg.pricing);
   return res.json({
     feature_enabled: premium(),
     afriSoftPayHubEnabled: payHub.isConfigured(),

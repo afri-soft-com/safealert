@@ -273,6 +273,10 @@ export const api = {
         monthly_cdf_approx: number;
         yearly_cdf_approx: number;
       };
+      plans?: {
+        free: PremiumEntitlements;
+        premium: PremiumEntitlements;
+      };
       stats: {
         active: number;
         expired: number;
@@ -285,6 +289,25 @@ export const api = {
       total: number;
     }>(`/admin/premium?${params}`);
   },
+
+  getPremiumPlans: () =>
+    request<PremiumPlansPayload>("/admin/premium/plans"),
+
+  savePremiumPlans: (body: {
+    free: PremiumEntitlements;
+    premium: PremiumEntitlements;
+    pricing: { monthly_usd: number; yearly_usd: number; currency?: string };
+  }) =>
+    request<PremiumPlansPayload>("/admin/premium/plans", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  resetPremiumPlans: () =>
+    request<PremiumPlansPayload>("/admin/premium/plans/reset", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
 
   getTreasury: () =>
     request<{
@@ -465,6 +488,37 @@ export const api = {
       body: JSON.stringify({ status }),
     }),
 };
+
+export interface PremiumEntitlements {
+  contacts_max: number;
+  trips_per_week: number | null;
+  trip_eta_max_minutes: number;
+  history_limit: number;
+  sos_priority: boolean;
+  sos_mediation: boolean;
+  live_circles_max: number;
+}
+
+export interface PremiumPlansPayload {
+  free: PremiumEntitlements;
+  premium: PremiumEntitlements;
+  pricing: {
+    currency: string;
+    monthly_usd: number;
+    yearly_usd: number;
+    monthly_cdf?: number;
+    yearly_cdf?: number;
+    monthly_cdf_approx: number;
+    yearly_cdf_approx: number;
+    usd_to_cdf_rate?: number;
+  };
+  defaults: {
+    free: PremiumEntitlements;
+    premium: PremiumEntitlements;
+    pricing: PremiumPlansPayload["pricing"];
+  };
+  field_hints?: Record<string, string>;
+}
 
 export interface UserRow {
   id: string;

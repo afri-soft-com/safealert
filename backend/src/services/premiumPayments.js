@@ -6,29 +6,30 @@ const crypto = require("crypto");
 const { pool } = require("../config/database");
 const payHub = require("./afrisoftPayHub");
 const platformWallet = require("./platformWallet");
-const { PRICING, pricingWithCdf, toCdf } = require("./premiumEntitlements");
+const { pricingWithCdf, toCdf, loadPlanConfig } = require("./premiumEntitlements");
 const { warn } = require("../utils/logger");
 
-const PLANS = {
-  monthly: {
-    code: "monthly",
-    label: "Premium mensuel",
-    days: 30,
-    amount_usd: PRICING.monthly_usd,
-  },
-  yearly: {
-    code: "yearly",
-    label: "Premium annuel",
-    days: 365,
-    amount_usd: PRICING.yearly_usd,
-  },
-};
-
-function resolvePlan(planCode) {
+async function resolvePlan(planCode) {
+  const cfg = await loadPlanConfig();
+  const pricing = pricingWithCdf(cfg.pricing);
   const key = String(planCode || "monthly")
     .trim()
     .toLowerCase();
-  const plan = PLANS[key];
+  const catalog = {
+    monthly: {
+      code: "monthly",
+      label: "Premium mensuel",
+      days: 30,
+      amount_usd: pricing.monthly_usd,
+    },
+    yearly: {
+      code: "yearly",
+      label: "Premium annuel",
+      days: 365,
+      amount_usd: pricing.yearly_usd,
+    },
+  };
+  const plan = catalog[key];
   if (!plan) {
     const err = new Error("Plan invalide (monthly | yearly).");
     err.status = 400;
@@ -36,6 +37,26 @@ function resolvePlan(planCode) {
     throw err;
   }
   return plan;
+}
+
+function listPlans() {
+  const pricing = pricingWithCdf();
+  return [
+    {
+      code: "monthly",
+      label: "Premium mensuel",
+      days: 30,
+      amount_usd: pricing.monthly_usd,
+      amount_cdf: pricing.monthly_cdf,
+    },
+    {
+      code: "yearly",
+      label: "Premium annuel",
+      days: 365,
+      amount_usd: pricing.yearly_usd,
+      amount_cdf: pricing.yearly_cdf,
+    },
+  ];
 }
 
 async function grantPremiumDays(userId, days, client = pool) {
@@ -95,8 +116,9 @@ async function createIntent({
     throw err;
   }
 
-  const plan = resolvePlan(planCode);
-  const pricing = pricingWithCdf();
+  const plan = await resolvePlan(planCode);
+  const cfg = await loadPlanConfig();
+  const pricing = pricingWithCdf(cfg.pricing);
   const amountCdf =
     plan.code === "yearly" ? pricing.yearly_cdf : pricing.monthly_cdf;
   const telecomCode = payHub.operatorToTelecom(telecom || "MP");
@@ -443,19 +465,7 @@ async function processWebhook({ rawBody, timestamp, signature, path }) {
   return { ok: true, code: "processed_completed" };
 }
 
-function listPlans() {
-  const pricing = pricingWithCdf();
-  return Object.values(PLANS).map((p) => ({
-    code: p.code,
-    label: p.label,
-    days: p.days,
-    amount_usd: p.amount_usd,
-    amount_cdf: p.code === "yearly" ? pricing.yearly_cdf : pricing.monthly_cdf,
-  }));
-}
-
 module.exports = {
-  PLANS,
   resolvePlan,
   listPlans,
   createIntent,

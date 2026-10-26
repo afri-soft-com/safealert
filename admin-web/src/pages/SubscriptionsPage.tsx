@@ -169,8 +169,8 @@ export default function SubscriptionsPage() {
       <div className="card" style={{ marginTop: 16 }}>
         <h3>Offre citoyenne</h3>
         <p style={{ color: "var(--muted, #666)", fontSize: 14 }}>
-          Gratuit : 5 contacts, 3 trajets / semaine, ETA 2 h, historique 30.
-          Premium : illimité, ETA 12 h, 25 contacts, historique 100, priorité SOS.
+          Les plafonds Gratuit / Premium et les prix se configurent dans{" "}
+          <a href="/offres">Offres Gratuit / Premium</a>.
         </p>
         <table>
           <thead>

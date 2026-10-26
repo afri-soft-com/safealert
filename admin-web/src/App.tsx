@@ -8,6 +8,7 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import UsersPage from "./pages/UsersPage";
 import SubscriptionsPage from "./pages/SubscriptionsPage";
+import PlansPage from "./pages/PlansPage";
 import TreasuryPage from "./pages/TreasuryPage";
 import PartnersPage from "./pages/PartnersPage";
 import EmergencyPage from "./pages/EmergencyPage";
@@ -43,6 +44,7 @@ export default function App() {
                 <Route path="broadcasts" element={<BroadcastsPage />} />
                 <Route path="utilisateurs" element={<UsersPage />} />
                 <Route path="abonnements" element={<SubscriptionsPage />} />
+                <Route path="offres" element={<PlansPage />} />
                 <Route path="tresorerie" element={<TreasuryPage />} />
                 <Route path="partenaires" element={<PartnersPage />} />
                 <Route path="annuaire" element={<EmergencyPage />} />

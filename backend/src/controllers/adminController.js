@@ -2,7 +2,13 @@ const { pool } = require("../config/database");
 const { generateApiKey } = require("../middleware/partnerAuth");
 const { writeAudit } = require("../services/audit");
 const { premium } = require("../config/features");
-const { PRICING } = require("../services/premiumEntitlements");
+const {
+  loadPlanConfig,
+  pricingWithCdf,
+  getPlansAdminPayload,
+  savePlansAdmin,
+  resetPlansAdmin,
+} = require("../services/premiumEntitlements");
 const { fail } = require("../utils/httpError");
 const {
   getMaintenance,
@@ -358,12 +364,15 @@ const listPremiumSubscriptions = async (req, res) => {
       params
     );
 
+    const cfg = await loadPlanConfig();
+    const pricing = pricingWithCdf(cfg.pricing);
     return res.json({
       feature_enabled: premium(),
-      pricing: PRICING,
+      pricing,
+      plans: { free: cfg.free, premium: cfg.premium },
       stats: {
         ...stats,
-        estimated_mrr_usd: (stats.active || 0) * (PRICING.monthly_usd || 2),
+        estimated_mrr_usd: (stats.active || 0) * (pricing.monthly_usd || 2),
       },
       data: result.rows,
       page,
@@ -372,6 +381,64 @@ const listPremiumSubscriptions = async (req, res) => {
     });
   } catch (err) {
     console.error("listPremiumSubscriptions error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
+const getPremiumPlans = async (req, res) => {
+  try {
+    return res.json(await getPlansAdminPayload());
+  } catch (err) {
+    console.error("getPremiumPlans error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
+const updatePremiumPlans = async (req, res) => {
+  try {
+    const { free, premium: prem, pricing } = req.body || {};
+    if (!free || !prem || !pricing) {
+      return res.status(400).json({
+        error: "Corps invalide : free, premium et pricing sont requis.",
+      });
+    }
+    const payload = await savePlansAdmin({ free, premium: prem, pricing });
+    await writeAudit({
+      actorId: req.userId,
+      action: "premium_plans.update",
+      entityType: "app_settings",
+      entityId: null,
+      metadata: {
+        free: payload.free,
+        premium: payload.premium,
+        pricing: {
+          monthly_usd: payload.pricing.monthly_usd,
+          yearly_usd: payload.pricing.yearly_usd,
+        },
+      },
+      ip: clientIp(req),
+    });
+    return res.json(payload);
+  } catch (err) {
+    console.error("updatePremiumPlans error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
+const resetPremiumPlans = async (req, res) => {
+  try {
+    const payload = await resetPlansAdmin();
+    await writeAudit({
+      actorId: req.userId,
+      action: "premium_plans.reset",
+      entityType: "app_settings",
+      entityId: null,
+      metadata: {},
+      ip: clientIp(req),
+    });
+    return res.json(payload);
+  } catch (err) {
+    console.error("resetPremiumPlans error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
@@ -645,5 +712,8 @@ module.exports = {
   listGroups,
   listAuditLogs,
   listPremiumSubscriptions,
+  getPremiumPlans,
+  updatePremiumPlans,
+  resetPremiumPlans,
   VALID_ROLES,
 };

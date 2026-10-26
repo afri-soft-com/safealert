@@ -22,7 +22,12 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const superAdmin = isSuperAdmin(user?.role);
   const items = superAdmin
-    ? [...NAV, { to: "/reglages", label: "Réglages" }]
+    ? [
+        ...NAV.slice(0, 5),
+        { to: "/offres", label: "Offres Gratuit / Premium" },
+        ...NAV.slice(5),
+        { to: "/reglages", label: "Réglages" },
+      ]
     : NAV;
 
   return (

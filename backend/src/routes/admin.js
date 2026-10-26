@@ -12,6 +12,9 @@ router.use(authenticate, requireStaff);
 
 router.get("/stats", ctrl.getStats);
 router.get("/premium", ctrl.listPremiumSubscriptions);
+router.get("/premium/plans", requireSuperAdmin, ctrl.getPremiumPlans);
+router.put("/premium/plans", requireSuperAdmin, ctrl.updatePremiumPlans);
+router.post("/premium/plans/reset", requireSuperAdmin, ctrl.resetPremiumPlans);
 router.get("/treasury", treasury.getTreasury);
 router.post("/treasury/withdraw", requireSuperAdmin, treasury.withdrawTreasury);
 router.get("/users", ctrl.listUsers);
