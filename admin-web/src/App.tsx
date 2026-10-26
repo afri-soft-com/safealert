@@ -24,6 +24,7 @@ import PrivacyPage from "./pages/PrivacyPage";
 import ManuelPage from "./pages/ManuelPage";
 import IncidentTypesPage from "./pages/IncidentTypesPage";
 import BroadcastsPage from "./pages/BroadcastsPage";
+import TripsPage from "./pages/TripsPage";
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
                 <Route path="partenaires" element={<PartnersPage />} />
                 <Route path="annuaire" element={<EmergencyPage />} />
                 <Route path="incidents" element={<IncidentsPage />} />
+                <Route path="trajets" element={<TripsPage />} />
                 <Route path="types-incidents" element={<IncidentTypesPage />} />
                 <Route path="groupes" element={<GroupsPage />} />
                 <Route path="audit" element={<AuditPage />} />

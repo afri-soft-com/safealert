@@ -466,6 +466,62 @@ describe("Admin", () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
   });
+
+  it("GET /api/admin/trips returns paginated list", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "11111111-1111-4111-8111-111111111111",
+          status: "active",
+          trip_mode: "destination",
+          dest_label: "Gombe",
+          traveler_pseudo: "A",
+        }],
+      });
+    const res = await request(app)
+      .get("/api/admin/trips")
+      .set("Authorization", `Bearer ${staffToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+  });
+
+  it("POST /api/admin/trips creates a trip for a user", async () => {
+    const uid = "22222222-2222-4222-8222-222222222222";
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: uid }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "33333333-3333-4333-8333-333333333333",
+          user_id: uid,
+          status: "active",
+          dest_label: "Kin",
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] }); // audit
+    const res = await request(app)
+      .post("/api/admin/trips")
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({
+        user_id: uid,
+        origin_lat: -4.32,
+        origin_lng: 15.31,
+        dest_lat: -4.33,
+        dest_lng: 15.32,
+        dest_label: "Kin",
+        eta_minutes: 45,
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.dest_label).toBe("Kin");
+  });
+
+  it("DELETE /api/admin/trips/:id requires super admin", async () => {
+    const res = await request(app)
+      .delete("/api/admin/trips/33333333-3333-4333-8333-333333333333")
+      .set("Authorization", `Bearer ${staffToken}`);
+    expect(res.status).toBe(403);
+  });
 });
 
 describe("SOS", () => {
@@ -872,7 +928,7 @@ describe("App version", () => {
     const res = await request(app).get("/api/app/version");
     expect(res.status).toBe(200);
     expect(res.body.latestVersion).toBe("1.0.32");
-    expect(res.body.adminWebVersion).toBe("1.0.7");
+    expect(res.body.adminWebVersion).toBe("1.0.8");
     expect(res.body.iosStoreUrl).toContain("apps.apple.com");
     expect(res.body.adminWebUrl).toContain("safealert-admin");
   });

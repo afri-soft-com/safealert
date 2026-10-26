@@ -5,6 +5,7 @@ const types = require("../controllers/incidentTypesController");
 const treasury = require("../controllers/treasuryController");
 const broadcasts = require("../controllers/broadcastController");
 const sosCtrl = require("../controllers/sosController");
+const trips = require("../controllers/adminTripsController");
 
 const router = Router();
 
@@ -43,5 +44,11 @@ router.delete("/incident-types/:id", requireSuperAdmin, types.deleteType);
 router.get("/broadcasts", broadcasts.listBroadcasts);
 router.post("/broadcasts", requireSuperAdmin, broadcasts.createBroadcast);
 router.patch("/incidents/:id/mediation", sosCtrl.updateMediation);
+
+router.get("/trips", trips.listTrips);
+router.get("/trips/:id", trips.getTrip);
+router.post("/trips", trips.createTrip);
+router.patch("/trips/:id", trips.updateTrip);
+router.delete("/trips/:id", requireSuperAdmin, trips.deleteTrip);
 
 module.exports = router;

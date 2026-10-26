@@ -404,6 +404,30 @@ export const api = {
     );
   },
 
+  getTrips: (params: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request<{ data: SafeTripRow[]; page: number; limit: number; total: number }>(
+      `/admin/trips${qs ? `?${qs}` : ""}`
+    );
+  },
+
+  getTrip: (id: string) => request<SafeTripDetail>(`/admin/trips/${id}`),
+
+  createTrip: (data: SafeTripInput) =>
+    request<SafeTripRow>("/admin/trips", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateTrip: (id: string, data: Partial<SafeTripInput> & { eta_at?: string }) =>
+    request<SafeTripRow>(`/admin/trips/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  deleteTrip: (id: string) =>
+    request<{ message: string; id: string }>(`/admin/trips/${id}`, { method: "DELETE" }),
+
   getGroups: (page = 1, limit = 20) =>
     request<{ data: GroupRow[]; page: number; limit: number; total: number }>(
       `/admin/groups?page=${page}&limit=${limit}`
@@ -598,6 +622,71 @@ export interface IncidentRow {
   reporter: string;
   reporter_phone: string;
 }
+
+export type SafeTripStatus = "active" | "arrived" | "alerted" | "cancelled" | "expired";
+export type SafeTripMode = "destination" | "patrol";
+
+export interface SafeTripRow {
+  id: string;
+  user_id: string;
+  status: SafeTripStatus;
+  trip_mode: SafeTripMode | string;
+  dest_label: string | null;
+  origin_lat: number;
+  origin_lng: number;
+  dest_lat: number;
+  dest_lng: number;
+  last_lat: number | null;
+  last_lng: number | null;
+  eta_at: string;
+  created_at: string;
+  arrived_at: string | null;
+  transport_mode: string | null;
+  vehicle_plate: string | null;
+  vehicle_note: string | null;
+  notify_on_delay: boolean;
+  last_ping_at: string | null;
+  traveler_pseudo?: string;
+  traveler_phone?: string;
+}
+
+export interface SafeTripDetail extends SafeTripRow {
+  track?: Array<{ lat: number; lng: number; recorded_at: string }>;
+  escort_contact_ids?: string[];
+  share_token?: string | null;
+  share_expires_at?: string | null;
+}
+
+export interface SafeTripInput {
+  user_id?: string;
+  origin_lat?: number;
+  origin_lng?: number;
+  dest_lat?: number;
+  dest_lng?: number;
+  dest_label?: string | null;
+  eta_minutes?: number;
+  status?: SafeTripStatus;
+  trip_mode?: SafeTripMode;
+  transport_mode?: string;
+  vehicle_plate?: string | null;
+  vehicle_note?: string | null;
+  notify_on_delay?: boolean;
+  last_lat?: number;
+  last_lng?: number;
+}
+
+export const TRIP_STATUS_LABELS: Record<SafeTripStatus, string> = {
+  active: "Actif",
+  arrived: "Arrivé",
+  alerted: "Alerte",
+  cancelled: "Annulé",
+  expired: "Expiré",
+};
+
+export const TRIP_MODE_LABELS: Record<SafeTripMode, string> = {
+  destination: "Destination",
+  patrol: "Patrouille",
+};
 
 export interface GroupRow {
   id: string;
