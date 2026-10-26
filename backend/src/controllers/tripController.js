@@ -36,6 +36,45 @@ const assertTripEnabled = (res) => {
   return true;
 };
 
+/** Persist a GPS breadcrumb (best-effort — trail must not break pings). */
+async function appendTrackPoint(tripId, lat, lng) {
+  try {
+    await pool.query(
+      `INSERT INTO safe_trip_track_points (trip_id, lat, lng) VALUES ($1, $2, $3)`,
+      [tripId, lat, lng]
+    );
+  } catch (err) {
+    console.error("appendTrackPoint:", err.message);
+  }
+}
+
+async function loadTrack(tripId, limit = 800) {
+  try {
+    const r = await pool.query(
+      `SELECT lat, lng, recorded_at
+         FROM safe_trip_track_points
+        WHERE trip_id = $1
+        ORDER BY recorded_at ASC
+        LIMIT $2`,
+      [tripId, limit]
+    );
+    return r.rows.map((p) => ({
+      lat: Number(p.lat),
+      lng: Number(p.lng),
+      at: p.recorded_at,
+    }));
+  } catch (err) {
+    console.error("loadTrack:", err.message);
+    return [];
+  }
+}
+
+async function withTrack(trip) {
+  if (!trip || !trip.id) return trip;
+  const track = await loadTrack(trip.id);
+  return { ...trip, track };
+}
+
 const startTrip = async (req, res) => {
   if (!assertTripEnabled(res)) return;
 
@@ -196,6 +235,8 @@ const startTrip = async (req, res) => {
       }
     }
     const trip = result.rows[0];
+    await appendTrackPoint(trip.id, originLat, originLng);
+    const tripWithTrack = await withTrack(trip);
     const shareUrl = shareToken
       ? `${PUBLIC_BASE.replace(/\/$/, "")}/t/${shareToken}`
       : null;
@@ -217,7 +258,7 @@ const startTrip = async (req, res) => {
       if (io) {
         io.emit("trip_started", { trip_id: trip.id, user_id: req.userId });
         for (const cid of escorts) {
-          io.to(`user:${cid}`).emit("escort_trip", { trip });
+          io.to(`user:${cid}`).emit("escort_trip", { trip: tripWithTrack });
         }
       }
     } catch (ioErr) {
@@ -225,7 +266,7 @@ const startTrip = async (req, res) => {
     }
 
     return res.status(201).json({
-      trip,
+      trip: tripWithTrack,
       share_url: shareUrl,
       share_text: shareUrl
         ? `Suivez mon trajet SafeAlert (lecture seule) : ${shareUrl}`
@@ -324,17 +365,34 @@ const pingTrip = async (req, res) => {
       [id, lat, lng, abnormal, status, arrivedAt]
     );
 
+    await appendTrackPoint(id, Number(lat), Number(lng));
+
     const io = req.app.get("io");
     if (io) {
       const payload = {
         trip_id: id,
         user_id: req.userId,
-        lat, lng,
+        lat: Number(lat),
+        lng: Number(lng),
         status,
+        at: new Date().toISOString(),
       };
       io.emit("trip_ping", payload);
       for (const cid of trip.escort_contact_ids || []) {
         io.to(`user:${cid}`).emit("trip_ping", payload);
+      }
+      // Also notify trust-circle members who may follow without being escorts
+      try {
+        const circle = await pool.query(
+          `SELECT contact_user_id FROM trust_contacts
+            WHERE user_id = $1 AND contact_user_id IS NOT NULL`,
+          [req.userId]
+        );
+        for (const row of circle.rows) {
+          io.to(`user:${row.contact_user_id}`).emit("trip_ping", payload);
+        }
+      } catch (_) {
+        /* non-fatal */
       }
     }
 
@@ -352,7 +410,8 @@ const pingTrip = async (req, res) => {
       }
     }
 
-    return res.json({ trip: updated.rows[0] });
+    const tripOut = await withTrack(updated.rows[0]);
+    return res.json({ trip: tripOut });
   } catch (err) {
     console.error("pingTrip error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
@@ -411,9 +470,42 @@ const getActiveTrip = async (req, res) => {
        ORDER BY created_at DESC LIMIT 1`,
       [req.userId]
     );
-    return res.json(result.rows[0] || {});
+    if (!result.rows[0]) return res.json({});
+    return res.json(await withTrack(result.rows[0]));
   } catch (err) {
     console.error("getActiveTrip error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
+/** Past secured trips (owner) + trips the user was invited to escort. */
+const listMyTrips = async (req, res) => {
+  if (!assertTripEnabled(res)) return;
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 40, 1), 100);
+    const result = await pool.query(
+      `SELECT t.id, t.status, t.dest_label, t.origin_lat, t.origin_lng,
+              t.dest_lat, t.dest_lng, t.last_lat, t.last_lng, t.eta_at,
+              t.created_at, t.arrived_at, t.transport_mode, t.vehicle_plate,
+              t.user_id,
+              (t.user_id = $1) AS is_owner,
+              u.pseudo AS traveler_pseudo
+         FROM safe_trips t
+         JOIN users u ON u.id = t.user_id
+        WHERE t.user_id = $1
+           OR $1 = ANY (t.escort_contact_ids)
+           OR EXISTS (
+                SELECT 1 FROM trust_contacts tc
+                 WHERE tc.user_id = t.user_id AND tc.contact_user_id = $1
+                   AND t.status IN ('active','arrived','alerted')
+              )
+        ORDER BY t.created_at DESC
+        LIMIT $2`,
+      [req.userId, limit]
+    );
+    return res.json({ trips: result.rows });
+  } catch (err) {
+    console.error("listMyTrips error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
@@ -436,7 +528,7 @@ const getTrip = async (req, res) => {
         return res.status(403).json({ error: "Accès refusé" });
       }
     }
-    return res.json(trip);
+    return res.json(await withTrack(trip));
   } catch (err) {
     console.error("getTrip error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
@@ -530,6 +622,7 @@ module.exports = {
   arriveTrip,
   cancelTrip,
   getActiveTrip,
+  listMyTrips,
   getTrip,
   processOverdueTrips,
   createShareLink,

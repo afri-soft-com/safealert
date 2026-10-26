@@ -17,6 +17,7 @@ router.post(
   ctrl.startTrip
 );
 router.get("/active", authenticate, ctrl.getActiveTrip);
+router.get("/history", authenticate, ctrl.listMyTrips);
 router.get("/:id", authenticate, ctrl.getTrip);
 router.post("/:id/ping", authenticate, ctrl.pingTrip);
 router.post("/:id/arrive", authenticate, ctrl.arriveTrip);

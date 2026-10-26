@@ -15,7 +15,9 @@ class TripProvider extends ChangeNotifier {
   String? _shareUrl;
   String? _shareText;
   Map<String, dynamic>? _routeSuggestion;
+  List<Map<String, dynamic>> _history = [];
   bool _loading = false;
+  bool _historyLoading = false;
   String? _error;
   bool _socketBound = false;
   String? _trackingTripId;
@@ -27,10 +29,24 @@ class TripProvider extends ChangeNotifier {
   String? get shareUrl => _shareUrl;
   String? get shareText => _shareText;
   Map<String, dynamic>? get routeSuggestion => _routeSuggestion;
+  List<Map<String, dynamic>> get history => _history;
   bool get loading => _loading;
+  bool get historyLoading => _historyLoading;
   String? get error => _error;
   bool get isTracking =>
       TripTrackingService().isRunning || _fallbackPing != null;
+
+  /// Continuous trail for the followed (or active) trip.
+  List<Map<String, dynamic>> trackFor(Map<String, dynamic>? trip) {
+    if (trip == null) return const [];
+    final raw = trip['track'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .where((p) => p['lat'] != null && p['lng'] != null)
+        .toList();
+  }
 
   TripProvider() {
     _bindSockets();
@@ -43,23 +59,21 @@ class TripProvider extends ChangeNotifier {
       onTripPing: (data) {
         final tripId = data['trip_id']?.toString();
         if (tripId == null) return;
+        final point = <String, dynamic>{
+          'lat': data['lat'],
+          'lng': data['lng'],
+          if (data['at'] != null) 'at': data['at'],
+        };
         if (_activeTrip != null && _activeTrip!['id']?.toString() == tripId) {
-          _activeTrip = {
-            ..._activeTrip!,
-            'last_lat': data['lat'],
-            'last_lng': data['lng'],
-            'status': data['status'] ?? _activeTrip!['status'],
-          };
+          _activeTrip = _mergePing(_activeTrip!, data, point);
           notifyListeners();
         }
         if (_followTripId == tripId) {
-          _followedTrip = {
-            ...?_followedTrip,
-            'id': tripId,
-            'last_lat': data['lat'],
-            'last_lng': data['lng'],
-            'status': data['status'] ?? _followedTrip?['status'],
-          };
+          _followedTrip = _mergePing(
+            {...?_followedTrip, 'id': tripId},
+            data,
+            point,
+          );
           notifyListeners();
         }
       },
@@ -71,6 +85,33 @@ class TripProvider extends ChangeNotifier {
     );
   }
 
+  Map<String, dynamic> _mergePing(
+    Map<String, dynamic> trip,
+    Map<String, dynamic> data,
+    Map<String, dynamic> point,
+  ) {
+    final track = List<Map<String, dynamic>>.from(trackFor(trip));
+    final lat = (point['lat'] as num?)?.toDouble();
+    final lng = (point['lng'] as num?)?.toDouble();
+    if (lat != null && lng != null) {
+      final last = track.isEmpty ? null : track.last;
+      final lastLat = (last?['lat'] as num?)?.toDouble();
+      final lastLng = (last?['lng'] as num?)?.toDouble();
+      final same = lastLat != null &&
+          lastLng != null &&
+          (lastLat - lat).abs() < 0.00001 &&
+          (lastLng - lng).abs() < 0.00001;
+      if (!same) track.add(point);
+    }
+    return {
+      ...trip,
+      'last_lat': data['lat'] ?? trip['last_lat'],
+      'last_lng': data['lng'] ?? trip['last_lng'],
+      'status': data['status'] ?? trip['status'],
+      'track': track,
+    };
+  }
+
   Future<void> fetchActive() async {
     try {
       final res = await _api.get('/trips/active');
@@ -80,6 +121,25 @@ class TripProvider extends ChangeNotifier {
       _activeTrip = null;
     }
     await _syncTracking();
+  }
+
+  Future<void> fetchHistory() async {
+    _historyLoading = true;
+    notifyListeners();
+    try {
+      final res = await _api.get('/trips/history');
+      final list = res['trips'];
+      _history = list is List
+          ? list
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : [];
+    } catch (e) {
+      _error = userFacingError(e, fallback: 'Impossible de charger l\'historique.');
+    }
+    _historyLoading = false;
+    notifyListeners();
   }
 
   Future<Map<String, dynamic>?> fetchTrip(String id) async {
@@ -187,6 +247,7 @@ class TripProvider extends ChangeNotifier {
       _loading = false;
       notifyListeners();
       await _syncTracking();
+      unawaited(fetchHistory());
       return _activeTrip;
     } catch (e) {
       if (e is ApiException && e.statusCode == 409) {
@@ -252,10 +313,26 @@ class TripProvider extends ChangeNotifier {
         'lat': lat,
         'lng': lng,
       });
-      _activeTrip = res['trip'] as Map<String, dynamic>?;
+      final trip = res['trip'] as Map<String, dynamic>?;
+      if (trip != null) {
+        // Prefer server track; merge if socket already appended locally.
+        final serverTrack = trackFor(trip);
+        if (serverTrack.isEmpty) {
+          _activeTrip = _mergePing(_activeTrip!, {
+            'lat': lat,
+            'lng': lng,
+            'status': trip['status'],
+          }, {'lat': lat, 'lng': lng});
+        } else {
+          _activeTrip = trip;
+        }
+      } else {
+        _activeTrip = null;
+      }
       notifyListeners();
       if (_activeTrip == null || _activeTrip!['status'] != 'active') {
         await _syncTracking();
+        unawaited(fetchHistory());
       }
     } catch (e) {
       if (e is ApiException && (e.statusCode == 404 || e.statusCode == 401)) {
@@ -274,6 +351,7 @@ class TripProvider extends ChangeNotifier {
       notifyListeners();
     } catch (_) {}
     await _syncTracking();
+    unawaited(fetchHistory());
   }
 
   Future<void> cancel() async {
@@ -284,6 +362,7 @@ class TripProvider extends ChangeNotifier {
       notifyListeners();
     } catch (_) {}
     await _syncTracking();
+    unawaited(fetchHistory());
   }
 
   Future<void> stopTracking() async {
@@ -314,7 +393,7 @@ class TripProvider extends ChangeNotifier {
     final started = await TripTrackingService().start(onPosition: pingAt);
     if (!started) {
       _fallbackPing?.cancel();
-      _fallbackPing = Timer.periodic(const Duration(seconds: 20), (_) => ping());
+      _fallbackPing = Timer.periodic(const Duration(seconds: 12), (_) => ping());
       debugPrint('TripTracking: GPS stream unavailable, using periodic pings');
     } else {
       _fallbackPing?.cancel();

@@ -29,9 +29,28 @@ const getPublicTrip = async (req, res) => {
       return res.status(404).json({ error: "Lien expiré ou trajet introuvable" });
     }
     const trip = result.rows[0];
+    let track = [];
+    try {
+      const pts = await pool.query(
+        `SELECT lat, lng, recorded_at
+           FROM safe_trip_track_points
+          WHERE trip_id = $1
+          ORDER BY recorded_at ASC
+          LIMIT 800`,
+        [trip.id]
+      );
+      track = pts.rows.map((p) => ({
+        lat: Number(p.lat),
+        lng: Number(p.lng),
+        at: p.recorded_at,
+      }));
+    } catch (_) {
+      track = [];
+    }
     return res.json({
       trip: {
         ...trip,
+        track,
         // Never expose user_id or escort ids publicly
       },
       read_only: true,

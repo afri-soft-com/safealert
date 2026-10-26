@@ -30,13 +30,32 @@
     (function () {
       const token = location.pathname.split("/").filter(Boolean).pop();
       const statusEl = document.getElementById("status");
-      let map, marker, destMarker;
+      let map, marker, destMarker, originMarker, trailLine;
 
       function setStatus(html) { statusEl.innerHTML = html; }
 
+      function trackLatLngs(t) {
+        const pts = [];
+        if (Array.isArray(t.track)) {
+          t.track.forEach(function (p) {
+            if (p && p.lat != null && p.lng != null) pts.push([p.lat, p.lng]);
+          });
+        }
+        if (!pts.length && t.origin_lat != null) {
+          pts.push([t.origin_lat, t.origin_lng]);
+        }
+        const lat = t.last_lat ?? t.origin_lat;
+        const lng = t.last_lng ?? t.origin_lng;
+        if (lat != null && lng != null) {
+          const last = pts[pts.length - 1];
+          if (!last || last[0] !== lat || last[1] !== lng) pts.push([lat, lng]);
+        }
+        return pts;
+      }
+
       async function load() {
         try {
-          const res = await fetch("/api/public/trips/" + encodeURIComponent(token));
+          const res = await fetch("/api/public/trips/" + encodeURIComponent(token) + "?t=" + Date.now());
           const data = await res.json();
           if (!res.ok) {
             setStatus('<span class="err">' + (data.error || "Lien invalide") + "</span>");
@@ -46,26 +65,36 @@
           const lat = t.last_lat ?? t.origin_lat;
           const lng = t.last_lng ?? t.origin_lng;
           const eta = t.eta_at ? new Date(t.eta_at).toLocaleString("fr-FR") : "—";
+          const nPts = Array.isArray(t.track) ? t.track.length : 0;
           setStatus(
             "<strong>" + (t.traveler_pseudo || "Voyageur") + "</strong> · " +
             (t.dest_label || "Destination") +
             " · Statut : " + (t.status || "—") +
-            " · Arrivée prévue : " + eta
+            " · Arrivée prévue : " + eta +
+            (nPts > 1 ? " · Tracé : " + nPts + " pts" : "")
           );
 
+          const trail = trackLatLngs(t);
+
           if (!map) {
-            map = L.map("map").setView([lat, lng], 14);
+            map = L.map("map").setView([lat, lng], 15);
             L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
               attribution: "&copy; OpenStreetMap",
             }).addTo(map);
+            if (t.origin_lat != null) {
+              originMarker = L.marker([t.origin_lat, t.origin_lng], { title: "Départ" })
+                .addTo(map).bindPopup("Départ");
+            }
             marker = L.marker([lat, lng]).addTo(map).bindPopup("Position actuelle");
             destMarker = L.marker([t.dest_lat, t.dest_lng], { title: "Destination" })
               .addTo(map).bindPopup(t.dest_label || "Destination");
-            L.polyline([[t.origin_lat, t.origin_lng], [lat, lng], [t.dest_lat, t.dest_lng]], {
-              color: "#0B6E6E", weight: 3, dashArray: "6 6",
+            trailLine = L.polyline(trail.length ? trail : [[lat, lng]], {
+              color: "#0B6E6E", weight: 4, opacity: 0.9,
             }).addTo(map);
           } else {
             marker.setLatLng([lat, lng]);
+            if (trailLine) trailLine.setLatLngs(trail.length ? trail : [[lat, lng]]);
+            map.panTo([lat, lng]);
           }
         } catch (e) {
           setStatus('<span class="err">Impossible de charger le trajet.</span>');
@@ -73,7 +102,7 @@
       }
 
       load();
-      setInterval(load, 15000);
+      setInterval(load, 5000);
     })();
   </script>
 </body>

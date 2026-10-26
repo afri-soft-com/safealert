@@ -42,6 +42,7 @@ const WIPE_TABLES = [
   "trust_contacts",
   "user_devices",
   "leader_sectors",
+  "safe_trip_track_points",
   "safe_trips",
   "otp_codes",
   "audit_logs",

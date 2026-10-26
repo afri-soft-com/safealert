@@ -21,6 +21,8 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
   final MapController _mapController = MapController();
   final _tripIdCtrl = TextEditingController();
   Timer? _pollTimer;
+  String? _lastCenteredKey;
+  bool _followLive = true;
 
   @override
   void initState() {
@@ -28,7 +30,7 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final trip = context.read<TripProvider>().followedTrip;
       if (trip != null) {
-        _centerOnTrip(trip);
+        _centerOnTrip(trip, force: true);
         _startPoll();
       }
     });
@@ -43,18 +45,22 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
 
   void _startPoll() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+    // Socket pushes trip_ping; polling is a safety net for missed events.
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       final id = context.read<TripProvider>().followTripId;
       if (id != null) context.read<TripProvider>().fetchTrip(id);
     });
   }
 
-  void _centerOnTrip(Map<String, dynamic> trip) {
+  void _centerOnTrip(Map<String, dynamic> trip, {bool force = false}) {
     final lat = (trip['last_lat'] ?? trip['origin_lat']) as num?;
     final lng = (trip['last_lng'] ?? trip['origin_lng']) as num?;
     if (lat == null || lng == null) return;
+    final key = '${lat.toStringAsFixed(5)},${lng.toStringAsFixed(5)}';
+    if (!force && key == _lastCenteredKey) return;
+    _lastCenteredKey = key;
     try {
-      _mapController.move(LatLng(lat.toDouble(), lng.toDouble()), 14);
+      _mapController.move(LatLng(lat.toDouble(), lng.toDouble()), 15);
     } catch (_) {}
   }
 
@@ -69,8 +75,35 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
       );
       return;
     }
-    _centerOnTrip(trip);
+    _centerOnTrip(trip, force: true);
     _startPoll();
+  }
+
+  List<LatLng> _trackPoints(TripProvider prov, Map<String, dynamic> trip) {
+    final track = prov.trackFor(trip);
+    final pts = <LatLng>[];
+    for (final p in track) {
+      final la = (p['lat'] as num?)?.toDouble();
+      final ln = (p['lng'] as num?)?.toDouble();
+      if (la != null && ln != null) pts.add(LatLng(la, ln));
+    }
+    if (pts.isEmpty) {
+      final oLat = trip['origin_lat'] as num?;
+      final oLng = trip['origin_lng'] as num?;
+      final lLat = trip['last_lat'] as num?;
+      final lLng = trip['last_lng'] as num?;
+      if (oLat != null && oLng != null) {
+        pts.add(LatLng(oLat.toDouble(), oLng.toDouble()));
+      }
+      if (lLat != null &&
+          lLng != null &&
+          (pts.isEmpty ||
+              (pts.last.latitude - lLat).abs() > 0.00001 ||
+              (pts.last.longitude - lLng).abs() > 0.00001)) {
+        pts.add(LatLng(lLat.toDouble(), lLng.toDouble()));
+      }
+    }
+    return pts;
   }
 
   @override
@@ -84,6 +117,14 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
     final center = liveLat != null && liveLng != null
         ? LatLng(liveLat.toDouble(), liveLng.toDouble())
         : const LatLng(-4.3217, 15.3125);
+    final track = trip != null ? _trackPoints(prov, trip) : const <LatLng>[];
+
+    if (trip != null && _followLive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _centerOnTrip(trip);
+      });
+    }
 
     return Scaffold(
       body: Column(
@@ -129,20 +170,48 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                 children: [
                   FlutterMap(
                     mapController: _mapController,
-                    options: MapOptions(initialCenter: center, initialZoom: 14),
+                    options: MapOptions(
+                      initialCenter: center,
+                      initialZoom: 15,
+                      onPositionChanged: (camera, hasGesture) {
+                        if (hasGesture && _followLive) {
+                          setState(() => _followLive = false);
+                        }
+                      },
+                    ),
                     children: [
                       TileLayer(
                         urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         userAgentPackageName: 'com.safealert.safealert',
                       ),
+                      if (track.length >= 2)
+                        PolylineLayer(
+                          polylines: [
+                            Polyline(
+                              points: track,
+                              color: AppColors.bleu.withValues(alpha: 0.85),
+                              strokeWidth: 4.5,
+                            ),
+                          ],
+                        ),
                       MarkerLayer(
                         markers: [
+                          if (trip['origin_lat'] != null && trip['origin_lng'] != null)
+                            Marker(
+                              point: LatLng(
+                                (trip['origin_lat'] as num).toDouble(),
+                                (trip['origin_lng'] as num).toDouble(),
+                              ),
+                              width: 28,
+                              height: 28,
+                              child: const Icon(Icons.trip_origin, color: AppColors.bleu, size: 22),
+                            ),
                           if (liveLat != null && liveLng != null)
                             Marker(
                               point: LatLng(liveLat.toDouble(), liveLng.toDouble()),
-                              width: 44,
-                              height: 44,
-                              child: const Icon(Icons.navigation, color: AppColors.bleu, size: 36),
+                              width: 48,
+                              height: 48,
+                              child: const Icon(Icons.navigation, color: AppColors.rouge, size: 38),
                             ),
                           if (destLat != null && destLng != null)
                             Marker(
@@ -154,6 +223,26 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                         ],
                       ),
                     ],
+                  ),
+                  Positioned(
+                    right: 12,
+                    top: 12,
+                    child: Material(
+                      elevation: 3,
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      child: IconButton(
+                        tooltip: _followLive ? 'Suivi auto activé' : 'Recentrer sur la position',
+                        onPressed: () {
+                          setState(() => _followLive = true);
+                          _centerOnTrip(trip, force: true);
+                        },
+                        icon: Icon(
+                          Icons.my_location,
+                          color: _followLive ? AppColors.bleu : AppColors.gris,
+                        ),
+                      ),
+                    ),
                   ),
                   Positioned(
                     left: 12,
@@ -178,7 +267,8 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Statut : ${trip['status'] ?? '—'} · ETA ${trip['eta_at'] ?? '—'}',
+                              'Statut : ${trip['status'] ?? '—'} · ETA ${trip['eta_at'] ?? '—'}'
+                              '${track.length > 1 ? ' · ${track.length} points de tracé' : ''}',
                               style: const TextStyle(fontSize: 11, color: AppColors.gris),
                             ),
                             if (trip['abnormal_stop_at'] != null)
@@ -186,7 +276,11 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                                 padding: EdgeInsets.only(top: 4),
                                 child: Text(
                                   'Arrêt anormal détecté',
-                                  style: TextStyle(fontSize: 11, color: AppColors.rouge, fontWeight: FontWeight.w600),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.rouge,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             Align(
@@ -195,6 +289,7 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                                 onPressed: () {
                                   context.read<TripProvider>().clearFollowedTrip();
                                   _pollTimer?.cancel();
+                                  _lastCenteredKey = null;
                                 },
                                 child: const Text('Quitter le suivi'),
                               ),

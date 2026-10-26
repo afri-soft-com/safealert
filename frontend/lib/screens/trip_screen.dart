@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -63,6 +65,7 @@ class _TripScreenState extends State<TripScreen> {
       final contactsProv = context.read<ContactsProvider>();
       await tripProv.fetchActive();
       await contactsProv.fetchContacts();
+      unawaited(tripProv.fetchHistory());
       if (!mounted) return;
       if (tripProv.activeTrip == null) {
         await _initMyLocationAsOrigin();
@@ -438,6 +441,152 @@ class _TripScreenState extends State<TripScreen> {
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  String _tripStatusLabel(String? status) {
+    switch (status) {
+      case 'active':
+        return 'En cours';
+      case 'arrived':
+        return 'Arrivé';
+      case 'alerted':
+        return 'Alerte';
+      case 'cancelled':
+        return 'Annulé';
+      case 'expired':
+        return 'Expiré';
+      default:
+        return status ?? '—';
+    }
+  }
+
+  Color _tripStatusColor(String? status) {
+    switch (status) {
+      case 'active':
+        return AppColors.bleu;
+      case 'arrived':
+        return AppColors.vert;
+      case 'alerted':
+        return AppColors.rouge;
+      default:
+        return AppColors.gris;
+    }
+  }
+
+  String _formatTripWhen(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day.toString().padLeft(2, '0')}/'
+          '${dt.month.toString().padLeft(2, '0')}/'
+          '${dt.year} ${dt.hour.toString().padLeft(2, '0')}:'
+          '${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  Widget _buildHistorySection(BuildContext context) {
+    final prov = context.watch<TripProvider>();
+    final items = prov.history;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Trajets sécurisés réalisés',
+                style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.bleuFonce),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Actualiser',
+              onPressed: prov.historyLoading ? null : () => prov.fetchHistory(),
+              icon: prov.historyLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh, size: 20),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Vos trajets passés et ceux que vous avez escortés. Ouvrez la carte pour revoir le tracé.',
+          style: TextStyle(fontSize: 12, color: AppColors.gris, height: 1.35),
+        ),
+        const SizedBox(height: 10),
+        if (items.isEmpty && !prov.historyLoading)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.grisClair,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text(
+              'Aucun trajet sécurisé pour l\'instant. Démarrez-en un ci-dessus.',
+              style: TextStyle(fontSize: 12, color: AppColors.gris),
+            ),
+          )
+        else
+          ...items.take(25).map((t) {
+            final status = t['status']?.toString();
+            final label = t['dest_label']?.toString().trim();
+            final traveler = t['traveler_pseudo']?.toString();
+            final isOwner = t['is_owner'] == true;
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(color: AppColors.gris.withValues(alpha: 0.25)),
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                title: Text(
+                  label?.isNotEmpty == true ? label! : 'Destination',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                subtitle: Text(
+                  '${_formatTripWhen(t['created_at']?.toString())}'
+                  '${traveler != null && traveler.isNotEmpty && !isOwner ? ' · $traveler' : ''}'
+                  '${isOwner ? ' · Vous' : ' · Escorte'}',
+                  style: const TextStyle(fontSize: 11, color: AppColors.gris),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _tripStatusColor(status).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _tripStatusLabel(status),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: _tripStatusColor(status),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Voir sur la carte',
+                      onPressed: () => _openEscortMap(t['id']?.toString()),
+                      icon: const Icon(Icons.map_outlined, size: 20),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
       ],
     );
   }
@@ -999,6 +1148,8 @@ class _TripScreenState extends State<TripScreen> {
                 ] else
                   _buildCreateForm(escortable, loading),
                 const SizedBox(height: 28),
+                _buildHistorySection(context),
+                const SizedBox(height: 20),
                 const Divider(),
                 const SizedBox(height: 8),
                 const Text('Suivre le trajet de quelqu\'un',

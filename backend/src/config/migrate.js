@@ -650,6 +650,17 @@ const migrate = async () => {
       );
       CREATE INDEX IF NOT EXISTS idx_live_circle_members_user
         ON live_circle_members(user_id);
+
+      -- Continuous GPS trail for secured trips (watcher map + history replay)
+      CREATE TABLE IF NOT EXISTS safe_trip_track_points (
+        id BIGSERIAL PRIMARY KEY,
+        trip_id UUID NOT NULL REFERENCES safe_trips(id) ON DELETE CASCADE,
+        lat DOUBLE PRECISION NOT NULL,
+        lng DOUBLE PRECISION NOT NULL,
+        recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_safe_trip_track_trip_time
+        ON safe_trip_track_points(trip_id, recorded_at ASC);
     `);
 
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;

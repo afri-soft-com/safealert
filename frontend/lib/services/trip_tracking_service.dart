@@ -15,7 +15,7 @@ class TripTrackingService {
   Future<void> Function(double lat, double lng)? _onPosition;
   DateTime? _lastEmitAt;
 
-  static const _minInterval = Duration(seconds: 15);
+  static const _minInterval = Duration(seconds: 8);
 
   bool get isRunning => _sub != null;
 
@@ -68,7 +68,7 @@ class TripTrackingService {
       return AndroidSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 10,
-        intervalDuration: const Duration(seconds: 15),
+        intervalDuration: const Duration(seconds: 8),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationTitle: 'Trajet sécurisé SafeAlert',
           notificationText:
