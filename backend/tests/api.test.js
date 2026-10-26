@@ -522,6 +522,83 @@ describe("Admin", () => {
       .set("Authorization", `Bearer ${staffToken}`);
     expect(res.status).toBe(403);
   });
+
+  it("GET /api/admin/groups returns paginated list", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "g1",
+          name: "Quartier Nord",
+          member_count: 3,
+          admin_count: 1,
+          invite_code: "ABCD1234",
+        }],
+      });
+    const res = await request(app)
+      .get("/api/admin/groups")
+      .set("Authorization", `Bearer ${staffToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+  });
+
+  it("POST /api/admin/groups requires super admin", async () => {
+    const res = await request(app)
+      .post("/api/admin/groups")
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ name: "Test" });
+    expect(res.status).toBe(403);
+  });
+
+  it("POST /api/admin/groups creates a group for platform_admin", async () => {
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "55555555-5555-4555-8555-555555555555",
+          name: "Gombe Voisins",
+          invite_code: "AABBCCDD",
+          created_by: "admin-1",
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] }) // insert creator admin
+      .mockResolvedValueOnce({ rows: [] }) // recount
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "55555555-5555-4555-8555-555555555555",
+          name: "Gombe Voisins",
+          invite_code: "AABBCCDD",
+          member_count: 1,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] }); // audit
+    const res = await request(app)
+      .post("/api/admin/groups")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Gombe Voisins", zone_name: "Gombe" });
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe("Gombe Voisins");
+  });
+
+  it("POST /api/admin/groups/:id/admins promotes a member by phone", async () => {
+    const gid = "55555555-5555-4555-8555-555555555555";
+    const uid = "66666666-6666-4666-8666-666666666666";
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ id: gid, name: "Gombe" }] })
+      .mockResolvedValueOnce({
+        rows: [{ id: uid, phone: "+243811111111", pseudo: "Chef", role: "citizen" }],
+      })
+      .mockResolvedValueOnce({ rows: [] }) // existing member?
+      .mockResolvedValueOnce({ rows: [] }) // insert admin
+      .mockResolvedValueOnce({ rows: [] }) // recount
+      .mockResolvedValueOnce({ rows: [] }); // audit
+    const res = await request(app)
+      .post(`/api/admin/groups/${gid}/admins`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ phone: "+243811111111" });
+    expect(res.status).toBe(201);
+    expect(res.body.user.id).toBe(uid);
+    expect(res.body.created).toBe(true);
+  });
 });
 
 describe("SOS", () => {
@@ -928,7 +1005,7 @@ describe("App version", () => {
     const res = await request(app).get("/api/app/version");
     expect(res.status).toBe(200);
     expect(res.body.latestVersion).toBe("1.0.33");
-    expect(res.body.adminWebVersion).toBe("1.0.10");
+    expect(res.body.adminWebVersion).toBe("1.0.11");
     expect(res.body.iosStoreUrl).toContain("apps.apple.com");
     expect(res.body.adminWebUrl).toContain("safealert-admin");
   });

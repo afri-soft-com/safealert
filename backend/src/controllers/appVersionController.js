@@ -4,7 +4,7 @@ const { getMaintenance } = require("../services/appSettings");
 /** Keep in sync with frontend/pubspec.yaml (version name, before +build). */
 const DEFAULT_MOBILE_VERSION = "1.0.33";
 /** Keep in sync with admin-web/package.json. */
-const DEFAULT_ADMIN_WEB_VERSION = "1.0.10";
+const DEFAULT_ADMIN_WEB_VERSION = "1.0.11";
 
 /**
  * Public app version policy for soft / force update prompts.

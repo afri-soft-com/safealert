@@ -428,9 +428,55 @@ export const api = {
   deleteTrip: (id: string) =>
     request<{ message: string; id: string }>(`/admin/trips/${id}`, { method: "DELETE" }),
 
-  getGroups: (page = 1, limit = 20) =>
-    request<{ data: GroupRow[]; page: number; limit: number; total: number }>(
-      `/admin/groups?page=${page}&limit=${limit}`
+  getGroups: (page = 1, limit = 20, q = "") => {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (q.trim()) params.set("q", q.trim());
+    return request<{ data: GroupRow[]; page: number; limit: number; total: number }>(
+      `/admin/groups?${params}`
+    );
+  },
+
+  getGroup: (id: string) => request<GroupDetail>(`/admin/groups/${id}`),
+
+  createGroup: (data: GroupInput) =>
+    request<GroupRow & { admins_added?: Array<{ id: string; phone: string; pseudo: string }> }>(
+      "/admin/groups",
+      { method: "POST", body: JSON.stringify(data) }
+    ),
+
+  updateGroup: (id: string, data: Partial<GroupInput> & { regenerate_invite?: boolean }) =>
+    request<GroupRow>(`/admin/groups/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  deleteGroup: (id: string) =>
+    request<{ message: string; id: string }>(`/admin/groups/${id}`, { method: "DELETE" }),
+
+  addGroupAdmin: (id: string, body: { user_id?: string; phone?: string }) =>
+    request<{
+      message: string;
+      user: { id: string; phone: string; pseudo: string; role: string };
+      created: boolean;
+      promoted: boolean;
+    }>(`/admin/groups/${id}/admins`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  setGroupMemberRole: (id: string, userId: string, role: "admin" | "member") =>
+    request<{ id: string; user_id: string; role: string }>(
+      `/admin/groups/${id}/members/${userId}`,
+      { method: "PATCH", body: JSON.stringify({ role }) }
+    ),
+
+  removeGroupMember: (id: string, userId: string) =>
+    request<{ message: string; user_id: string }>(
+      `/admin/groups/${id}/members/${userId}`,
+      { method: "DELETE" }
     ),
 
   getAuditLogs: (page = 1, limit = 30, q = "", action = "") => {
@@ -708,6 +754,32 @@ export interface GroupRow {
   created_at: string;
   creator_pseudo: string;
   creator_phone: string;
+  is_public?: boolean;
+  created_by?: string;
+  admin_count?: number;
+}
+
+export interface GroupMemberRow {
+  id: string;
+  user_id: string;
+  role: "admin" | "member" | string;
+  joined_at: string;
+  pseudo: string;
+  phone: string;
+  user_role?: string;
+}
+
+export interface GroupDetail extends GroupRow {
+  members: GroupMemberRow[];
+}
+
+export interface GroupInput {
+  name: string;
+  description?: string | null;
+  zone_name?: string | null;
+  is_public?: boolean;
+  admin_user_ids?: string[];
+  admin_phones?: string[];
 }
 
 export interface AuditLogRow {

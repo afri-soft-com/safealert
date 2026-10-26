@@ -117,7 +117,7 @@ services:
         value: "1.0.33"
       # Align with admin-web/package.json
       - key: ADMIN_WEB_VERSION
-        value: "1.0.10"
+        value: "1.0.11"
       - key: ADMIN_WEB_URL
         value: "https://safealert-admin.onrender.com"
 

@@ -609,34 +609,6 @@ const listIncidents = async (req, res) => {
   }
 };
 
-const listGroups = async (req, res) => {
-  const page = Math.max(parseInt(req.query.page) || 1, 1);
-  const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 100);
-  const offset = (page - 1) * limit;
-
-  try {
-    const countRes = await pool.query("SELECT COUNT(*)::int AS total FROM neighborhood_groups");
-    const result = await pool.query(
-      `SELECT g.id, g.name, g.description, g.zone_name, g.member_count, g.invite_code, g.created_at,
-              u.pseudo AS creator_pseudo, u.phone AS creator_phone
-       FROM neighborhood_groups g
-       JOIN users u ON g.created_by = u.id
-       ORDER BY g.created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-    return res.json({
-      data: result.rows,
-      page,
-      limit,
-      total: countRes.rows[0].total,
-    });
-  } catch (err) {
-    console.error("listGroups error:", err);
-    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
-  }
-};
-
 const listAuditLogs = async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -709,7 +681,6 @@ module.exports = {
   updateEmergencyNumber,
   deleteEmergencyNumber,
   listIncidents,
-  listGroups,
   listAuditLogs,
   listPremiumSubscriptions,
   getPremiumPlans,

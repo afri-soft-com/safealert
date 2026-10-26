@@ -6,6 +6,7 @@ const treasury = require("../controllers/treasuryController");
 const broadcasts = require("../controllers/broadcastController");
 const sosCtrl = require("../controllers/sosController");
 const trips = require("../controllers/adminTripsController");
+const groups = require("../controllers/adminGroupsController");
 
 const router = Router();
 
@@ -30,7 +31,14 @@ router.post("/emergency-numbers", ctrl.createEmergencyNumber);
 router.put("/emergency-numbers/:id", ctrl.updateEmergencyNumber);
 router.delete("/emergency-numbers/:id", ctrl.deleteEmergencyNumber);
 router.get("/incidents", ctrl.listIncidents);
-router.get("/groups", ctrl.listGroups);
+router.get("/groups", groups.listGroups);
+router.get("/groups/:id", groups.getGroup);
+router.post("/groups", requireSuperAdmin, groups.createGroup);
+router.patch("/groups/:id", requireSuperAdmin, groups.updateGroup);
+router.delete("/groups/:id", requireSuperAdmin, groups.deleteGroup);
+router.post("/groups/:id/admins", requireSuperAdmin, groups.addGroupAdmin);
+router.patch("/groups/:id/members/:userId", requireSuperAdmin, groups.setMemberRole);
+router.delete("/groups/:id/members/:userId", requireSuperAdmin, groups.removeMember);
 router.get("/audit-logs", ctrl.listAuditLogs);
 router.get("/settings", ctrl.getSettings);
 router.put("/settings/maintenance", requireSuperAdmin, ctrl.setMaintenanceSetting);
