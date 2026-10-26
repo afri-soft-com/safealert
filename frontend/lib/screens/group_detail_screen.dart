@@ -468,7 +468,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
 
   Widget _alertsTab(List<Map<String, dynamic>> alerts) {
     if (alerts.isEmpty) {
-      return const Center(child: Text('Aucune alerte locale.\nPubliez une alerte d\'entraide.',
+      return const Center(child: Text('Aucune alerte pour l\'instant.\nLes SOS des membres et les alertes d\'entraide apparaissent ici.',
           textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: AppColors.gris)));
     }
     return ListView.builder(

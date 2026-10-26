@@ -484,7 +484,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('Alerter mes groupes en SOS', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bleuFonce)),
-                                Text('Notifie les membres de vos groupes voisins lors d\'un SOS (push uniquement)', style: TextStyle(fontSize: 10, color: AppColors.gris)),
+                                Text('Notifie les membres et publie le SOS dans l\'onglet Alertes de vos groupes', style: TextStyle(fontSize: 10, color: AppColors.gris)),
                               ],
                             ),
                           ),

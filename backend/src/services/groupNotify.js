@@ -58,7 +58,28 @@ const notifyUserGroupsOnSOS = async (userId, lat, lng, pseudo, zoneName = null) 
   const where = coords ? `${place} · ${coords}` : place;
 
   let membersNotified = 0;
+  let alertsCreated = 0;
   for (const group of groups.rows) {
+    // Persist in group feed so members see the SOS when opening Alertes
+    // (push alone is invisible if the app was closed / user opens the group later).
+    try {
+      await pool.query(
+        `INSERT INTO group_alerts (group_id, author_id, type, title, body, lat, lng)
+         VALUES ($1, $2, 'danger', $3, $4, $5, $6)`,
+        [
+          group.id,
+          userId,
+          `SOS — ${pseudo}`,
+          `Alerte SOS déclenchée dans ${group.name}. ${where}`,
+          Number.isFinite(la) ? la : null,
+          Number.isFinite(ln) ? ln : null,
+        ]
+      );
+      alertsCreated += 1;
+    } catch (err) {
+      console.error("group SOS alert insert failed:", group.id, err.message);
+    }
+
     const count = await notifyGroupMembers(
       group.id,
       userId,
@@ -78,7 +99,7 @@ const notifyUserGroupsOnSOS = async (userId, lat, lng, pseudo, zoneName = null) 
     membersNotified += count;
   }
 
-  return { groupsNotified: groups.rows.length, membersNotified };
+  return { groupsNotified: groups.rows.length, membersNotified, alertsCreated };
 };
 
 module.exports = { notifyGroupMembers, notifyUserGroupsOnSOS };
