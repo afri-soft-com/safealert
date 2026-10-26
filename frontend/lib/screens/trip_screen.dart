@@ -375,13 +375,15 @@ class _TripScreenState extends State<TripScreen> {
             ? 'Patrouille terrain'
             : _destAddrCtrl.text.trim())
         : (_destAddrCtrl.text.trim().isEmpty ? null : _destAddrCtrl.text.trim());
+    final parsedEta = int.tryParse(_etaCtrl.text.trim());
     final trip = await tripProv.startTrip(
       originLat: origin.latitude,
       originLng: origin.longitude,
       destLat: dest?.latitude,
       destLng: dest?.longitude,
       destLabel: destLabel,
-      etaMinutes: int.tryParse(_etaCtrl.text) ?? (_patrolMode ? 480 : 30),
+      // Patrol: omit duration → API applies default field window (~8 h).
+      etaMinutes: _patrolMode ? parsedEta : (parsedEta ?? 30),
       transportMode: _transportMode.apiValue,
       tripMode: _patrolMode ? 'patrol' : 'destination',
       escortContactIds: _selectedEscorts.isEmpty ? null : _selectedEscorts.toList(),
@@ -658,7 +660,8 @@ class _TripScreenState extends State<TripScreen> {
                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 subtitle: Text(
-                  '${_formatTripWhen(t['created_at']?.toString())}'
+                  'Départ ${_formatTripWhen(t['created_at']?.toString())}'
+                  '${t['arrived_at'] != null ? ' → Arrivée ${_formatTripWhen(t['arrived_at']?.toString())}' : ''}'
                   '${t['trip_mode']?.toString() == 'patrol' ? ' · Patrouille' : ''}'
                   '${traveler != null && traveler.isNotEmpty && !isOwner ? ' · $traveler' : ''}'
                   '${isOwner ? ' · Vous' : ' · Escorte'}',
@@ -730,7 +733,13 @@ class _TripScreenState extends State<TripScreen> {
               child: ChoiceChip(
                 label: const Text('Trajet A → B'),
                 selected: !_patrolMode,
-                onSelected: (_) => setState(() => _patrolMode = false),
+                onSelected: (_) => setState(() {
+                  _patrolMode = false;
+                  if (_etaCtrl.text.trim().isEmpty) {
+                    _etaCtrl.text = '30';
+                    _etaManual = false;
+                  }
+                }),
                 selectedColor: AppColors.bleu.withValues(alpha: 0.2),
               ),
             ),
@@ -742,7 +751,9 @@ class _TripScreenState extends State<TripScreen> {
                 onSelected: (_) => setState(() {
                   _patrolMode = true;
                   _pickTarget = _MapPickTarget.origin;
-                  if (_etaCtrl.text == '30') _etaCtrl.text = '480';
+                  // Duration optional for patrol — backend defaults to an 8h window.
+                  _etaCtrl.clear();
+                  _etaManual = false;
                 }),
                 selectedColor: AppColors.vert.withValues(alpha: 0.2),
               ),
@@ -973,19 +984,25 @@ class _TripScreenState extends State<TripScreen> {
           keyboardType: TextInputType.number,
           onChanged: (_) => _etaManual = true,
           decoration: InputDecoration(
-            labelText: 'Durée estimée (minutes)',
-            helperText: _origin != null && _destination != null
-                ? (_etaManual
-                    ? 'Modifiée manuellement — changez le moyen pour recalculer'
-                    : 'Calculée selon ${_transportMode.label.toLowerCase()} — vous pouvez la modifier')
-                : 'Indiquez départ et arrivée pour un calcul automatique',
+            labelText: _patrolMode
+                ? 'Durée / fenêtre (minutes, optionnel)'
+                : 'Durée estimée (minutes)',
+            helperText: _patrolMode
+                ? 'Optionnel — laissez vide pour une fenêtre terrain de 8 h (sans alerte retard)'
+                : (_origin != null && _destination != null
+                    ? (_etaManual
+                        ? 'Modifiée manuellement — changez le moyen pour recalculer'
+                        : 'Calculée selon ${_transportMode.label.toLowerCase()} — vous pouvez la modifier')
+                    : 'Indiquez départ et arrivée pour un calcul automatique'),
             border: const OutlineInputBorder(),
             isDense: true,
-            suffixIcon: IconButton(
-              tooltip: 'Recalculer',
-              onPressed: () => _recomputeEta(force: true),
-              icon: const Icon(Icons.refresh, size: 18),
-            ),
+            suffixIcon: _patrolMode
+                ? null
+                : IconButton(
+                    tooltip: 'Recalculer',
+                    onPressed: () => _recomputeEta(force: true),
+                    icon: const Icon(Icons.refresh, size: 18),
+                  ),
           ),
         ),
         const SizedBox(height: 8),
@@ -1190,9 +1207,15 @@ class _TripScreenState extends State<TripScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          trip['trip_mode']?.toString() == 'patrol'
-                              ? 'Fenêtre : ${trip['eta_at'] ?? '—'} · tracé continu pour l\'enquête'
-                              : 'ETA : ${trip['eta_at'] ?? '—'}',
+                          'Départ : ${_formatTripWhen(trip['created_at']?.toString())}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.bleuFonce, fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          trip['arrived_at'] != null
+                              ? 'Arrivée : ${_formatTripWhen(trip['arrived_at']?.toString())}'
+                              : (trip['trip_mode']?.toString() == 'patrol'
+                                  ? 'Fenêtre jusqu\'à : ${_formatTripWhen(trip['eta_at']?.toString())}'
+                                  : 'Arrivée prévue : ${_formatTripWhen(trip['eta_at']?.toString())}'),
                           style: const TextStyle(fontSize: 12, color: AppColors.gris),
                         ),
                         const SizedBox(height: 6),

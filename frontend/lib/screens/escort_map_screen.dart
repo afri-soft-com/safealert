@@ -79,6 +79,41 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
     _startPoll();
   }
 
+  String _fmtWhen(String? iso) {
+    if (iso == null || iso.isEmpty) return '—';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day.toString().padLeft(2, '0')}/'
+          '${dt.month.toString().padLeft(2, '0')} '
+          '${dt.hour.toString().padLeft(2, '0')}:'
+          '${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  Widget _timeChip(String label, String? iso, {Color color = AppColors.bleu}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+        boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 4)],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w700)),
+          Text(
+            _fmtWhen(iso),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
+          ),
+        ],
+      ),
+    );
+  }
+
   List<LatLng> _trackPoints(TripProvider prov, Map<String, dynamic> trip) {
     final track = prov.trackFor(trip);
     final pts = <LatLng>[];
@@ -202,9 +237,16 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                                 (trip['origin_lat'] as num).toDouble(),
                                 (trip['origin_lng'] as num).toDouble(),
                               ),
-                              width: 28,
-                              height: 28,
-                              child: const Icon(Icons.trip_origin, color: AppColors.bleu, size: 22),
+                              width: 96,
+                              height: 64,
+                              alignment: Alignment.bottomCenter,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _timeChip('Départ', trip['created_at']?.toString()),
+                                  const Icon(Icons.trip_origin, color: AppColors.bleu, size: 22),
+                                ],
+                              ),
                             ),
                           if (liveLat != null && liveLng != null)
                             Marker(
@@ -218,9 +260,35 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                               trip['trip_mode']?.toString() != 'patrol')
                             Marker(
                               point: LatLng(destLat.toDouble(), destLng.toDouble()),
-                              width: 40,
-                              height: 40,
-                              child: const Icon(Icons.flag, color: AppColors.vert, size: 32),
+                              width: 110,
+                              height: 64,
+                              alignment: Alignment.bottomCenter,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _timeChip(
+                                    trip['arrived_at'] != null ? 'Arrivée' : 'Prévu',
+                                    (trip['arrived_at'] ?? trip['eta_at'])?.toString(),
+                                    color: AppColors.vert,
+                                  ),
+                                  const Icon(Icons.flag, color: AppColors.vert, size: 32),
+                                ],
+                              ),
+                            ),
+                          if (trip['arrived_at'] != null &&
+                              liveLat != null &&
+                              liveLng != null &&
+                              trip['trip_mode']?.toString() == 'patrol')
+                            Marker(
+                              point: LatLng(liveLat.toDouble(), liveLng.toDouble()),
+                              width: 110,
+                              height: 56,
+                              alignment: Alignment.topCenter,
+                              child: _timeChip(
+                                'Arrivée',
+                                trip['arrived_at']?.toString(),
+                                color: AppColors.vert,
+                              ),
                             ),
                         ],
                       ),
@@ -269,7 +337,12 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Statut : ${trip['status'] ?? '—'} · ETA ${trip['eta_at'] ?? '—'}'
+                              'Départ : ${_fmtWhen(trip['created_at']?.toString())}'
+                              '${trip['arrived_at'] != null ? ' · Arrivée : ${_fmtWhen(trip['arrived_at']?.toString())}' : ' · Arrivée prévue : ${_fmtWhen(trip['eta_at']?.toString())}'}',
+                              style: const TextStyle(fontSize: 11, color: AppColors.bleuFonce, fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              'Statut : ${trip['status'] ?? '—'}'
                               '${track.length > 1 ? ' · ${track.length} points de tracé' : ''}',
                               style: const TextStyle(fontSize: 11, color: AppColors.gris),
                             ),

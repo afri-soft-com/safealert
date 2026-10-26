@@ -928,7 +928,7 @@ describe("App version", () => {
     const res = await request(app).get("/api/app/version");
     expect(res.status).toBe(200);
     expect(res.body.latestVersion).toBe("1.0.32");
-    expect(res.body.adminWebVersion).toBe("1.0.8");
+    expect(res.body.adminWebVersion).toBe("1.0.9");
     expect(res.body.iosStoreUrl).toContain("apps.apple.com");
     expect(res.body.adminWebUrl).toContain("safealert-admin");
   });

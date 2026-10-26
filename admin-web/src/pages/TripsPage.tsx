@@ -10,6 +10,7 @@ import {
   type SafeTripRow,
   type SafeTripStatus,
 } from "../api/client";
+import TripTrackMap from "../components/TripTrackMap";
 import { useAuth } from "../context/AuthContext";
 import { userFacingError } from "../utils/userFacingError";
 
@@ -138,6 +139,19 @@ export default function TripsPage() {
       setDetailLoading(false);
     }
   };
+
+  // Live refresh while viewing an active trip on the admin map.
+  useEffect(() => {
+    if (!detail || detail.status !== "active") return;
+    const id = detail.id;
+    const timer = window.setInterval(() => {
+      void api
+        .getTrip(id)
+        .then((full) => setDetail(full))
+        .catch(() => {});
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [detail?.id, detail?.status]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -409,7 +423,7 @@ export default function TripsPage() {
 
       {(detail || detailLoading) && (
         <div className="modal-overlay" onClick={() => setDetail(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
             <h3>Détail du trajet</h3>
             {detailLoading || !detail ? (
               <div className="loading">Chargement…</div>
@@ -442,8 +456,10 @@ export default function TripsPage() {
                       ? `${detail.last_lat}, ${detail.last_lng} (${fmt(detail.last_ping_at)})`
                       : "—"}
                   </dd>
-                  <dt>ETA</dt>
-                  <dd>{fmt(detail.eta_at)}</dd>
+                  <dt>Départ</dt>
+                  <dd>{fmt(detail.created_at)}</dd>
+                  <dt>{detail.arrived_at ? "Arrivée" : "Arrivée prévue"}</dt>
+                  <dd>{fmt(detail.arrived_at || detail.eta_at)}</dd>
                   <dt>Transport</dt>
                   <dd>
                     {detail.transport_mode || "—"}
@@ -454,26 +470,7 @@ export default function TripsPage() {
                   <dt>Points de tracé</dt>
                   <dd>{detail.track?.length ?? 0}</dd>
                 </dl>
-                {detail.track && detail.track.length > 0 && (
-                  <div
-                    style={{
-                      maxHeight: 160,
-                      overflow: "auto",
-                      fontSize: 12,
-                      fontFamily: "ui-monospace, monospace",
-                      marginTop: 8,
-                      background: "rgba(0,0,0,0.04)",
-                      padding: 8,
-                      borderRadius: 6,
-                    }}
-                  >
-                    {detail.track.slice(-40).map((p, i) => (
-                      <div key={`${p.recorded_at}-${i}`}>
-                        {fmt(p.recorded_at)} → {p.lat.toFixed(5)}, {p.lng.toFixed(5)}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <TripTrackMap trip={detail} />
                 <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button type="button" className="btn btn-secondary" onClick={() => openEdit(detail)}>
                     Modifier

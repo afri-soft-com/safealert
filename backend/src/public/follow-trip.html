@@ -64,13 +64,20 @@
           const t = data.trip;
           const lat = t.last_lat ?? t.origin_lat;
           const lng = t.last_lng ?? t.origin_lng;
-          const eta = t.eta_at ? new Date(t.eta_at).toLocaleString("fr-FR") : "—";
+          const fmt = function (iso) {
+            if (!iso) return "—";
+            try { return new Date(iso).toLocaleString("fr-FR"); } catch (e) { return iso; }
+          };
+          const depart = fmt(t.created_at);
+          const arrive = t.arrived_at ? fmt(t.arrived_at) : fmt(t.eta_at);
+          const arriveLabel = t.arrived_at ? "Arrivée" : "Arrivée prévue";
           const nPts = Array.isArray(t.track) ? t.track.length : 0;
           setStatus(
             "<strong>" + (t.traveler_pseudo || "Voyageur") + "</strong> · " +
             (t.dest_label || "Destination") +
             " · Statut : " + (t.status || "—") +
-            " · Arrivée prévue : " + eta +
+            " · Départ : " + depart +
+            " · " + arriveLabel + " : " + arrive +
             (nPts > 1 ? " · Tracé : " + nPts + " pts" : "")
           );
 
@@ -83,11 +90,16 @@
             }).addTo(map);
             if (t.origin_lat != null) {
               originMarker = L.marker([t.origin_lat, t.origin_lng], { title: "Départ" })
-                .addTo(map).bindPopup("Départ");
+                .addTo(map).bindPopup("<strong>Départ</strong><br/>" + depart);
             }
             marker = L.marker([lat, lng]).addTo(map).bindPopup("Position actuelle");
-            destMarker = L.marker([t.dest_lat, t.dest_lng], { title: "Destination" })
-              .addTo(map).bindPopup(t.dest_label || "Destination");
+            if (t.trip_mode !== "patrol" && t.dest_lat != null) {
+              destMarker = L.marker([t.dest_lat, t.dest_lng], { title: "Destination" })
+                .addTo(map).bindPopup(
+                  "<strong>" + arriveLabel + "</strong><br/>" + arrive +
+                  (t.dest_label ? "<br/>" + t.dest_label : "")
+                );
+            }
             trailLine = L.polyline(trail.length ? trail : [[lat, lng]], {
               color: "#0B6E6E", weight: 4, opacity: 0.9,
             }).addTo(map);
