@@ -41,25 +41,57 @@ function dismiss(version: string) {
   }
 }
 
+function maxVersion(...versions: string[]): string | null {
+  let best: string | null = null;
+  for (const v of versions) {
+    const t = v.trim();
+    if (!t) continue;
+    if (!best || compareVersions(best, t) < 0) best = t;
+  }
+  return best;
+}
+
+async function fetchRemoteVersion(): Promise<string | null> {
+  const found: string[] = [];
+  const stamp = Date.now();
+
+  try {
+    const res = await fetch(`${API_BASE}/app/version?t=${stamp}`, { cache: "no-store" });
+    if (res.ok) {
+      const body = (await res.json()) as { adminWebVersion?: string };
+      if (body.adminWebVersion) found.push(body.adminWebVersion);
+    }
+  } catch {
+    /* offline / CORS — try same-origin fallback */
+  }
+
+  // Fresh deploy fingerprint on the static host (survives SPA cache of old JS).
+  try {
+    const res = await fetch(`/version.json?t=${stamp}`, { cache: "no-store" });
+    const ctype = res.headers.get("content-type") || "";
+    if (res.ok && ctype.includes("json")) {
+      const body = (await res.json()) as { version?: string };
+      if (body.version) found.push(body.version);
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return maxVersion(...found);
+}
+
 export default function UpdateBanner() {
   const [latest, setLatest] = useState<string | null>(null);
   const [, setDismissTick] = useState(0);
   const local = currentVersion();
 
   const check = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/app/version?t=${Date.now()}`, { cache: "no-store" });
-      if (!res.ok) return;
-      const body = (await res.json()) as { adminWebVersion?: string };
-      const remote = (body.adminWebVersion || "").trim();
-      if (!remote) return;
-      if (compareVersions(local, remote) < 0) {
-        setLatest(remote);
-      } else {
-        setLatest(null);
-      }
-    } catch {
-      /* offline — keep last state */
+    const remote = await fetchRemoteVersion();
+    if (!remote) return;
+    if (compareVersions(local, remote) < 0) {
+      setLatest(remote);
+    } else {
+      setLatest(null);
     }
   }, [local]);
 
