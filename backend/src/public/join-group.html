@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rejoindre un groupe — SafeAlert</title>
+  <style>
+    :root { --teal: #0B6E6E; --bg: #f4f7f7; --ink: #123; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, Segoe UI, sans-serif;
+      background: var(--bg); color: var(--ink);
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 24px;
+    }
+    .card {
+      background: #fff; border-radius: 16px; padding: 28px 24px;
+      max-width: 420px; width: 100%; box-shadow: 0 8px 28px rgba(0,0,0,.08);
+      text-align: center;
+    }
+    h1 { margin: 0 0 8px; color: var(--teal); font-size: 1.4rem; }
+    .code {
+      font-size: 1.75rem; font-weight: 800; letter-spacing: .14em;
+      margin: 18px 0; color: var(--teal);
+    }
+    p { margin: 0 0 12px; line-height: 1.45; font-size: .95rem; }
+    .muted { color: #667; font-size: .85rem; }
+    a.btn {
+      display: inline-block; margin-top: 8px; padding: 12px 20px;
+      background: var(--teal); color: #fff; text-decoration: none;
+      border-radius: 10px; font-weight: 700;
+    }
+    a.secondary { color: var(--teal); display: inline-block; margin-top: 14px; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>SafeAlert</h1>
+    <p>Invitation à un groupe de voisins</p>
+    <div class="code" id="code">—</div>
+    <p class="muted">Ouvrez l’app pour rejoindre automatiquement, ou saisissez ce code dans Groupes → Rejoindre.</p>
+    <a class="btn" id="openApp" href="#">Ouvrir SafeAlert</a>
+    <br />
+    <a class="secondary" id="copyHint" href="#">Copier le code</a>
+  </div>
+  <script>
+    (function () {
+      var parts = location.pathname.split("/").filter(Boolean);
+      var code = (parts[parts.length - 1] || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      document.getElementById("code").textContent = code || "—";
+
+      var custom = "safealert://group/" + encodeURIComponent(code);
+      // Android Chrome: intent URL tries the app, then falls back to this page.
+      var isAndroid = /Android/i.test(navigator.userAgent);
+      var openHref = isAndroid
+        ? "intent://group/" + encodeURIComponent(code) +
+          "#Intent;scheme=safealert;package=com.safealert.safealert;S.browser_fallback_url=" +
+          encodeURIComponent(location.href) + ";end"
+        : custom;
+
+      var openBtn = document.getElementById("openApp");
+      openBtn.href = openHref;
+
+      // Auto-attempt open once (camera scan → browser → app).
+      if (code) {
+        setTimeout(function () {
+          window.location.href = openHref;
+        }, 400);
+      }
+
+      document.getElementById("copyHint").addEventListener("click", function (e) {
+        e.preventDefault();
+        if (navigator.clipboard && code) {
+          navigator.clipboard.writeText(code).then(function () {
+            e.target.textContent = "Code copié";
+          });
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

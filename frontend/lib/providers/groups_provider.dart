@@ -27,11 +27,14 @@ class GroupsProvider extends ChangeNotifier {
   String? get lastJoinMessage => _lastJoinMessage;
   String? get lastError => _lastError;
 
-  /// Accepts raw code or deep-link URI (safealert://group/CODE).
+  /// Accepts raw code, safealert://group/CODE, or https://…/g/CODE.
   static String normalizeInviteCode(String raw) {
     final s = raw.trim();
     if (s.isEmpty) return '';
-    final uriMatch = RegExp(r'(?:/|^)group/([A-Za-z0-9]+)', caseSensitive: false).firstMatch(s);
+    final uriMatch = RegExp(
+      r'(?:/(?:group|g)/|^group/)([A-Za-z0-9]+)',
+      caseSensitive: false,
+    ).firstMatch(s);
     if (uriMatch != null) return uriMatch.group(1)!.toUpperCase();
     return s.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
   }

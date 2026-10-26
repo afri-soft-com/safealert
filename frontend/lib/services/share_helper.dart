@@ -1,9 +1,27 @@
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'api_service.dart';
 import '../utils/location_format.dart';
 
 /// Partage système + raccourci WhatsApp (FR, sans jargon).
 class ShareHelper {
+  /// Public HTTPS origin derived from API base (…/api → origin).
+  /// Used for QR codes that phone cameras can open.
+  static String get publicWebOrigin {
+    final api = ApiService.baseUrl; // e.g. https://safealert-api.onrender.com/api
+    final uri = Uri.tryParse(api);
+    if (uri == null || !uri.hasScheme) {
+      return 'https://safealert-api.onrender.com';
+    }
+    final path = uri.path.replaceAll(RegExp(r'/api/?$'), '');
+    return uri.replace(path: path.isEmpty ? '' : path, query: '', fragment: '').toString().replaceAll(RegExp(r'/$'), '');
+  }
+
+  static String groupInviteUrl(String code) {
+    final c = code.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    return '$publicWebOrigin/g/$c';
+  }
+
   static Future<void> shareText(String text, {String? subject}) async {
     await Share.share(text, subject: subject ?? 'SafeAlert');
   }
@@ -48,7 +66,7 @@ class ShareHelper {
 
   static String groupInviteMessage(String code, {String? groupName}) {
     final name = groupName != null ? ' « $groupName »' : '';
-    return 'Rejoins mon groupe SafeAlert$name avec le code $code '
-        '(safealert://group/$code)';
+    final url = groupInviteUrl(code);
+    return 'Rejoins mon groupe SafeAlert$name avec le code $code : $url';
   }
 }

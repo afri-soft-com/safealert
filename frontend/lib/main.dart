@@ -160,8 +160,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Future<void> _handleDeepLink(Uri uri) async {
     if (!mounted) return;
     final auth = context.read<AuthProvider>();
-    // safealert://invite/CODE or https://.../invite/CODE
-    // safealert://group/CODE
+    // safealert://invite|group/CODE or https://…/invite|/g|/group/CODE
     final segments = uri.pathSegments;
     final host = uri.host;
     String? kind;
@@ -178,7 +177,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       code = segments.length > 1 ? segments[1] : null;
     }
     if (code == null || code.isEmpty) return;
-    code = code.toUpperCase();
+    code = code.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    if (code.isEmpty) return;
+    // HTTPS short path /g/CODE → same as group
+    if (kind == 'g') kind = 'group';
 
     if (!auth.canEnterApp) {
       _navigate('login');

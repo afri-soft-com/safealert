@@ -211,7 +211,7 @@ app.get("/s/:token", (req, res) => {
 
 // Deep-link landing for circle invites (opens app or shows code)
 app.get("/invite/:code", (req, res) => {
-  const code = String(req.params.code || "").toUpperCase();
+  const code = String(req.params.code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Invitation SafeAlert</title><style>body{font-family:system-ui;padding:24px;background:#f4f7f7;color:#123}a{color:#0B6E6E}</style></head>
@@ -219,6 +219,20 @@ app.get("/invite/:code", (req, res) => {
 <p style="font-size:1.6rem;font-weight:700;letter-spacing:0.1em">${code}</p>
 <p>Ouvrez l'application SafeAlert → Confiance → « Rejoindre avec un code ».</p>
 <p><a href="safealert://invite/${code}">Ouvrir dans l'app</a></p></body></html>`);
+});
+
+// HTTPS landing for group invite QR (phone cameras need https://, not safealert://)
+const joinGroupHtml = path.join(__dirname, "public", "join-group.html");
+app.get("/g/:code", (req, res) => {
+  if (!fs.existsSync(joinGroupHtml)) {
+    return res.status(404).send("Page indisponible");
+  }
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.sendFile(joinGroupHtml);
+});
+app.get("/group/:code", (req, res) => {
+  const code = String(req.params.code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return res.redirect(302, `/g/${encodeURIComponent(code)}`);
 });
 
 const adminWebDist = process.env.ADMIN_WEB_DIST;

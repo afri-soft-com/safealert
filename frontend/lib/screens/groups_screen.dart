@@ -119,7 +119,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Collez le code (ex. A1B2C3D4) ou le lien safealert://group/…. '
+              'Collez le code (ex. A1B2C3D4) ou le lien d\'invitation (https://…/g/…). '
               'Avec un code valide vous entrez tout de suite. '
               'Sinon, pour les groupes publics listés plus bas, une demande d\'admin est nécessaire.',
               style: TextStyle(fontSize: 11, color: AppColors.gris),
@@ -444,7 +444,11 @@ class _GroupsScreenState extends State<GroupsScreen> {
                               textAlign: TextAlign.center,
                               style: TextStyle(fontSize: 11, color: AppColors.gris),
                             ),
-                            QrImageView(data: 'safealert://group/$code', size: 140),
+                            QrImageView(
+                              data: ShareHelper.groupInviteUrl(code),
+                              size: 140,
+                              backgroundColor: Colors.white,
+                            ),
                             Row(
                               children: [
                                 Expanded(
