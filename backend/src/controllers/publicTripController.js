@@ -30,6 +30,7 @@ const getPublicTrip = async (req, res) => {
     }
     const trip = result.rows[0];
     let track = [];
+    let places = [];
     try {
       const pts = await pool.query(
         `SELECT lat, lng, recorded_at
@@ -47,10 +48,30 @@ const getPublicTrip = async (req, res) => {
     } catch (_) {
       track = [];
     }
+    try {
+      const pl = await pool.query(
+        `SELECT id, label, lat, lng, created_at
+           FROM safe_trip_places
+          WHERE trip_id = $1
+          ORDER BY created_at ASC
+          LIMIT 100`,
+        [trip.id]
+      );
+      places = pl.rows.map((p) => ({
+        id: p.id,
+        label: p.label,
+        lat: Number(p.lat),
+        lng: Number(p.lng),
+        at: p.created_at,
+      }));
+    } catch (_) {
+      places = [];
+    }
     return res.json({
       trip: {
         ...trip,
         track,
+        places,
         // Never expose user_id or escort ids publicly
       },
       read_only: true,

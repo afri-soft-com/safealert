@@ -928,7 +928,7 @@ describe("App version", () => {
     const res = await request(app).get("/api/app/version");
     expect(res.status).toBe(200);
     expect(res.body.latestVersion).toBe("1.0.32");
-    expect(res.body.adminWebVersion).toBe("1.0.9");
+    expect(res.body.adminWebVersion).toBe("1.0.10");
     expect(res.body.iosStoreUrl).toContain("apps.apple.com");
     expect(res.body.adminWebUrl).toContain("safealert-admin");
   });
@@ -1143,6 +1143,41 @@ describe("Safe trips", () => {
       if (prev === undefined) delete process.env.FEATURE_PREMIUM;
       else process.env.FEATURE_PREMIUM = prev;
     }
+  });
+
+  it("POST /api/trips/:id/places names a place for followers", async () => {
+    const tripId = "44444444-4444-4444-8444-444444444444";
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [{
+          id: tripId,
+          user_id: "user-1",
+          status: "active",
+          last_lat: -4.32,
+          last_lng: 15.31,
+          origin_lat: -4.32,
+          origin_lng: 15.31,
+          escort_contact_ids: [],
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "place-1",
+          label: "Marché central",
+          lat: -4.32,
+          lng: 15.31,
+          created_at: new Date().toISOString(),
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] }) // trust circle
+      .mockResolvedValueOnce({ rows: [] }) // track
+      .mockResolvedValueOnce({ rows: [] }); // places reload
+    const res = await request(app)
+      .post(`/api/trips/${tripId}/places`)
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ label: "Marché central" });
+    expect(res.status).toBe(201);
+    expect(res.body.place.label).toBe("Marché central");
   });
 });
 

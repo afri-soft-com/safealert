@@ -664,6 +664,18 @@ const migrate = async () => {
 
       -- destination = classic A→B ; patrol = field tracking without destination
       ALTER TABLE safe_trips ADD COLUMN IF NOT EXISTS trip_mode VARCHAR(20) DEFAULT 'destination';
+
+      -- Named places along a secured trip (visible to escorts / public followers)
+      CREATE TABLE IF NOT EXISTS safe_trip_places (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        trip_id UUID NOT NULL REFERENCES safe_trips(id) ON DELETE CASCADE,
+        label VARCHAR(120) NOT NULL,
+        lat DOUBLE PRECISION NOT NULL,
+        lng DOUBLE PRECISION NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_safe_trip_places_trip
+        ON safe_trip_places(trip_id, created_at ASC);
     `);
 
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;

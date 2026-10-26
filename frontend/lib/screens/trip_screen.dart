@@ -415,6 +415,47 @@ class _TripScreenState extends State<TripScreen> {
     }
   }
 
+  Future<void> _nameCurrentPlace() async {
+    final ctrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nommer ce lieu'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          maxLength: 120,
+          decoration: const InputDecoration(
+            labelText: 'Ex. Marché central, Chez Mama…',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || name == null || name.isEmpty) return;
+    final place = await context.read<TripProvider>().addPlace(name);
+    if (!mounted) return;
+    if (place == null) {
+      showAppSnackBar(
+        context,
+        context.read<TripProvider>().error ?? 'Échec',
+        isError: true,
+        fallback: 'Impossible d\'enregistrer le lieu.',
+      );
+      return;
+    }
+    showAppSnackBar(context, 'Lieu « ${place['label']} » partagé avec les suiveurs.');
+  }
+
   Future<void> _openEscortMap([String? tripId]) async {
     final id = tripId ?? _followIdCtrl.text.trim();
     if (id.isEmpty) {
@@ -1263,6 +1304,19 @@ class _TripScreenState extends State<TripScreen> {
                             ),
                             const Text('Copier le code', style: TextStyle(fontSize: 11, color: AppColors.gris)),
                           ],
+                        ),
+                        if (context.watch<TripProvider>().placesFor(trip).isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Lieux nommés : ${context.watch<TripProvider>().placesFor(trip).map((p) => p['label']).join(' · ')}',
+                            style: const TextStyle(fontSize: 12, color: AppColors.orange, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: _nameCurrentPlace,
+                          icon: const Icon(Icons.place_outlined, size: 18),
+                          label: const Text('Nommer ce lieu (visible des suiveurs)'),
                         ),
                         const SizedBox(height: 8),
                         Row(

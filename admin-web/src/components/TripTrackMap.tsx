@@ -107,6 +107,7 @@ type MapHandles = {
   trail: ReturnType<LeafletNs["polyline"]>;
   origin?: ReturnType<LeafletNs["marker"]>;
   dest?: ReturnType<LeafletNs["marker"]>;
+  places: Array<{ remove: () => void }>;
 };
 
 /** Carte Leaflet lecture seule pour suivre / revoir un trajet admin. */
@@ -172,9 +173,19 @@ export default function TripTrackMap({ trip, height = 320 }: Props) {
             map.fitBounds(line.getBounds(), { padding: [28, 28] });
           }
 
-          mapRef.current = { map, marker, trail: line, origin, dest };
+          const placeMarkers: Array<{ remove: () => void }> = [];
+          for (const p of trip.places || []) {
+            if (p.lat == null || p.lng == null || !p.label) continue;
+            const m = L.marker([p.lat, p.lng]).addTo(map) as ReturnType<LeafletNs["marker"]> & {
+              remove: () => void;
+            };
+            m.bindPopup(`<strong>${p.label}</strong><br/>${fmtWhen(p.at || p.created_at)}`);
+            placeMarkers.push(m as { remove: () => void });
+          }
+
+          mapRef.current = { map, marker, trail: line, origin, dest, places: placeMarkers };
         } else {
-          const { map, marker, trail, origin, dest } = mapRef.current;
+          const { map, marker, trail, origin, dest, places } = mapRef.current;
           marker.setLatLng([lat, lng]);
           trail.setLatLngs(trailPts.length ? trailPts : [[lat, lng]]);
           origin
@@ -185,6 +196,23 @@ export default function TripTrackMap({ trip, height = 320 }: Props) {
               trip.arrived_at || trip.eta_at
             )}`
           );
+          for (const m of places) {
+            try {
+              m.remove();
+            } catch {
+              /* ignore */
+            }
+          }
+          const nextPlaces: Array<{ remove: () => void }> = [];
+          for (const p of trip.places || []) {
+            if (p.lat == null || p.lng == null || !p.label) continue;
+            const m = L.marker([p.lat, p.lng]).addTo(map) as ReturnType<LeafletNs["marker"]> & {
+              remove: () => void;
+            };
+            m.bindPopup(`<strong>${p.label}</strong><br/>${fmtWhen(p.at || p.created_at)}`);
+            nextPlaces.push(m as { remove: () => void });
+          }
+          mapRef.current.places = nextPlaces;
           if (trip.status === "active") map.panTo([lat, lng]);
         }
       } catch {
@@ -222,6 +250,12 @@ export default function TripTrackMap({ trip, height = 320 }: Props) {
           <strong>{trip.arrived_at ? "Arrivée" : "Arrivée prévue"}</strong>{" "}
           {fmtWhen(trip.arrived_at || trip.eta_at)}
         </span>
+        {(trip.places?.length ?? 0) > 0 && (
+          <span>
+            <strong>Lieux</strong>{" "}
+            {(trip.places || []).map((p) => p.label).filter(Boolean).join(" · ")}
+          </span>
+        )}
       </div>
       <div
         ref={containerRef}

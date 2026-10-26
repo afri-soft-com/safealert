@@ -69,10 +69,46 @@ async function loadTrack(tripId, limit = 800) {
   }
 }
 
+async function loadPlaces(tripId, limit = 100) {
+  try {
+    const r = await pool.query(
+      `SELECT id, label, lat, lng, created_at
+         FROM safe_trip_places
+        WHERE trip_id = $1
+        ORDER BY created_at ASC
+        LIMIT $2`,
+      [tripId, limit]
+    );
+    return r.rows.map((p) => ({
+      id: p.id,
+      label: p.label,
+      lat: Number(p.lat),
+      lng: Number(p.lng),
+      at: p.created_at,
+    }));
+  } catch (err) {
+    console.error("loadPlaces:", err.message);
+    return [];
+  }
+}
+
 async function withTrack(trip) {
   if (!trip || !trip.id) return trip;
-  const track = await loadTrack(trip.id);
-  return { ...trip, track };
+  const [track, places] = await Promise.all([loadTrack(trip.id), loadPlaces(trip.id)]);
+  return { ...trip, track, places };
+}
+
+function emitTripPlace(io, trip, place) {
+  if (!io || !trip) return;
+  const payload = {
+    trip_id: trip.id,
+    place,
+    at: new Date().toISOString(),
+  };
+  io.emit("trip_place", payload);
+  for (const cid of trip.escort_contact_ids || []) {
+    io.to(`user:${cid}`).emit("trip_place", payload);
+  }
 }
 
 const startTrip = async (req, res) => {
@@ -607,6 +643,76 @@ const processOverdueTrips = async () => {
   return { alerted };
 };
 
+/** Traveler names a place at current (or given) coordinates — visible to followers. */
+const addPlace = async (req, res) => {
+  if (!assertTripEnabled(res)) return;
+  const label = String(req.body?.label || "").trim().slice(0, 120);
+  if (label.length < 2) {
+    return res.status(400).json({ error: "Indiquez un nom de lieu (2 caractères min.)." });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM safe_trips WHERE id = $1 AND user_id = $2 AND status = 'active'`,
+      [req.params.id, req.userId]
+    );
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "Trajet actif non trouvé" });
+    }
+    const trip = result.rows[0];
+    let lat = Number(req.body?.lat);
+    let lng = Number(req.body?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      lat = Number(trip.last_lat ?? trip.origin_lat);
+      lng = Number(trip.last_lng ?? trip.origin_lng);
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ error: "Position GPS indisponible pour ce lieu." });
+    }
+
+    const inserted = await pool.query(
+      `INSERT INTO safe_trip_places (trip_id, label, lat, lng)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, label, lat, lng, created_at`,
+      [trip.id, label, lat, lng]
+    );
+    const place = {
+      id: inserted.rows[0].id,
+      label: inserted.rows[0].label,
+      lat: Number(inserted.rows[0].lat),
+      lng: Number(inserted.rows[0].lng),
+      at: inserted.rows[0].created_at,
+    };
+
+    const io = req.app.get("io");
+    emitTripPlace(io, trip, place);
+    // Notify trust circle too (same audience as live pings)
+    try {
+      const circle = await pool.query(
+        `SELECT contact_user_id FROM trust_contacts
+          WHERE user_id = $1 AND contact_user_id IS NOT NULL`,
+        [req.userId]
+      );
+      if (io) {
+        for (const row of circle.rows) {
+          io.to(`user:${row.contact_user_id}`).emit("trip_place", {
+            trip_id: trip.id,
+            place,
+            at: new Date().toISOString(),
+          });
+        }
+      }
+    } catch (_) {
+      /* non-fatal */
+    }
+
+    return res.status(201).json({ place, trip: await withTrack(trip) });
+  } catch (err) {
+    console.error("addPlace error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
 /** Create / refresh a public share link for an active trip */
 const createShareLink = async (req, res) => {
   if (!assertTripEnabled(res)) return;
@@ -649,4 +755,5 @@ module.exports = {
   getTrip,
   processOverdueTrips,
   createShareLink,
+  addPlace,
 };

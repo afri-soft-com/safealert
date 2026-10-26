@@ -33,6 +33,22 @@ async function loadTrack(tripId, limit = 800) {
   return r.rows;
 }
 
+async function loadPlaces(tripId, limit = 100) {
+  try {
+    const r = await pool.query(
+      `SELECT id, label, lat, lng, created_at
+         FROM safe_trip_places
+        WHERE trip_id = $1
+        ORDER BY created_at ASC
+        LIMIT $2`,
+      [tripId, limit]
+    );
+    return r.rows;
+  } catch (_) {
+    return [];
+  }
+}
+
 const listTrips = async (req, res) => {
   const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
@@ -125,8 +141,8 @@ const getTrip = async (req, res) => {
       return res.status(404).json({ error: "Trajet non trouvé" });
     }
     const trip = result.rows[0];
-    const track = await loadTrack(trip.id);
-    return res.json({ ...trip, track });
+    const [track, places] = await Promise.all([loadTrack(trip.id), loadPlaces(trip.id)]);
+    return res.json({ ...trip, track, places });
   } catch (err) {
     console.error("admin getTrip error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });

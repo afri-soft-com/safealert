@@ -153,6 +153,7 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
         ? LatLng(liveLat.toDouble(), liveLng.toDouble())
         : const LatLng(-4.3217, 15.3125);
     final track = trip != null ? _trackPoints(prov, trip) : const <LatLng>[];
+    final places = trip != null ? prov.placesFor(trip) : const <Map<String, dynamic>>[];
 
     if (trip != null && _followLive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -290,6 +291,46 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                                 color: AppColors.vert,
                               ),
                             ),
+                          ...places.map((p) {
+                            final la = (p['lat'] as num).toDouble();
+                            final ln = (p['lng'] as num).toDouble();
+                            final label = p['label']?.toString() ?? 'Lieu';
+                            return Marker(
+                              point: LatLng(la, ln),
+                              width: 140,
+                              height: 56,
+                              alignment: Alignment.bottomCenter,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    constraints: const BoxConstraints(maxWidth: 130),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: AppColors.orange.withValues(alpha: 0.5)),
+                                      boxShadow: const [
+                                        BoxShadow(color: Color(0x22000000), blurRadius: 3),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      label,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.bleuFonce,
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(Icons.place, color: AppColors.orange, size: 22),
+                                ],
+                              ),
+                            );
+                          }),
                         ],
                       ),
                     ],
@@ -343,9 +384,19 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                             ),
                             Text(
                               'Statut : ${trip['status'] ?? '—'}'
-                              '${track.length > 1 ? ' · ${track.length} points de tracé' : ''}',
+                              '${track.length > 1 ? ' · ${track.length} points de tracé' : ''}'
+                              '${places.isNotEmpty ? ' · ${places.length} lieu(x) nommé(s)' : ''}',
                               style: const TextStyle(fontSize: 11, color: AppColors.gris),
                             ),
+                            if (places.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                places.map((p) => p['label']?.toString() ?? '').where((s) => s.isNotEmpty).join(' · '),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 11, color: AppColors.orange, fontWeight: FontWeight.w600),
+                              ),
+                            ],
                             if (trip['abnormal_stop_at'] != null)
                               const Padding(
                                 padding: EdgeInsets.only(top: 4),

@@ -30,7 +30,7 @@
     (function () {
       const token = location.pathname.split("/").filter(Boolean).pop();
       const statusEl = document.getElementById("status");
-      let map, marker, destMarker, originMarker, trailLine;
+      let map, marker, destMarker, originMarker, trailLine, placeMarkers = [];
 
       function setStatus(html) { statusEl.innerHTML = html; }
 
@@ -72,13 +72,16 @@
           const arrive = t.arrived_at ? fmt(t.arrived_at) : fmt(t.eta_at);
           const arriveLabel = t.arrived_at ? "Arrivée" : "Arrivée prévue";
           const nPts = Array.isArray(t.track) ? t.track.length : 0;
+          const places = Array.isArray(t.places) ? t.places : [];
+          const placeNames = places.map(function (p) { return p && p.label; }).filter(Boolean);
           setStatus(
             "<strong>" + (t.traveler_pseudo || "Voyageur") + "</strong> · " +
             (t.dest_label || "Destination") +
             " · Statut : " + (t.status || "—") +
             " · Départ : " + depart +
             " · " + arriveLabel + " : " + arrive +
-            (nPts > 1 ? " · Tracé : " + nPts + " pts" : "")
+            (nPts > 1 ? " · Tracé : " + nPts + " pts" : "") +
+            (placeNames.length ? " · Lieux : " + placeNames.join(", ") : "")
           );
 
           const trail = trackLatLngs(t);
@@ -103,9 +106,24 @@
             trailLine = L.polyline(trail.length ? trail : [[lat, lng]], {
               color: "#0B6E6E", weight: 4, opacity: 0.9,
             }).addTo(map);
+            placeMarkers = [];
+            places.forEach(function (p) {
+              if (!p || p.lat == null || p.lng == null || !p.label) return;
+              placeMarkers.push(
+                L.marker([p.lat, p.lng]).addTo(map).bindPopup("<strong>" + p.label + "</strong>")
+              );
+            });
           } else {
             marker.setLatLng([lat, lng]);
             if (trailLine) trailLine.setLatLngs(trail.length ? trail : [[lat, lng]]);
+            placeMarkers.forEach(function (m) { try { map.removeLayer(m); } catch (e) {} });
+            placeMarkers = [];
+            places.forEach(function (p) {
+              if (!p || p.lat == null || p.lng == null || !p.label) return;
+              placeMarkers.push(
+                L.marker([p.lat, p.lng]).addTo(map).bindPopup("<strong>" + p.label + "</strong>")
+              );
+            });
             map.panTo([lat, lng]);
           }
         } catch (e) {

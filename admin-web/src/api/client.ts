@@ -650,8 +650,18 @@ export interface SafeTripRow {
   traveler_phone?: string;
 }
 
+export interface SafeTripPlace {
+  id: string;
+  label: string;
+  lat: number;
+  lng: number;
+  created_at?: string;
+  at?: string;
+}
+
 export interface SafeTripDetail extends SafeTripRow {
   track?: Array<{ lat: number; lng: number; recorded_at: string }>;
+  places?: SafeTripPlace[];
   escort_contact_ids?: string[];
   share_token?: string | null;
   share_expires_at?: string | null;

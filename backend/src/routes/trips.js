@@ -21,6 +21,12 @@ router.get("/active", authenticate, ctrl.getActiveTrip);
 router.get("/history", authenticate, ctrl.listMyTrips);
 router.get("/:id", authenticate, ctrl.getTrip);
 router.post("/:id/ping", authenticate, ctrl.pingTrip);
+router.post(
+  "/:id/places",
+  authenticate,
+  [body("label").isString().trim().isLength({ min: 2, max: 120 })],
+  ctrl.addPlace
+);
 router.post("/:id/arrive", authenticate, ctrl.arriveTrip);
 router.post("/:id/cancel", authenticate, ctrl.cancelTrip);
 router.post("/:id/share", authenticate, ctrl.createShareLink);

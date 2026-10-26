@@ -56,6 +56,21 @@ class TripProvider extends ChangeNotifier {
         .toList();
   }
 
+  /// Named places the traveler pinned along the trip.
+  List<Map<String, dynamic>> placesFor(Map<String, dynamic>? trip) {
+    if (trip == null) return const [];
+    final raw = trip['places'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .where((p) =>
+            p['lat'] != null &&
+            p['lng'] != null &&
+            (p['label']?.toString().trim().isNotEmpty ?? false))
+        .toList();
+  }
+
   TripProvider() {
     _bindSockets();
   }
@@ -90,7 +105,34 @@ class TripProvider extends ChangeNotifier {
         _followTripId = trip['id']?.toString();
         notifyListeners();
       },
+      onTripPlace: (data) {
+        final tripId = data['trip_id']?.toString();
+        final placeRaw = data['place'];
+        if (tripId == null || placeRaw is! Map) return;
+        final place = Map<String, dynamic>.from(placeRaw);
+        if (_activeTrip != null && _activeTrip!['id']?.toString() == tripId) {
+          _activeTrip = _mergePlace(_activeTrip!, place);
+          notifyListeners();
+        }
+        if (_followTripId == tripId) {
+          _followedTrip = _mergePlace({...?_followedTrip, 'id': tripId}, place);
+          notifyListeners();
+        }
+      },
     );
+  }
+
+  Map<String, dynamic> _mergePlace(
+    Map<String, dynamic> trip,
+    Map<String, dynamic> place,
+  ) {
+    final places = List<Map<String, dynamic>>.from(placesFor(trip));
+    final id = place['id']?.toString();
+    if (id != null && places.any((p) => p['id']?.toString() == id)) {
+      return trip;
+    }
+    places.add(place);
+    return {...trip, 'places': places};
   }
 
   Map<String, dynamic> _mergePing(
@@ -453,6 +495,57 @@ class TripProvider extends ChangeNotifier {
     final left = await _cache.listPending(kind: 'trip_ping');
     _pendingOfflinePings = left.length;
     notifyListeners();
+  }
+
+  /// Pin a named place at the current (or provided) GPS position.
+  Future<Map<String, dynamic>?> addPlace(
+    String label, {
+    double? lat,
+    double? lng,
+  }) async {
+    if (_activeTrip == null) return null;
+    final name = label.trim();
+    if (name.length < 2) {
+      _error = 'Indiquez un nom de lieu (2 caractères min.).';
+      notifyListeners();
+      return null;
+    }
+    _error = null;
+    try {
+      var oLat = lat;
+      var oLng = lng;
+      if (oLat == null || oLng == null) {
+        final pos = await LocationService().getCurrentPosition();
+        oLat = pos?.latitude ??
+            (_activeTrip!['last_lat'] as num?)?.toDouble() ??
+            (_activeTrip!['origin_lat'] as num?)?.toDouble();
+        oLng = pos?.longitude ??
+            (_activeTrip!['last_lng'] as num?)?.toDouble() ??
+            (_activeTrip!['origin_lng'] as num?)?.toDouble();
+      }
+      final res = await _api.post('/trips/${_activeTrip!['id']}/places', {
+        'label': name,
+        if (oLat != null) 'lat': oLat,
+        if (oLng != null) 'lng': oLng,
+      });
+      final trip = res['trip'];
+      if (trip is Map) {
+        _activeTrip = Map<String, dynamic>.from(trip);
+      } else {
+        final place = res['place'];
+        if (place is Map) {
+          _activeTrip = _mergePlace(_activeTrip!, Map<String, dynamic>.from(place));
+        }
+      }
+      notifyListeners();
+      return res['place'] is Map
+          ? Map<String, dynamic>.from(res['place'] as Map)
+          : null;
+    } catch (e) {
+      _error = e is ApiException ? e.message : 'Impossible d\'enregistrer le lieu.';
+      notifyListeners();
+      return null;
+    }
   }
 
   Future<void> arrive() async {

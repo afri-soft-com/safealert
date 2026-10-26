@@ -15,6 +15,7 @@ class SocketService {
   SosAlertCallback? _onSosLive;
   TripEventCallback? _onTripPing;
   TripEventCallback? _onEscortTrip;
+  TripEventCallback? _onTripPlace;
   String? _userId;
 
   String? get currentUserId => _userId;
@@ -30,9 +31,11 @@ class SocketService {
   void setTripHandlers({
     TripEventCallback? onTripPing,
     TripEventCallback? onEscortTrip,
+    TripEventCallback? onTripPlace,
   }) {
     _onTripPing = onTripPing;
     _onEscortTrip = onEscortTrip;
+    _onTripPlace = onTripPlace;
   }
 
   void connect({String? userId}) {
@@ -82,6 +85,11 @@ class SocketService {
         } else {
           _onEscortTrip?.call(map);
         }
+      }
+    });
+    _socket!.on('trip_place', (data) {
+      if (data is Map) {
+        _onTripPlace?.call(Map<String, dynamic>.from(data));
       }
     });
   }
