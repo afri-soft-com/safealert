@@ -4,6 +4,7 @@ const { resolveZoneName } = require("../utils/incidentZone");
 const { deliverEvent } = require("../services/partnerWebhooks");
 const { witnessEvidence, reliabilityScore } = require("../config/features");
 const { withReliabilityBadge } = require("../utils/reliability");
+const { notifyUserGroupsOnReport } = require("../services/groupNotify");
 
 const ACTIVE_STATUSES = ["active", "verified", "acknowledged", "in_progress"];
 const FILTER_TO_DB = {
@@ -210,6 +211,24 @@ const reportIncident = async (req, res) => {
       zone_name: incident.zone_name,
       reliability_score: incident.reliability_score,
     }).catch(() => {});
+
+    // Same group fan-out as SOS (push + onglet Alertes), gated by sos_notify_groups
+    try {
+      const userRes = await pool.query("SELECT pseudo FROM users WHERE id = $1", [req.userId]);
+      const displayName = incident.is_anonymous
+        ? "Un voisin"
+        : userRes.rows[0]?.pseudo || "Un membre";
+      await notifyUserGroupsOnReport(
+        req.userId,
+        lat,
+        lng,
+        displayName,
+        incident.zone_name,
+        incident.incident_type
+      );
+    } catch (groupErr) {
+      console.error("reportIncident group notify:", groupErr.message);
+    }
 
     return res.status(201).json(
       reliabilityScore() ? withReliabilityBadge(incident) : incident

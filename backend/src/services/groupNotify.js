@@ -30,13 +30,43 @@ const notifyGroupMembers = async (groupId, excludeUserId, notification, data) =>
   return notified;
 };
 
-const notifyUserGroupsOnSOS = async (userId, lat, lng, pseudo, zoneName = null) => {
+const locationWhere = (lat, lng, zoneName) => {
+  const place =
+    typeof zoneName === "string" && zoneName.trim()
+      ? zoneName.trim()
+      : "Lieu en cours de résolution";
+  const la = Number(lat);
+  const ln = Number(lng);
+  const coords =
+    Number.isFinite(la) && Number.isFinite(ln)
+      ? `${la.toFixed(4)}, ${ln.toFixed(4)}`
+      : "";
+  return {
+    where: coords ? `${place} · ${coords}` : place,
+    la: Number.isFinite(la) ? la : null,
+    ln: Number.isFinite(ln) ? ln : null,
+  };
+};
+
+/**
+ * Push + feed Alertes for every neighborhood group the user belongs to.
+ * Gated by users.sos_notify_groups (covers SOS and signalements).
+ */
+const notifyUserGroups = async ({
+  userId,
+  lat,
+  lng,
+  pseudo,
+  zoneName = null,
+  kind = "sos", // sos | report
+  incidentType = null,
+}) => {
   const userRes = await pool.query(
     "SELECT sos_notify_groups FROM users WHERE id = $1",
     [userId]
   );
   if (userRes.rows.length === 0 || userRes.rows[0].sos_notify_groups === false) {
-    return { groupsNotified: 0, membersNotified: 0 };
+    return { groupsNotified: 0, membersNotified: 0, alertsCreated: 0 };
   }
 
   const groups = await pool.query(
@@ -46,54 +76,49 @@ const notifyUserGroupsOnSOS = async (userId, lat, lng, pseudo, zoneName = null) 
     [userId]
   );
 
-  const place = (typeof zoneName === "string" && zoneName.trim())
-    ? zoneName.trim()
-    : "Lieu en cours de résolution";
-  const la = Number(lat);
-  const ln = Number(lng);
-  const coords =
-    Number.isFinite(la) && Number.isFinite(ln)
-      ? `${la.toFixed(4)}, ${ln.toFixed(4)}`
-      : "";
-  const where = coords ? `${place} · ${coords}` : place;
+  const { where, la, ln } = locationWhere(lat, lng, zoneName);
+  const isSos = kind !== "report";
+  const typeLabel = incidentType ? String(incidentType) : "incident";
+  const alertTitle = isSos ? `SOS — ${pseudo}` : `Signalement — ${typeLabel}`;
+  const alertBody = isSos
+    ? (groupName) => `Alerte SOS déclenchée dans ${groupName}. ${where}`
+    : (groupName) => `${pseudo} a signalé « ${typeLabel} » dans ${groupName}. ${where}`;
+  const pushTitle = isSos ? "🚨 SOS — membre du groupe" : "⚠️ Signalement — groupe";
+  const pushBody = isSos
+    ? (groupName) => `${pseudo} a déclenché une alerte SOS dans ${groupName} ! ${where}`
+    : (groupName) => `${pseudo} a signalé « ${typeLabel} » dans ${groupName}. ${where}`;
+  const pushType = isSos ? "group_sos" : "group_report";
+  const feedType = isSos ? "danger" : "danger";
 
   let membersNotified = 0;
   let alertsCreated = 0;
   for (const group of groups.rows) {
-    // Persist in group feed so members see the SOS when opening Alertes
-    // (push alone is invisible if the app was closed / user opens the group later).
     try {
       await pool.query(
         `INSERT INTO group_alerts (group_id, author_id, type, title, body, lat, lng)
-         VALUES ($1, $2, 'danger', $3, $4, $5, $6)`,
-        [
-          group.id,
-          userId,
-          `SOS — ${pseudo}`,
-          `Alerte SOS déclenchée dans ${group.name}. ${where}`,
-          Number.isFinite(la) ? la : null,
-          Number.isFinite(ln) ? ln : null,
-        ]
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [group.id, userId, feedType, alertTitle, alertBody(group.name), la, ln]
       );
       alertsCreated += 1;
     } catch (err) {
-      console.error("group SOS alert insert failed:", group.id, err.message);
+      console.error("group alert insert failed:", group.id, err.message);
     }
 
     const count = await notifyGroupMembers(
       group.id,
       userId,
       {
-        title: "🚨 SOS — membre du groupe",
-        body: `${pseudo} a déclenché une alerte SOS dans ${group.name} ! ${where}`,
+        title: pushTitle,
+        body: pushBody(group.name),
       },
       {
-        type: "group_sos",
+        type: pushType,
         groupId: String(group.id),
         userId: String(userId),
         lat: String(lat),
         lng: String(lng),
         zone_name: zoneName ? String(zoneName) : "",
+        incidentType: incidentType ? String(incidentType) : "",
       }
     );
     membersNotified += count;
@@ -102,4 +127,23 @@ const notifyUserGroupsOnSOS = async (userId, lat, lng, pseudo, zoneName = null) 
   return { groupsNotified: groups.rows.length, membersNotified, alertsCreated };
 };
 
-module.exports = { notifyGroupMembers, notifyUserGroupsOnSOS };
+const notifyUserGroupsOnSOS = (userId, lat, lng, pseudo, zoneName = null) =>
+  notifyUserGroups({ userId, lat, lng, pseudo, zoneName, kind: "sos" });
+
+const notifyUserGroupsOnReport = (userId, lat, lng, pseudo, zoneName, incidentType) =>
+  notifyUserGroups({
+    userId,
+    lat,
+    lng,
+    pseudo,
+    zoneName,
+    kind: "report",
+    incidentType,
+  });
+
+module.exports = {
+  notifyGroupMembers,
+  notifyUserGroups,
+  notifyUserGroupsOnSOS,
+  notifyUserGroupsOnReport,
+};
