@@ -81,28 +81,38 @@ const startTrip = async (req, res) => {
   const {
     origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
     eta_minutes, escort_contact_ids, notify_on_delay, transport_mode,
-    vehicle_plate, vehicle_note,
+    vehicle_plate, vehicle_note, trip_mode,
   } = req.body;
   const plate = vehicle_plate != null ? String(vehicle_plate).trim().slice(0, 32) : null;
   const vNote = vehicle_note != null ? String(vehicle_note).trim().slice(0, 200) : null;
+  const tripMode =
+    String(trip_mode || "").toLowerCase() === "patrol" ? "patrol" : "destination";
 
   const originLat = Number(origin_lat);
   const originLng = Number(origin_lng);
-  const destLat = Number(dest_lat);
-  const destLng = Number(dest_lng);
+  let destLat = Number(dest_lat);
+  let destLng = Number(dest_lng);
 
-  if (
-    !Number.isFinite(originLat) || !Number.isFinite(originLng) ||
-    !Number.isFinite(destLat) || !Number.isFinite(destLng)
-  ) {
-    return res.status(400).json({ error: "Origine et destination requises" });
+  if (!Number.isFinite(originLat) || !Number.isFinite(originLng)) {
+    return res.status(400).json({ error: "Point de départ requis" });
   }
 
-  const distanceKm = haversineKm(originLat, originLng, destLat, destLng);
-  if (!Number.isFinite(distanceKm) || distanceKm < 0.01) {
-    return res.status(400).json({
-      error: "Choisissez un point d'arrivée distinct du départ.",
-    });
+  if (tripMode === "patrol") {
+    // Field / investigation tracking: destination optional — trail is the product.
+    if (!Number.isFinite(destLat) || !Number.isFinite(destLng)) {
+      destLat = originLat;
+      destLng = originLng;
+    }
+  } else {
+    if (!Number.isFinite(destLat) || !Number.isFinite(destLng)) {
+      return res.status(400).json({ error: "Origine et destination requises" });
+    }
+    const distanceKm = haversineKm(originLat, originLng, destLat, destLng);
+    if (!Number.isFinite(distanceKm) || distanceKm < 0.01) {
+      return res.status(400).json({
+        error: "Choisissez un point d'arrivée distinct du départ.",
+      });
+    }
   }
 
   try {
@@ -142,7 +152,9 @@ const startTrip = async (req, res) => {
     }
 
     const mode = normalizeTransportMode(transport_mode);
-    const suggested = estimateEtaMinutes(originLat, originLng, destLat, destLng, mode);
+    const suggested = tripMode === "patrol"
+      ? Math.min(8 * 60, ents.trip_eta_max_minutes) // fenêtre terrain par défaut
+      : estimateEtaMinutes(originLat, originLng, destLat, destLng, mode);
     const requestedRaw = eta_minutes == null || eta_minutes === ""
       ? suggested
       : parseInt(eta_minutes, 10);
@@ -159,7 +171,12 @@ const startTrip = async (req, res) => {
       ? escort_contact_ids.map(String).filter((id) => UUID_RE.test(id))
       : [];
 
-    const destLabel = clipDestLabel(dest_label);
+    const destLabel = clipDestLabel(dest_label)
+      || (tripMode === "patrol" ? "Patrouille terrain" : null);
+    // Patrol: no overdue SOS unless explicitly requested
+    const notifyDelay = tripMode === "patrol"
+      ? notify_on_delay === true
+      : notify_on_delay !== false;
     const shareToken = publicShare() ? crypto.randomBytes(12).toString("hex") : null;
     // Token lives until ETA + 2h (or max 24h). Hours are a separate bind so $10
     // is never both varchar (share_token) and text — Postgres 42P08.
@@ -169,18 +186,18 @@ const startTrip = async (req, res) => {
 
     const insertParams = [
       req.userId, originLat, originLng, destLat, destLng,
-      destLabel, minutes, escorts, notify_on_delay !== false,
-      shareToken, shareHours, mode, plate || null, vNote || null,
+      destLabel, minutes, escorts, notifyDelay,
+      shareToken, shareHours, mode, plate || null, vNote || null, tripMode,
     ];
     const insertFull = () =>
       pool.query(
         `INSERT INTO safe_trips
            (user_id, origin_lat, origin_lng, dest_lat, dest_lng, dest_label,
             eta_at, last_lat, last_lng, last_ping_at, escort_contact_ids, notify_on_delay,
-            share_token, share_expires_at, transport_mode, vehicle_plate, vehicle_note)
+            share_token, share_expires_at, transport_mode, vehicle_plate, vehicle_note, trip_mode)
          VALUES ($1,$2,$3,$4,$5,$6, NOW() + ($7::int * INTERVAL '1 minute'), $2,$3, NOW(), $8, $9,
                  $10, CASE WHEN $11::int IS NOT NULL THEN NOW() + ($11::int * INTERVAL '1 hour') ELSE NULL END,
-                 $12, $13, $14)
+                 $12, $13, $14, $15)
          RETURNING *`,
         insertParams
       );
@@ -245,9 +262,13 @@ const startTrip = async (req, res) => {
       await notifyTrustCircle(
         req.userId,
         "🛣️ Trajet SafeAlert",
-        `{pseudo} partage un trajet vers ${destLabel || "sa destination"} (ETA ${minutes} min).`,
+        tripMode === "patrol"
+          ? `{pseudo} partage une patrouille terrain (suivi GPS live).`
+          : `{pseudo} partage un trajet vers ${destLabel || "sa destination"} (ETA ${minutes} min).`,
         "safe_trip_started",
-        `🛣️ SafeAlert — {pseudo} a démarré un trajet sécurisé (ETA ${minutes} min).`
+        tripMode === "patrol"
+          ? `🛣️ SafeAlert — {pseudo} a démarré une patrouille terrain (suivi GPS).`
+          : `🛣️ SafeAlert — {pseudo} a démarré un trajet sécurisé (ETA ${minutes} min).`
       );
     } catch (notifyErr) {
       console.error("startTrip notify skipped:", notifyErr.message);
@@ -332,29 +353,31 @@ const pingTrip = async (req, res) => {
       }
     }
 
-    // Arrival: within 80m of destination — skipped for short trips
+    // Arrival: within 80m of destination — skipped for patrol / short trips
     // (origin already inside the 80m radius, which looked like an instant failure).
-    const originDestM = haversineKm(
-      Number(trip.origin_lat), Number(trip.origin_lng),
-      Number(trip.dest_lat), Number(trip.dest_lng)
-    ) * 1000;
-    const arrivalRes = await pool.query(
-      `SELECT ST_Distance(
-         ST_SetSRID(ST_MakePoint($1,$2),4326)::geography,
-         ST_SetSRID(ST_MakePoint($3,$4),4326)::geography
-       ) AS meters`,
-      [trip.dest_lng, trip.dest_lat, lng, lat]
-    );
-    const nearDest = arrivalRes.rows[0].meters < 80;
-    const startedAt = trip.created_at ? new Date(trip.created_at).getTime() : 0;
-    const elapsedMs = Date.now() - startedAt;
-    const autoArriveOk = originDestM >= 150 && elapsedMs > 60 * 1000;
-
+    const isPatrol = String(trip.trip_mode || "") === "patrol";
     let status = "active";
     let arrivedAt = null;
-    if (autoArriveOk && nearDest) {
-      status = "arrived";
-      arrivedAt = new Date();
+    if (!isPatrol) {
+      const originDestM = haversineKm(
+        Number(trip.origin_lat), Number(trip.origin_lng),
+        Number(trip.dest_lat), Number(trip.dest_lng)
+      ) * 1000;
+      const arrivalRes = await pool.query(
+        `SELECT ST_Distance(
+           ST_SetSRID(ST_MakePoint($1,$2),4326)::geography,
+           ST_SetSRID(ST_MakePoint($3,$4),4326)::geography
+         ) AS meters`,
+        [trip.dest_lng, trip.dest_lat, lng, lat]
+      );
+      const nearDest = arrivalRes.rows[0].meters < 80;
+      const startedAt = trip.created_at ? new Date(trip.created_at).getTime() : 0;
+      const elapsedMs = Date.now() - startedAt;
+      const autoArriveOk = originDestM >= 150 && elapsedMs > 60 * 1000;
+      if (autoArriveOk && nearDest) {
+        status = "arrived";
+        arrivedAt = new Date();
+      }
     }
 
     const updated = await pool.query(
@@ -487,7 +510,7 @@ const listMyTrips = async (req, res) => {
       `SELECT t.id, t.status, t.dest_label, t.origin_lat, t.origin_lng,
               t.dest_lat, t.dest_lng, t.last_lat, t.last_lng, t.eta_at,
               t.created_at, t.arrived_at, t.transport_mode, t.vehicle_plate,
-              t.user_id,
+              t.trip_mode, t.user_id,
               (t.user_id = $1) AS is_owner,
               u.pseudo AS traveler_pseudo
          FROM safe_trips t

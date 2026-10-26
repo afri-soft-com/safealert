@@ -54,7 +54,12 @@ class _TripScreenState extends State<TripScreen> {
   bool _showAdvancedCoords = false;
   bool _syncingFields = false;
   bool _etaManual = false;
+  bool _patrolMode = false;
   TripTransportMode _transportMode = TripTransportMode.moto;
+  Timer? _suggestTimer;
+  _MapPickTarget? _suggestTarget;
+  List<({double lat, double lng, String label})> _suggestions = [];
+  bool _suggestLoading = false;
 
   @override
   void initState() {
@@ -75,6 +80,7 @@ class _TripScreenState extends State<TripScreen> {
 
   @override
   void dispose() {
+    _suggestTimer?.cancel();
     _originAddrCtrl.dispose();
     _destAddrCtrl.dispose();
     _originLatCtrl.dispose();
@@ -86,6 +92,48 @@ class _TripScreenState extends State<TripScreen> {
     _plateCtrl.dispose();
     _vehicleNoteCtrl.dispose();
     super.dispose();
+  }
+
+  void _scheduleSuggest(_MapPickTarget target, String text) {
+    _suggestTimer?.cancel();
+    final q = text.trim();
+    if (q.length < 2) {
+      setState(() {
+        _suggestions = [];
+        _suggestTarget = null;
+        _suggestLoading = false;
+      });
+      return;
+    }
+    setState(() {
+      _suggestTarget = target;
+      _suggestLoading = true;
+    });
+    _suggestTimer = Timer(const Duration(milliseconds: 450), () async {
+      final list = await GeocodeService().suggest(q, limit: 6);
+      if (!mounted) return;
+      if (_suggestTarget != target) return;
+      setState(() {
+        _suggestions = list;
+        _suggestLoading = false;
+      });
+    });
+  }
+
+  Future<void> _pickSuggestion(
+    _MapPickTarget target,
+    ({double lat, double lng, String label}) place,
+  ) async {
+    setState(() {
+      _suggestions = [];
+      _suggestTarget = null;
+      _suggestLoading = false;
+    });
+    final point = LatLng(place.lat, place.lng);
+    try {
+      _mapController.move(point, 15);
+    } catch (_) {}
+    await _applyPoint(target, point, reverseGeocode: false, addressOverride: place.label);
   }
 
   Future<void> _initMyLocationAsOrigin() async {
@@ -215,9 +263,13 @@ class _TripScreenState extends State<TripScreen> {
   }
 
   Future<void> _onMapTap(TapPosition tapPosition, LatLng point) async {
-    await _applyPoint(_pickTarget, point, reverseGeocode: true);
+    // In patrol mode the "destination" field is a label only — map taps set start.
+    final target = _patrolMode ? _MapPickTarget.origin : _pickTarget;
+    await _applyPoint(target, point, reverseGeocode: true);
     // After setting origin, switch to destination for next tap (moto-taxi flow)
-    if (_pickTarget == _MapPickTarget.origin && _destination == null) {
+    if (!_patrolMode &&
+        _pickTarget == _MapPickTarget.origin &&
+        _destination == null) {
       setState(() => _pickTarget = _MapPickTarget.destination);
     }
   }
@@ -277,7 +329,7 @@ class _TripScreenState extends State<TripScreen> {
       await _resolveAddressField(_MapPickTarget.origin);
       origin = _origin;
     }
-    if (dest == null && _destAddrCtrl.text.trim().isNotEmpty) {
+    if (!_patrolMode && dest == null && _destAddrCtrl.text.trim().isNotEmpty) {
       await _resolveAddressField(_MapPickTarget.destination);
       dest = _destination;
     }
@@ -288,47 +340,50 @@ class _TripScreenState extends State<TripScreen> {
       final lng = double.tryParse(_originLngCtrl.text.trim().replaceAll(',', '.'));
       if (lat != null && lng != null) origin = LatLng(lat, lng);
     }
-    if (dest == null) {
+    if (!_patrolMode && dest == null) {
       final lat = double.tryParse(_destLatCtrl.text.trim().replaceAll(',', '.'));
       final lng = double.tryParse(_destLngCtrl.text.trim().replaceAll(',', '.'));
       if (lat != null && lng != null) dest = LatLng(lat, lng);
     }
 
-    if (origin == null || dest == null) {
+    if (origin == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            origin == null && dest == null
-                ? 'Définissez le point de départ et la destination (carte ou adresse).'
-                : origin == null
-                    ? 'Définissez le point de départ.'
-                    : 'Définissez la destination.',
-          ),
-        ),
+        const SnackBar(content: Text('Définissez le point de départ (carte, GPS ou adresse).')),
+      );
+      return;
+    }
+    if (!_patrolMode && dest == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Définissez la destination, ou passez en mode Patrouille terrain.')),
       );
       return;
     }
 
     if (!mounted) return;
     final tripProv = context.read<TripProvider>();
-    await tripProv.fetchRouteSuggestion(
-      originLat: origin.latitude,
-      originLng: origin.longitude,
-      destLat: dest.latitude,
-      destLng: dest.longitude,
-    );
+    if (!_patrolMode && dest != null) {
+      await tripProv.fetchRouteSuggestion(
+        originLat: origin.latitude,
+        originLng: origin.longitude,
+        destLat: dest.latitude,
+        destLng: dest.longitude,
+      );
+    }
     if (!mounted) return;
-    final destLabel = _destAddrCtrl.text.trim().isEmpty
-        ? null
-        : _destAddrCtrl.text.trim();
+    final destLabel = _patrolMode
+        ? (_destAddrCtrl.text.trim().isEmpty
+            ? 'Patrouille terrain'
+            : _destAddrCtrl.text.trim())
+        : (_destAddrCtrl.text.trim().isEmpty ? null : _destAddrCtrl.text.trim());
     final trip = await tripProv.startTrip(
       originLat: origin.latitude,
       originLng: origin.longitude,
-      destLat: dest.latitude,
-      destLng: dest.longitude,
+      destLat: dest?.latitude,
+      destLng: dest?.longitude,
       destLabel: destLabel,
-      etaMinutes: int.tryParse(_etaCtrl.text) ?? 30,
+      etaMinutes: int.tryParse(_etaCtrl.text) ?? (_patrolMode ? 480 : 30),
       transportMode: _transportMode.apiValue,
+      tripMode: _patrolMode ? 'patrol' : 'destination',
       escortContactIds: _selectedEscorts.isEmpty ? null : _selectedEscorts.toList(),
       vehiclePlate: _plateCtrl.text,
       vehicleNote: _vehicleNoteCtrl.text,
@@ -382,13 +437,16 @@ class _TripScreenState extends State<TripScreen> {
     required _MapPickTarget target,
     required Color accent,
     required IconData icon,
+    bool optional = false,
   }) {
     final selected = _pickTarget == target;
+    final showSuggest = _suggestTarget == target &&
+        (_suggestLoading || _suggestions.isNotEmpty);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          label,
+          optional ? '$label (optionnel)' : label,
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
@@ -400,6 +458,7 @@ class _TripScreenState extends State<TripScreen> {
           controller: controller,
           textInputAction: TextInputAction.search,
           onTap: () => setState(() => _pickTarget = target),
+          onChanged: (v) => _scheduleSuggest(target, v),
           onSubmitted: (_) => _resolveAddressField(target),
           decoration: InputDecoration(
             hintText: hint,
@@ -427,6 +486,15 @@ class _TripScreenState extends State<TripScreen> {
             suffixIcon: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (_suggestLoading && _suggestTarget == target)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
                 IconButton(
                   tooltip: 'Ma position',
                   onPressed: _locating ? null : () => _useMyLocation(target),
@@ -435,12 +503,46 @@ class _TripScreenState extends State<TripScreen> {
                 IconButton(
                   tooltip: 'Rechercher l\'adresse',
                   onPressed: _geocoding ? null : () => _resolveAddressField(target),
-                  icon: Icon(Icons.search, size: 22, color: AppColors.gris),
+                  icon: const Icon(Icons.search, size: 22, color: AppColors.gris),
                 ),
               ],
             ),
           ),
         ),
+        if (showSuggest) ...[
+          const SizedBox(height: 4),
+          Material(
+            elevation: 2,
+            borderRadius: BorderRadius.circular(10),
+            color: Colors.white,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: _suggestLoading && _suggestions.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text(
+                        'Recherche de lieux…',
+                        style: TextStyle(fontSize: 12, color: AppColors.gris),
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      itemCount: _suggestions.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final s = _suggestions[i];
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(Icons.place_outlined, color: accent, size: 20),
+                          title: Text(s.label, style: const TextStyle(fontSize: 13)),
+                          onTap: () => _pickSuggestion(target, s),
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -550,11 +652,14 @@ class _TripScreenState extends State<TripScreen> {
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 title: Text(
-                  label?.isNotEmpty == true ? label! : 'Destination',
+                  label?.isNotEmpty == true
+                      ? label!
+                      : (t['trip_mode']?.toString() == 'patrol' ? 'Patrouille' : 'Destination'),
                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 subtitle: Text(
                   '${_formatTripWhen(t['created_at']?.toString())}'
+                  '${t['trip_mode']?.toString() == 'patrol' ? ' · Patrouille' : ''}'
                   '${traveler != null && traveler.isNotEmpty && !isOwner ? ' · $traveler' : ''}'
                   '${isOwner ? ' · Vous' : ' · Escorte'}',
                   style: const TextStyle(fontSize: 11, color: AppColors.gris),
@@ -612,9 +717,37 @@ class _TripScreenState extends State<TripScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'Choisissez le départ et l\'arrivée comme pour une course : carte, adresse, ou « Ma position ». Une alerte part si vous n\'arrivez pas à temps.',
-          style: TextStyle(fontSize: 12, color: AppColors.gris),
+        Text(
+          _patrolMode
+              ? 'Mode patrouille : seul le départ est requis. Le GPS enregistre le tracé pour l\'enquête, même sans destination.'
+              : 'Choisissez le départ et l\'arrivée : carte, adresse (propositions), ou « Ma position ». Une alerte part si vous n\'arrivez pas à temps.',
+          style: const TextStyle(fontSize: 12, color: AppColors.gris),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: ChoiceChip(
+                label: const Text('Trajet A → B'),
+                selected: !_patrolMode,
+                onSelected: (_) => setState(() => _patrolMode = false),
+                selectedColor: AppColors.bleu.withValues(alpha: 0.2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ChoiceChip(
+                label: const Text('Patrouille terrain'),
+                selected: _patrolMode,
+                onSelected: (_) => setState(() {
+                  _patrolMode = true;
+                  _pickTarget = _MapPickTarget.origin;
+                  if (_etaCtrl.text == '30') _etaCtrl.text = '480';
+                }),
+                selectedColor: AppColors.vert.withValues(alpha: 0.2),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         // Map (style moto-taxi / course)
@@ -731,47 +864,63 @@ class _TripScreenState extends State<TripScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: ChoiceChip(
-                label: const Text('Arrivée'),
-                selected: _pickTarget == _MapPickTarget.destination,
-                onSelected: (_) =>
-                    setState(() => _pickTarget = _MapPickTarget.destination),
-                selectedColor: AppColors.vert.withValues(alpha: 0.2),
-                labelStyle: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: _pickTarget == _MapPickTarget.destination
-                      ? AppColors.vert
-                      : AppColors.gris,
+            if (!_patrolMode)
+              Expanded(
+                child: ChoiceChip(
+                  label: const Text('Arrivée'),
+                  selected: _pickTarget == _MapPickTarget.destination,
+                  onSelected: (_) =>
+                      setState(() => _pickTarget = _MapPickTarget.destination),
+                  selectedColor: AppColors.vert.withValues(alpha: 0.2),
+                  labelStyle: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _pickTarget == _MapPickTarget.destination
+                        ? AppColors.vert
+                        : AppColors.gris,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Saisissez l\'adresse ou utilisez le GPS',
-          style: TextStyle(fontSize: 12, color: AppColors.gris),
+        Text(
+          _patrolMode
+              ? 'Saisissez un lieu de départ (propositions) ou utilisez le GPS'
+              : 'Saisissez l\'adresse — des lieux vous seront proposés',
+          style: const TextStyle(fontSize: 12, color: AppColors.gris),
         ),
         const SizedBox(height: 10),
         _buildPointField(
           label: 'Départ',
-          hint: 'Adresse de départ, ou appuyez sur la carte',
+          hint: 'Ex. Gombe, Kinshasa…',
           controller: _originAddrCtrl,
           target: _MapPickTarget.origin,
           accent: AppColors.bleu,
           icon: Icons.trip_origin,
         ),
-        const SizedBox(height: 12),
-        _buildPointField(
-          label: 'Arrivée',
-          hint: 'Adresse d\'arrivée, ou appuyez sur la carte',
-          controller: _destAddrCtrl,
-          target: _MapPickTarget.destination,
-          accent: AppColors.vert,
-          icon: Icons.flag,
-        ),
+        if (!_patrolMode) ...[
+          const SizedBox(height: 12),
+          _buildPointField(
+            label: 'Arrivée',
+            hint: 'Ex. Limete, aéroport…',
+            controller: _destAddrCtrl,
+            target: _MapPickTarget.destination,
+            accent: AppColors.vert,
+            icon: Icons.flag,
+          ),
+        ] else ...[
+          const SizedBox(height: 12),
+          _buildPointField(
+            label: 'Libellé mission',
+            hint: 'Ex. Enquête zone X (optionnel)',
+            controller: _destAddrCtrl,
+            target: _MapPickTarget.destination,
+            accent: AppColors.vert,
+            icon: Icons.badge_outlined,
+            optional: true,
+          ),
+        ],
         const SizedBox(height: 10),
         const Text('Moyen de transport',
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bleuFonce)),
@@ -991,7 +1140,9 @@ class _TripScreenState extends State<TripScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
                 : Text(
-                    'Démarrer — ${AppLocalizations.of(context).safeTrip}',
+                    _patrolMode
+                        ? 'Démarrer la patrouille (suivi GPS)'
+                        : 'Démarrer — ${AppLocalizations.of(context).safeTrip}',
                     style: const TextStyle(color: Colors.white),
                   ),
           ),
@@ -1031,18 +1182,33 @@ class _TripScreenState extends State<TripScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Trajet en cours → ${trip['dest_label'] ?? 'Destination'}',
-                            style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.bleuFonce)),
+                        Text(
+                          trip['trip_mode']?.toString() == 'patrol'
+                              ? 'Patrouille en cours — ${trip['dest_label'] ?? 'terrain'}'
+                              : 'Trajet en cours → ${trip['dest_label'] ?? 'Destination'}',
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.bleuFonce),
+                        ),
                         const SizedBox(height: 6),
-                        Text('ETA : ${trip['eta_at'] ?? '—'}',
-                            style: const TextStyle(fontSize: 12, color: AppColors.gris)),
+                        Text(
+                          trip['trip_mode']?.toString() == 'patrol'
+                              ? 'Fenêtre : ${trip['eta_at'] ?? '—'} · tracé continu pour l\'enquête'
+                              : 'ETA : ${trip['eta_at'] ?? '—'}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.gris),
+                        ),
                         const SizedBox(height: 6),
                         Text(
                           context.watch<TripProvider>().isTracking
-                              ? 'Suivi GPS actif en arrière-plan (notification persistante).'
+                              ? 'Suivi GPS actif (y compris hors ligne — sync au retour réseau).'
                               : 'Activez le GPS pour le suivi en direct.',
                           style: const TextStyle(fontSize: 12, color: AppColors.bleuFonce),
                         ),
+                        if (context.watch<TripProvider>().hasOfflinePings) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            '${context.watch<TripProvider>().pendingOfflinePings} position(s) en attente de sync réseau',
+                            style: const TextStyle(fontSize: 11, color: AppColors.orange, fontWeight: FontWeight.w600),
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         SelectableText(
                           'Code à donner aux proches :\n${trip['id']}',

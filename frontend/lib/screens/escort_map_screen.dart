@@ -213,7 +213,9 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                               height: 48,
                               child: const Icon(Icons.navigation, color: AppColors.rouge, size: 38),
                             ),
-                          if (destLat != null && destLng != null)
+                          if (destLat != null &&
+                              destLng != null &&
+                              trip['trip_mode']?.toString() != 'patrol')
                             Marker(
                               point: LatLng(destLat.toDouble(), destLng.toDouble()),
                               width: 40,

@@ -255,6 +255,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         if (!mounted) return;
         await context.read<IncidentProvider>().flushOfflineQueue();
         if (!mounted) return;
+        await context.read<TripProvider>().flushPendingPings();
+        if (!mounted) return;
         await context.read<TripProvider>().fetchActive();
       }
     });
@@ -265,6 +267,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final auth = context.read<AuthProvider>();
     if (auth.isAuthenticated) {
       context.read<TripProvider>().fetchActive();
+      context.read<TripProvider>().flushPendingPings();
     } else {
       context.read<TripProvider>().stopTracking();
     }
@@ -275,7 +278,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed && mounted) {
       _appUpdates.check(context);
       if (context.read<AuthProvider>().isAuthenticated) {
+        context.read<TripProvider>().flushPendingPings();
         context.read<TripProvider>().fetchActive();
+        context.read<IncidentProvider>().flushOfflineQueue();
       }
     }
   }
@@ -465,6 +470,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             auth.exitGuestMode();
             FCMService().uploadToken();
             context.read<IncidentProvider>().flushOfflineQueue();
+            context.read<TripProvider>().flushPendingPings();
             _navigate('home');
           },
           onBack: _navStack.length > 1 ? _goBack : () {

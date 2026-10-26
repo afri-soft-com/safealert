@@ -11,8 +11,9 @@ router.post(
   [
     body("origin_lat").isFloat({ min: -90, max: 90 }),
     body("origin_lng").isFloat({ min: -180, max: 180 }),
-    body("dest_lat").isFloat({ min: -90, max: 90 }),
-    body("dest_lng").isFloat({ min: -180, max: 180 }),
+    body("dest_lat").optional({ values: "null" }).isFloat({ min: -90, max: 90 }),
+    body("dest_lng").optional({ values: "null" }).isFloat({ min: -180, max: 180 }),
+    body("trip_mode").optional().isIn(["destination", "patrol"]),
   ],
   ctrl.startTrip
 );

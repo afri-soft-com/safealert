@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/incident_provider.dart';
+import '../providers/trip_provider.dart';
 import '../services/local_database.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
@@ -45,6 +46,8 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen> {
         return 'Signalement';
       case 'group_message':
         return 'Message de groupe';
+      case 'trip_ping':
+        return 'Position trajet (hors ligne)';
       default:
         return kind;
     }
@@ -64,7 +67,9 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen> {
 
   Future<void> _retryAll() async {
     setState(() => _flushing = true);
-    final sent = await context.read<IncidentProvider>().flushOfflineQueue();
+    final a = await context.read<IncidentProvider>().flushOfflineQueue();
+    final b = await context.read<TripProvider>().flushPendingPings();
+    final sent = a + b;
     if (!mounted) return;
     setState(() {
       _flushing = false;

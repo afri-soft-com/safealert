@@ -661,6 +661,9 @@ const migrate = async () => {
       );
       CREATE INDEX IF NOT EXISTS idx_safe_trip_track_trip_time
         ON safe_trip_track_points(trip_id, recorded_at ASC);
+
+      -- destination = classic A→B ; patrol = field tracking without destination
+      ALTER TABLE safe_trips ADD COLUMN IF NOT EXISTS trip_mode VARCHAR(20) DEFAULT 'destination';
     `);
 
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;

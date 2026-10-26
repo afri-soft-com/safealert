@@ -31,3 +31,7 @@ __pycache__/
 .vscode/
 *.swp
 Thumbs.db
+
+.tmp-*/
+.tmp-aab*/
+
