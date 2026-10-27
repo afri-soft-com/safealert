@@ -22,7 +22,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
   Timer? _pollTimer;
   final _messageCtrl = TextEditingController();
 
-  String get _groupId => widget.group['id'] as String;
+  String get _groupId => widget.group['id']?.toString() ?? '';
   String get _groupName => widget.group['name'] as String? ?? 'Groupe';
   bool get _isAdmin => (widget.group['my_role'] as String? ?? 'member') == 'admin';
   int get _pending => widget.group['pending_requests'] as int? ?? 0;
@@ -42,6 +42,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
   }
 
   Future<void> _loadAll() async {
+    if (_groupId.isEmpty) return;
     final p = context.read<GroupsProvider>();
     await Future.wait([
       p.fetchMembers(_groupId),
@@ -52,7 +53,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
   }
 
   Future<void> _pollActiveTab() async {
-    if (!mounted) return;
+    if (!mounted || _groupId.isEmpty) return;
     final p = context.read<GroupsProvider>();
     switch (_tabController.index) {
       case 0:

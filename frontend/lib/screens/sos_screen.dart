@@ -12,6 +12,7 @@ import '../widgets/status_bar.dart';
 import '../providers/incident_provider.dart';
 import '../providers/checkin_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/groups_provider.dart';
 import '../services/share_helper.dart';
 import '../services/location_service.dart';
 import '../services/app_config_service.dart';
@@ -200,13 +201,28 @@ class _SOSScreenState extends State<SOSScreen> {
       final g = (groupSos['groupsNotified'] as num?)?.toInt() ?? 0;
       final a = (groupSos['alertsCreated'] as num?)?.toInt() ?? 0;
       final m = (groupSos['membersNotified'] as num?)?.toInt() ?? 0;
-      if (g == 0) {
+      final others = (groupSos['otherMembers'] as num?)?.toInt() ?? 0;
+      final disabled = groupSos['disabled'] == true;
+      final alone = groupSos['alone'] == true || (g > 0 && others == 0);
+      final errored = groupSos['error'] == true;
+      if (errored) {
         groupHint =
-            'Aucun groupe de voisins lié — rejoignez un groupe pour les alerter.';
-      } else if (a > 0) {
+            'SOS envoyé, mais la notification des groupes a échoué. Vérifiez l\'onglet Alertes du groupe.';
+      } else if (disabled) {
         groupHint =
-            'Groupe(s) : $g notifié(s), $a alerte(s) publiée(s), $m membre(s) contacté(s).';
+            'Notification des groupes désactivée dans vos réglages (sos_notify_groups).';
+      } else if (g == 0) {
+        groupHint =
+            'Aucun groupe de voisins lié — rejoignez un groupe (code ou QR) pour les alerter.';
+      } else if (alone) {
+        groupHint =
+            'Alerte publiée dans $g groupe(s) ($a dans Alertes). Vous êtes seul dans le groupe — invitez un autre membre pour push/SMS.';
+      } else {
+        groupHint =
+            'Groupes : $g · Alertes : $a · Autres membres : $others · Contactés (push/SMS) : $m.\nOuvrez Groupe → onglet Alertes pour vérifier.';
       }
+      // Refresh local Alertes feed so the sender sees the SOS immediately.
+      unawaited(context.read<GroupsProvider>().refreshAllAlerts());
     }
 
     setState(() {
@@ -220,6 +236,25 @@ class _SOSScreenState extends State<SOSScreen> {
       _sosLng = (incident?['lng'] as num?)?.toDouble() ?? (result['lng'] as num?)?.toDouble();
       _positionApprox = approx;
     });
+
+    if (groupHint != null && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Groupes de voisins', style: TextStyle(fontSize: 16)),
+            content: Text(groupHint!, style: const TextStyle(fontSize: 13, height: 1.35)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      });
+    }
 
     int i = 0;
     _progressTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {

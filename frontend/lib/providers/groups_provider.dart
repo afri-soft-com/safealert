@@ -56,18 +56,32 @@ class GroupsProvider extends ChangeNotifier {
   List<Map<String, dynamic>> alertsFor(String groupId) =>
       _alertsByGroup[groupId] ?? [];
 
+  /// Robust JSON list → maps (avoids silent empty lists from `.cast` failures).
+  static List<Map<String, dynamic>> mapList(dynamic raw) {
+    final list = raw is List
+        ? raw
+        : (raw is Map && raw['data'] is List
+            ? raw['data']
+            : (raw is Map && raw['messages'] is List ? raw['messages'] : null));
+    if (list is! List) return [];
+    return list
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
   Future<void> fetchMyGroups() async {
     _loading = true;
     _isOffline = false;
     notifyListeners();
     try {
       final res = await _api.get('/groups');
-      _myGroups = (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      _myGroups = mapList(res['data'] ?? res);
       await _cache.put('my_groups', _myGroups);
     } catch (_) {
       final cached = await _cache.get('my_groups', maxAgeSeconds: 600);
       if (cached != null) {
-        _myGroups = (cached as List).cast<Map<String, dynamic>>();
+        _myGroups = mapList(cached);
         _isOffline = true;
       } else {
         _myGroups = [];
@@ -80,13 +94,13 @@ class GroupsProvider extends ChangeNotifier {
   Future<void> fetchDiscoverable() async {
     try {
       final res = await _api.get('/groups/discover');
-      _discoverable = (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      _discoverable = mapList(res['data'] ?? res);
       await _cache.put('discover_groups', _discoverable);
       notifyListeners();
     } catch (_) {
       final cached = await _cache.get('discover_groups', maxAgeSeconds: 600);
       if (cached != null) {
-        _discoverable = (cached as List).cast<Map<String, dynamic>>();
+        _discoverable = mapList(cached);
         notifyListeners();
       }
     }
@@ -95,8 +109,7 @@ class GroupsProvider extends ChangeNotifier {
   Future<void> fetchJoinRequests(String groupId) async {
     try {
       final res = await _api.get('/groups/$groupId/join-requests');
-      _joinRequestsByGroup[groupId] =
-          (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      _joinRequestsByGroup[groupId] = mapList(res['data'] ?? res);
       notifyListeners();
     } catch (_) {
       _joinRequestsByGroup[groupId] = [];
@@ -107,8 +120,7 @@ class GroupsProvider extends ChangeNotifier {
   Future<void> fetchMembers(String groupId) async {
     try {
       final res = await _api.get('/groups/$groupId/members');
-      _membersByGroup[groupId] =
-          (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      _membersByGroup[groupId] = mapList(res['data'] ?? res);
       notifyListeners();
     } catch (_) {
       _membersByGroup[groupId] = [];
@@ -119,8 +131,7 @@ class GroupsProvider extends ChangeNotifier {
   Future<void> fetchMessages(String groupId) async {
     try {
       final res = await _api.get('/groups/$groupId/messages');
-      _messagesByGroup[groupId] =
-          (res['messages'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      _messagesByGroup[groupId] = mapList(res['messages'] ?? res['data'] ?? res);
       notifyListeners();
     } catch (_) {
       _messagesByGroup[groupId] = [];
@@ -147,13 +158,30 @@ class GroupsProvider extends ChangeNotifier {
   Future<void> fetchAlerts(String groupId) async {
     try {
       final res = await _api.get('/groups/$groupId/alerts');
-      _alertsByGroup[groupId] =
-          (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      _alertsByGroup[groupId] = mapList(res['data'] ?? res);
       notifyListeners();
-    } catch (_) {
-      _alertsByGroup[groupId] = [];
+    } catch (e) {
+      debugPrint('fetchAlerts failed ($groupId): $e');
+      // Keep previous alerts on transient errors instead of wiping the feed.
+      if (!_alertsByGroup.containsKey(groupId)) {
+        _alertsByGroup[groupId] = [];
+      }
       notifyListeners();
     }
+  }
+
+  /// Refresh Alertes for every neighborhood group the user belongs to.
+  Future<void> refreshAllAlerts() async {
+    if (_myGroups.isEmpty) {
+      await fetchMyGroups();
+    }
+    final ids = _myGroups
+        .map((g) => g['id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (ids.isEmpty) return;
+    await Future.wait(ids.map(fetchAlerts));
   }
 
   Future<bool> createAlert(

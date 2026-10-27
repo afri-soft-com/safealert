@@ -551,16 +551,17 @@ const getGroupAlerts = async (req, res) => {
     const result = await pool.query(
       `SELECT a.id, a.group_id, a.author_id, a.type, a.title, a.body,
               a.lat, a.lng, a.created_at,
-              u.pseudo as author_pseudo
+              COALESCE(u.pseudo, 'Membre') as author_pseudo
        FROM group_alerts a
-       JOIN users u ON u.id = a.author_id
+       LEFT JOIN users u ON u.id = a.author_id
        WHERE a.group_id = $1
        ORDER BY a.created_at DESC
        LIMIT $2`,
       [id, limit]
     );
 
-    return res.json(result.rows);
+    // Wrap so mobile ApiService + GroupsProvider.mapList always find `data`.
+    return res.json({ data: result.rows });
   } catch (err) {
     console.error("getGroupAlerts error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });

@@ -11,11 +11,11 @@ on:
       app_latest_version:
         description: APP_LATEST_VERSION
         required: true
-        default: "1.0.41"
+        default: "1.0.42"
       admin_web_version:
         description: ADMIN_WEB_VERSION
         required: true
-        default: "1.0.13"
+        default: "1.0.14"
       apple_client_ids:
         description: APPLE_CLIENT_IDS (bundle IDs, comma-separated)
         required: true

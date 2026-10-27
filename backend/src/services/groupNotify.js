@@ -162,8 +162,19 @@ const notifyUserGroups = async ({
     [userId]
   );
   if (userRes.rows.length === 0 || !groupsNotifyEnabled(userRes.rows[0].sos_notify_groups)) {
-    console.log("groupNotify skipped (disabled or missing user)", { userId });
-    return { groupsNotified: 0, membersNotified: 0, alertsCreated: 0, pushNotified: 0, smsNotified: 0 };
+    console.log("groupNotify skipped (disabled or missing user)", {
+      userId,
+      sos_notify_groups: userRes.rows[0]?.sos_notify_groups,
+    });
+    return {
+      groupsNotified: 0,
+      membersNotified: 0,
+      alertsCreated: 0,
+      pushNotified: 0,
+      smsNotified: 0,
+      otherMembers: 0,
+      disabled: true,
+    };
   }
 
   const groups = await pool.query(
@@ -175,7 +186,14 @@ const notifyUserGroups = async ({
 
   if (groups.rows.length === 0) {
     console.log("groupNotify: user has no neighborhood groups", { userId });
-    return { groupsNotified: 0, membersNotified: 0, alertsCreated: 0, pushNotified: 0, smsNotified: 0 };
+    return {
+      groupsNotified: 0,
+      membersNotified: 0,
+      alertsCreated: 0,
+      pushNotified: 0,
+      smsNotified: 0,
+      otherMembers: 0,
+    };
   }
 
   const { where, la, ln } = locationWhere(lat, lng, zoneName);
@@ -195,6 +213,7 @@ const notifyUserGroups = async ({
   let pushNotified = 0;
   let smsNotified = 0;
   let alertsCreated = 0;
+  let otherMembers = 0;
   for (const group of groups.rows) {
     try {
       await pool.query(
@@ -208,6 +227,9 @@ const notifyUserGroups = async ({
     }
 
     try {
+      const peers = await getGroupMembersContactable(group.id, userId);
+      otherMembers += peers.length;
+
       const result = await notifyGroupMembers(
         group.id,
         userId,
@@ -239,6 +261,7 @@ const notifyUserGroups = async ({
     userId,
     kind,
     groupsNotified: groups.rows.length,
+    otherMembers,
     membersNotified,
     pushNotified,
     smsNotified,
@@ -247,10 +270,12 @@ const notifyUserGroups = async ({
 
   return {
     groupsNotified: groups.rows.length,
+    otherMembers,
     membersNotified,
     pushNotified,
     smsNotified,
     alertsCreated,
+    alone: otherMembers === 0 && groups.rows.length > 0,
   };
 };
 

@@ -1,10 +1,10 @@
 const features = require("../config/features");
 const { getMaintenance } = require("../services/appSettings");
 
-/** Keep in sync with frontend/pubspec.yaml (version name, before +build). */
-const DEFAULT_MOBILE_VERSION = "1.0.41";
-/** Keep in sync with admin-web/package.json. */
-const DEFAULT_ADMIN_WEB_VERSION = "1.0.13";
+/** Soft-update target (bump when a newer build is on the store / ready). */
+const DEFAULT_MOBILE_VERSION = "1.0.42";
+/** Soft-update target for admin-web (bump ahead of a deploy to show the banner). */
+const DEFAULT_ADMIN_WEB_VERSION = "1.0.14";
 
 /**
  * Public app version policy for soft / force update prompts.

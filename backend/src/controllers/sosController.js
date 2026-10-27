@@ -144,7 +144,13 @@ const triggerSOS = async (req, res) => {
       notification.groupSos = groupNotification;
     } catch (groupErr) {
       console.error("notifyUserGroupsOnSOS error:", groupErr.message);
-      notification.groupSos = { groupsNotified: 0, membersNotified: 0, alertsCreated: 0, error: true };
+      notification.groupSos = {
+        groupsNotified: 0,
+        membersNotified: 0,
+        alertsCreated: 0,
+        otherMembers: 0,
+        error: true,
+      };
     }
 
     await invalidateActiveAlerts();

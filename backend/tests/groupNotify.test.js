@@ -57,6 +57,9 @@ describe("notifyUserGroupsOnSOS", () => {
       .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
       .mockResolvedValueOnce({ rows: [{ id: "a1" }] }) // INSERT alert
       .mockResolvedValueOnce({
+        rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000000" }],
+      }) // otherMembers count
+      .mockResolvedValueOnce({
         rows: [{ id: "u2", fcm_token: "tok", pseudo: "Bob" }],
       }) // tokens
       .mockResolvedValueOnce({
@@ -67,6 +70,7 @@ describe("notifyUserGroupsOnSOS", () => {
 
     expect(out.groupsNotified).toBe(1);
     expect(out.alertsCreated).toBe(1);
+    expect(out.otherMembers).toBe(1);
     expect(out.pushNotified).toBe(1);
     expect(out.smsNotified).toBe(1);
     expect(mockSendPush).toHaveBeenCalledTimes(1);
@@ -78,11 +82,13 @@ describe("notifyUserGroupsOnSOS", () => {
       .mockResolvedValueOnce({ rows: [{ sos_notify_groups: true }] })
       .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
       .mockResolvedValueOnce({ rows: [{ id: "a1" }] })
+      .mockResolvedValueOnce({ rows: [] }) // otherMembers
       .mockResolvedValueOnce({ rows: [] }) // no tokens
       .mockResolvedValueOnce({ rows: [] }); // no phones
 
     const out = await notifyUserGroupsOnSOS("u1", -4.3, 15.3, "Alice");
     expect(out.alertsCreated).toBe(1);
+    expect(out.alone).toBe(true);
     expect(out.pushNotified).toBe(0);
     expect(mockSendPush).not.toHaveBeenCalled();
   });
@@ -100,6 +106,9 @@ describe("notifyUserGroupsOnReport", () => {
       .mockResolvedValueOnce({ rows: [{ sos_notify_groups: true }] })
       .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
       .mockResolvedValueOnce({ rows: [{ id: "a1" }] })
+      .mockResolvedValueOnce({
+        rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000001" }],
+      }) // otherMembers
       .mockResolvedValueOnce({
         rows: [{ id: "u2", fcm_token: "tok", pseudo: "Bob" }],
       });
