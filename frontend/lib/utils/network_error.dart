@@ -77,6 +77,34 @@ bool looksTechnical(String message) {
 /// Messages API connus (anglais/technique) → français utilisateur.
 String? mapKnownApiMessage(String message) {
   final lower = message.toLowerCase().trim();
+
+  // Payment / Mobile Money — must run BEFORE any generic "impossible de démarrer"
+  // (that phrase also appears in payment errors and must not become "trajet").
+  if (lower.contains('paiement') || lower.contains('mobile money') || lower.contains('pay hub')) {
+    if (lower.contains('non configuré') || lower.contains('not configured')) {
+      return 'Paiement Mobile Money temporairement indisponible. Réessayez plus tard.';
+    }
+    if (lower.contains('invalide') && lower.contains('numéro')) {
+      return 'Numéro Mobile Money invalide. Utilisez un numéro RDC (+243 puis 9 chiffres).';
+    }
+    if (lower.contains('impossible de démarrer') || lower.contains('initiation')) {
+      return 'Impossible de démarrer le paiement Mobile Money. Vérifiez le numéro et réessayez.';
+    }
+    if (lower.contains('échoué') || lower.contains('failed')) {
+      return 'Paiement Mobile Money échoué. Réessayez ou changez d\'opérateur.';
+    }
+  }
+
+  if (lower.contains('numéro mobile money invalide') ||
+      (lower.contains('format rdc') && lower.contains('243'))) {
+    return 'Numéro Mobile Money invalide. Utilisez un numéro RDC (+243 puis 9 chiffres).';
+  }
+
+  if (lower.contains('impossible de démarrer le trajet') ||
+      (lower.contains('impossible de démarrer') && lower.contains('trajet'))) {
+    return 'Impossible de démarrer le trajet. Réessayez.';
+  }
+
   const known = {
     'invalid phone': 'Numéro de téléphone invalide.',
     'invalid code': 'Code incorrect. Vérifiez le SMS et réessayez.',
@@ -93,28 +121,7 @@ String? mapKnownApiMessage(String message) {
     'erreur serveur': 'Une erreur est survenue. Réessayez.',
     'feature_premium': 'Cette fonction n\'est pas encore disponible.',
     'internal server': 'Une erreur est survenue. Réessayez.',
-    'pay_hub_not_configured':
-        'Paiement Mobile Money temporairement indisponible. Réessayez plus tard.',
-    'pay_hub_init_failed':
-        'Impossible de démarrer le paiement Mobile Money. Vérifiez le numéro et réessayez.',
-    'montant minimum': 'Montant trop bas pour Mobile Money.',
   };
-
-  // Payment / trip phrases share "impossible de démarrer" — match the more
-  // specific ones first so Premium never shows a trajet error.
-  if (lower.contains('paiement') || lower.contains('mobile money')) {
-    if (lower.contains('non configur')) {
-      return 'Paiement Mobile Money temporairement indisponible. Réessayez plus tard.';
-    }
-    if (lower.contains('démarrer') || lower.contains('initia')) {
-      return 'Impossible de démarrer le paiement Mobile Money. Vérifiez le numéro et l\'opérateur, puis réessayez.';
-    }
-    return null; // keep original French payment message from API
-  }
-  if (lower.contains('trajet') && lower.contains('démarrer')) {
-    return 'Impossible de démarrer le trajet. Réessayez.';
-  }
-
   for (final entry in known.entries) {
     if (lower.contains(entry.key)) return entry.value;
   }

@@ -27,6 +27,15 @@ void main() {
         contains('indisponible'),
       );
     });
+
+    test('maps invalid MM phone without calling it a trip error', () {
+      final msg = mapKnownApiMessage(
+        'Numéro Mobile Money invalide (format RDC +243).',
+      );
+      expect(msg, isNotNull);
+      expect(msg!.toLowerCase(), contains('numéro'));
+      expect(msg.toLowerCase(), isNot(contains('trajet')));
+    });
   });
 
   group('userFacingError', () {

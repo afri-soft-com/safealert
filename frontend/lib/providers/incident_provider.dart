@@ -95,7 +95,22 @@ class IncidentProvider extends ChangeNotifier {
     _lastSosAlert = alert;
     // Destinataires seulement — pas de sirène sur l'appareil émetteur.
     if (!_isOwnIncomingAlert(alert)) {
+      final type = alert['incident_type']?.toString() ??
+          alert['type']?.toString() ??
+          'sos_alert';
+      final title = type == 'group_sos' || type == 'group_report'
+          ? (alert['title']?.toString() ?? '🚨 Alerte groupe SafeAlert')
+          : (alert['title']?.toString() ?? '🚨 Alerte SafeAlert');
+      final body = alert['body']?.toString() ??
+          alert['zone_name']?.toString() ??
+          'Une alerte nécessite votre attention.';
       _sounds.playSosAlert();
+      // Notif locale avec son SafeAlert (complète FCM si l'OS a muet le canal).
+      _sounds.showSosLocalNotification(
+        title: title,
+        body: body,
+        payload: type,
+      );
     }
     fetchIncidents();
   }

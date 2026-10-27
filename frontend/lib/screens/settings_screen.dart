@@ -587,10 +587,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: () => AlertSoundService().previewSound(_alertSound),
+                          onPressed: () async {
+                            await AlertSoundService().initialize();
+                            await AlertSoundService().previewSound(_alertSound);
+                            await AlertSoundService().showSosLocalNotification(
+                              title: 'Test SafeAlert',
+                              body:
+                                  'Si vous entendez ce son et voyez cette notification, les alertes SOS sont prêtes.',
+                              payload: 'test_sound',
+                            );
+                          },
                           icon: const Icon(Icons.notifications_active, size: 16),
                           label: const Text('Tester la notification sonore', style: TextStyle(fontSize: 12)),
                         ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Si le test est silencieux : Réglages Android → Apps → SafeAlert → Notifications → activez « Alertes SafeAlert » et le son.',
+                        style: TextStyle(fontSize: 10, color: AppColors.gris),
                       ),
                     ],
                   ),

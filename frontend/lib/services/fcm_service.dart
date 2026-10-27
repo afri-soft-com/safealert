@@ -93,6 +93,7 @@ class FCMService extends ChangeNotifier {
         sound: true,
       );
 
+      // Channels + Android 13 POST_NOTIFICATIONS before any push arrives.
       await AlertSoundService().initialize();
 
       _token = await messaging.getToken();

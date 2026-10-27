@@ -10,11 +10,19 @@ void showAppSnackBar(
   String? fallback,
   Duration duration = const Duration(seconds: 3),
 }) {
-  final text = messageOrError is String
-      ? (looksTechnical(messageOrError)
-          ? (fallback ?? 'Une erreur est survenue. Réessayez.')
-          : messageOrError)
-      : userFacingError(messageOrError, fallback: fallback);
+  final String text;
+  if (messageOrError is String) {
+    final mapped = mapKnownApiMessage(messageOrError);
+    if (mapped != null) {
+      text = mapped;
+    } else if (looksTechnical(messageOrError)) {
+      text = fallback ?? 'Une erreur est survenue. Réessayez.';
+    } else {
+      text = messageOrError;
+    }
+  } else {
+    text = userFacingError(messageOrError, fallback: fallback);
+  }
 
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(

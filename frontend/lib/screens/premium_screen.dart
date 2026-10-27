@@ -35,6 +35,15 @@ class _PremiumScreenState extends State<PremiumScreen> {
     'live_circles_max': 'Cercles famille en direct (jusqu\'à 5)',
   };
 
+  String _benefitLabel(String key) {
+    final known = _benefitLabels[key];
+    if (known != null) return known;
+    // Humanize unknown keys (e.g. sos_mediation → Sos mediation).
+    final cleaned = key.replaceAll('_', ' ').trim();
+    if (cleaned.isEmpty) return key;
+    return cleaned[0].toUpperCase() + cleaned.substring(1);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -88,10 +97,29 @@ class _PremiumScreenState extends State<PremiumScreen> {
     }
   }
 
+  /// RDC Mobile Money: +243 + 9 digits (e.g. 0970… → 243970…).
+  String? _validateMmPhone(String raw) {
+    var digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('0') && digits.length == 10) {
+      digits = '243${digits.substring(1)}';
+    } else if (digits.length == 9) {
+      digits = '243$digits';
+    }
+    if (!RegExp(r'^243\d{9}$').hasMatch(digits)) {
+      return 'Numéro incomplet ou invalide. Exemple : 0970123456 ou +243970123456';
+    }
+    return null;
+  }
+
   Future<void> _payMobileMoney() async {
     final phone = _phoneCtrl.text.trim();
     if (phone.isEmpty) {
       showAppSnackBar(context, 'Entrez votre numéro Mobile Money', isError: true);
+      return;
+    }
+    final phoneErr = _validateMmPhone(phone);
+    if (phoneErr != null) {
+      showAppSnackBar(context, phoneErr, isError: true);
       return;
     }
     setState(() => _acting = true);
@@ -291,7 +319,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                           ),
                           const SizedBox(height: 8),
                           ...benefits.map((key) {
-                            final label = _benefitLabels[key] ?? key;
+                            final label = _benefitLabel(key);
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: Row(
