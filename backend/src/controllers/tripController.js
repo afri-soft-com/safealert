@@ -571,7 +571,13 @@ const listMyTrips = async (req, res) => {
 
 const getTrip = async (req, res) => {
   try {
-    const result = await pool.query(`SELECT * FROM safe_trips WHERE id = $1`, [req.params.id]);
+    const result = await pool.query(
+      `SELECT t.*, u.pseudo AS traveler_pseudo
+       FROM safe_trips t
+       LEFT JOIN users u ON u.id = t.user_id
+       WHERE t.id = $1`,
+      [req.params.id]
+    );
     if (result.rows.length === 0) return res.status(404).json({ error: "Trajet non trouvé" });
     const trip = result.rows[0];
     const isOwner = String(trip.user_id) === String(req.userId);

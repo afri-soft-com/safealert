@@ -86,6 +86,11 @@ export default function UpdateBanner() {
   const local = currentVersion();
 
   const check = useCallback(async () => {
+    // Missing inject → "0.0.0" would permanently show a false banner.
+    if (!local || local === "0.0.0") {
+      setLatest(null);
+      return;
+    }
     const remote = await fetchRemoteVersion();
     if (!remote) return;
     if (compareVersions(local, remote) < 0) {

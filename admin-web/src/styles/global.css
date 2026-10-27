@@ -74,11 +74,12 @@ a {
 }
 
 body.has-update-banner {
-  padding-top: calc(3.5rem + env(safe-area-inset-top, 0px));
+  /* Match .update-banner height (copy + padding + safe area) */
+  padding-top: calc(4.25rem + env(safe-area-inset-top, 0px));
 }
 
 body.has-update-banner .sidebar {
-  top: calc(3.5rem + env(safe-area-inset-top, 0px));
+  top: calc(4.25rem + env(safe-area-inset-top, 0px));
 }
 
 .update-banner-copy {

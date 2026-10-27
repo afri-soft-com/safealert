@@ -449,6 +449,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
                               size: 140,
                               backgroundColor: Colors.white,
                             ),
+                            const SizedBox(height: 4),
+                            Text(
+                              ShareHelper.groupInviteUrl(code),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 10, color: AppColors.gris),
+                            ),
+                            const SizedBox(height: 8),
                             Row(
                               children: [
                                 Expanded(

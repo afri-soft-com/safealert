@@ -292,60 +292,60 @@ class AppUpdateBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top;
     return Material(
       color: AppColors.tealDeep,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-          child: Row(
-            children: [
-              const Icon(Icons.system_update_alt, color: Colors.white, size: 22),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Nouvelle version disponible',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
+      child: Padding(
+        // Parent Column already sits under the system UI when needed;
+        // only pad the notch once here (avoid double SafeArea with StatusBar).
+        padding: EdgeInsets.fromLTRB(16, 10 + topInset, 8, 10),
+        child: Row(
+          children: [
+            const Icon(Icons.system_update_alt, color: Colors.white, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Nouvelle version disponible',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
                     ),
-                    Text(
-                      latestVersion != null && latestVersion!.isNotEmpty
-                          ? 'SafeAlert $latestVersion est prête. Mettez à jour quand vous voulez.'
-                          : 'Une version plus récente est prête. Mettez à jour quand vous voulez.',
-                      style: const TextStyle(
-                        color: Color(0xFFB8E0D2),
-                        fontSize: 11,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              TextButton(
-                onPressed: onUpdate,
-                child: const Text(
-                  'Mettre à jour',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
                   ),
+                  Text(
+                    latestVersion != null && latestVersion!.isNotEmpty
+                        ? 'SafeAlert $latestVersion est prête. Mettez à jour quand vous voulez.'
+                        : 'Une version plus récente est prête. Mettez à jour quand vous voulez.',
+                    style: const TextStyle(
+                      color: Color(0xFFB8E0D2),
+                      fontSize: 11,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: onUpdate,
+              child: const Text(
+                'Mettre à jour',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
                 ),
               ),
-              IconButton(
-                tooltip: 'Plus tard',
-                onPressed: onDismiss,
-                icon: const Icon(Icons.close, color: Colors.white70, size: 18),
-              ),
-            ],
-          ),
+            ),
+            IconButton(
+              tooltip: 'Plus tard',
+              onPressed: onDismiss,
+              icon: const Icon(Icons.close, color: Colors.white70, size: 18),
+            ),
+          ],
         ),
       ),
     );

@@ -128,11 +128,11 @@ const createGroup = async (req, res) => {
   }
 };
 
-/** Accept pasted URI payloads like safealert://group/A1B2C3D4 or …/group/CODE. */
+/** Accept pasted URI payloads like safealert://group/CODE, https://…/g/CODE, …/group/CODE. */
 function normalizeInviteCode(raw) {
   const s = String(raw || "").trim();
   if (!s) return "";
-  const fromUri = s.match(/(?:\/|^)group\/([A-Za-z0-9]+)/i);
+  const fromUri = s.match(/(?:\/(?:group|g)\/|^group\/)([A-Za-z0-9]+)/i);
   if (fromUri) return fromUri[1].toUpperCase();
   return s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }

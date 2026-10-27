@@ -20,17 +20,24 @@
     }
     h1 { margin: 0 0 8px; color: var(--teal); font-size: 1.4rem; }
     .code {
-      font-size: 1.75rem; font-weight: 800; letter-spacing: .14em;
-      margin: 18px 0; color: var(--teal);
+      font-size: 1.9rem; font-weight: 800; letter-spacing: .16em;
+      margin: 18px 0; color: var(--teal); user-select: all;
     }
     p { margin: 0 0 12px; line-height: 1.45; font-size: .95rem; }
     .muted { color: #667; font-size: .85rem; }
-    a.btn {
+    a.btn, button.btn {
       display: inline-block; margin-top: 8px; padding: 12px 20px;
       background: var(--teal); color: #fff; text-decoration: none;
-      border-radius: 10px; font-weight: 700;
+      border-radius: 10px; font-weight: 700; border: 0; font: inherit; cursor: pointer;
     }
-    a.secondary { color: var(--teal); display: inline-block; margin-top: 14px; font-size: .9rem; }
+    a.secondary, button.secondary {
+      color: var(--teal); display: inline-block; margin-top: 14px;
+      font-size: .9rem; background: none; border: 0; cursor: pointer; font: inherit;
+    }
+    .hint {
+      margin-top: 16px; padding: 12px; background: #eef6f6; border-radius: 10px;
+      font-size: .8rem; color: #456; text-align: left;
+    }
   </style>
 </head>
 <body>
@@ -38,10 +45,14 @@
     <h1>SafeAlert</h1>
     <p>Invitation à un groupe de voisins</p>
     <div class="code" id="code">—</div>
-    <p class="muted">Ouvrez l’app pour rejoindre automatiquement, ou saisissez ce code dans Groupes → Rejoindre.</p>
+    <p class="muted">Touchez « Ouvrir SafeAlert », ou copiez le code puis allez dans l’app → Groupes → Rejoindre.</p>
     <a class="btn" id="openApp" href="#">Ouvrir SafeAlert</a>
     <br />
-    <a class="secondary" id="copyHint" href="#">Copier le code</a>
+    <button type="button" class="secondary" id="copyHint">Copier le code</button>
+    <div class="hint">
+      Si l’appareil photo dit « aucune donnée utilisable », mettez à jour SafeAlert :
+      le QR doit être une adresse https://…/g/… (pas un lien safealert://).
+    </div>
   </div>
   <script>
     (function () {
@@ -50,7 +61,6 @@
       document.getElementById("code").textContent = code || "—";
 
       var custom = "safealert://group/" + encodeURIComponent(code);
-      // Android Chrome: intent URL tries the app, then falls back to this page.
       var isAndroid = /Android/i.test(navigator.userAgent);
       var openHref = isAndroid
         ? "intent://group/" + encodeURIComponent(code) +
@@ -61,19 +71,23 @@
       var openBtn = document.getElementById("openApp");
       openBtn.href = openHref;
 
-      // Auto-attempt open once (camera scan → browser → app).
-      if (code) {
+      // One soft attempt after scan — keep the page usable if the app isn't installed.
+      if (code && !/bot|crawl|spider/i.test(navigator.userAgent || "")) {
         setTimeout(function () {
-          window.location.href = openHref;
-        }, 400);
+          try { window.location.href = openHref; } catch (e) {}
+        }, 600);
       }
 
       document.getElementById("copyHint").addEventListener("click", function (e) {
         e.preventDefault();
+        var btn = e.currentTarget;
+        var done = function () { btn.textContent = "Code copié ✓"; };
         if (navigator.clipboard && code) {
-          navigator.clipboard.writeText(code).then(function () {
-            e.target.textContent = "Code copié";
+          navigator.clipboard.writeText(code).then(done).catch(function () {
+            window.prompt("Copiez ce code :", code);
           });
+        } else {
+          window.prompt("Copiez ce code :", code);
         }
       });
     })();

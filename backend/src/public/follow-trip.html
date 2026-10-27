@@ -75,10 +75,10 @@
           const places = Array.isArray(t.places) ? t.places : [];
           const placeNames = places.map(function (p) { return p && p.label; }).filter(Boolean);
           setStatus(
-            "<strong>" + (t.traveler_pseudo || "Voyageur") + "</strong> · " +
-            (t.dest_label || "Destination") +
+            "<strong style=\"font-size:1.05rem\">" + (t.traveler_pseudo || "Voyageur") + "</strong>" +
+            "<br/>" + (t.dest_label || "Destination") +
             " · Statut : " + (t.status || "—") +
-            " · Départ : " + depart +
+            "<br/>Départ : " + depart +
             " · " + arriveLabel + " : " + arrive +
             (nPts > 1 ? " · Tracé : " + nPts + " pts" : "") +
             (placeNames.length ? " · Lieux : " + placeNames.join(", ") : "")

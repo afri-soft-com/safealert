@@ -243,6 +243,11 @@ export default function TripTrackMap({ trip, height = 320 }: Props) {
           fontSize: 13,
         }}
       >
+        {trip.traveler_pseudo ? (
+          <span>
+            <strong>Voyageur</strong> {trip.traveler_pseudo}
+          </span>
+        ) : null}
         <span>
           <strong>Départ</strong> {fmtWhen(trip.created_at)}
         </span>

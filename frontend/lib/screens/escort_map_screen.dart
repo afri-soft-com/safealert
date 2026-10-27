@@ -79,6 +79,13 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
     _startPoll();
   }
 
+  String _tripTitle(Map<String, dynamic> trip) {
+    final pseudo = trip['traveler_pseudo']?.toString().trim();
+    final dest = trip['dest_label']?.toString() ?? 'destination';
+    if (pseudo != null && pseudo.isNotEmpty) return '$pseudo · Vers $dest';
+    return 'Vers $dest';
+  }
+
   String _fmtWhen(String? iso) {
     if (iso == null || iso.isEmpty) return '—';
     try {
@@ -370,7 +377,7 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Vers ${trip['dest_label'] ?? 'destination'}',
+                              _tripTitle(trip),
                               style: const TextStyle(
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.bleuFonce,
