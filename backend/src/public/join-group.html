@@ -57,8 +57,21 @@
   <script>
     (function () {
       var parts = location.pathname.split("/").filter(Boolean);
-      var code = (parts[parts.length - 1] || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      // pathname /g or /g/ → no code; /g/ABC123 → code
+      var last = parts[parts.length - 1] || "";
+      var code = (last.toUpperCase() === "G" ? "" : last)
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
       document.getElementById("code").textContent = code || "—";
+
+      var openBtn = document.getElementById("openApp");
+      if (!code) {
+        openBtn.textContent = "Ouvrir SafeAlert";
+        openBtn.href = "safealert://";
+        document.querySelector(".muted").textContent =
+          "Lien incomplet (pas de code). Demandez un nouveau QR, ou ouvrez l'app → Groupes → Rejoindre et saisissez le code.";
+        return;
+      }
 
       var custom = "safealert://group/" + encodeURIComponent(code);
       var isAndroid = /Android/i.test(navigator.userAgent);
@@ -68,11 +81,10 @@
           encodeURIComponent(location.href) + ";end"
         : custom;
 
-      var openBtn = document.getElementById("openApp");
       openBtn.href = openHref;
 
       // One soft attempt after scan — keep the page usable if the app isn't installed.
-      if (code && !/bot|crawl|spider/i.test(navigator.userAgent || "")) {
+      if (!/bot|crawl|spider/i.test(navigator.userAgent || "")) {
         setTimeout(function () {
           try { window.location.href = openHref; } catch (e) {}
         }, 600);

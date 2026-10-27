@@ -5,20 +5,26 @@ import '../utils/location_format.dart';
 
 /// Partage système + raccourci WhatsApp (FR, sans jargon).
 class ShareHelper {
-  /// Public HTTPS origin derived from API base (…/api → origin).
-  /// Used for QR codes that phone cameras can open.
+  /// Public HTTPS origin derived from API base (strip `/api` and any path).
+  /// Used for QR codes that phone cameras can open — must NEVER include `/api`
+  /// or Safari hits the JSON 404 handler (`Page introuvable`).
   static String get publicWebOrigin {
+    const fallback = 'https://safealert-api.onrender.com';
     final api = ApiService.baseUrl; // e.g. https://safealert-api.onrender.com/api
     final uri = Uri.tryParse(api);
-    if (uri == null || !uri.hasScheme) {
-      return 'https://safealert-api.onrender.com';
-    }
-    final path = uri.path.replaceAll(RegExp(r'/api/?$'), '');
-    return uri.replace(path: path.isEmpty ? '' : path, query: '', fragment: '').toString().replaceAll(RegExp(r'/$'), '');
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) return fallback;
+    final port = uri.hasPort && uri.port != 80 && uri.port != 443
+        ? ':${uri.port}'
+        : '';
+    return '${uri.scheme}://${uri.host}$port';
   }
 
   static String groupInviteUrl(String code) {
     final c = code.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    if (c.length < 6) {
+      // Avoid generating https://…/g/ which 404s as JSON in Safari.
+      return publicWebOrigin;
+    }
     return '$publicWebOrigin/g/$c';
   }
 

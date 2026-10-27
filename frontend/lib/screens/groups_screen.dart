@@ -425,6 +425,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
               Flexible(
                 child: GestureDetector(
                   onTap: () {
+                    final inviteUrl = ShareHelper.groupInviteUrl(code);
+                    final canQr = code.trim().length >= 6 &&
+                        inviteUrl.contains('/g/') &&
+                        !inviteUrl.contains('/api/');
                     final text = ShareHelper.groupInviteMessage(code, groupName: name);
                     showModalBottomSheet(
                       context: context,
@@ -436,25 +440,31 @@ class _GroupsScreenState extends State<GroupsScreen> {
                             Text('Invitation — $name',
                                 style: const TextStyle(fontWeight: FontWeight.w700)),
                             const SizedBox(height: 8),
-                            Text(code, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 2)),
+                            Text(code.isEmpty ? 'Code indisponible' : code,
+                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 2)),
                             const SizedBox(height: 6),
-                            const Text(
-                              'Les autres scannent ce QR avec l\'appareil photo du téléphone '
-                              '(SafeAlert s\'ouvre si installé), ou saisissent le code.',
+                            Text(
+                              canQr
+                                  ? 'Les autres scannent ce QR avec l\'appareil photo du téléphone '
+                                      '(SafeAlert s\'ouvre si installé), ou saisissent le code.'
+                                  : 'Code d\'invitation manquant. Rouvrez le groupe ou recréez l\'invitation.',
                               textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 11, color: AppColors.gris),
+                              style: const TextStyle(fontSize: 11, color: AppColors.gris),
                             ),
-                            QrImageView(
-                              data: ShareHelper.groupInviteUrl(code),
-                              size: 140,
-                              backgroundColor: Colors.white,
-                            ),
+                            if (canQr)
+                              QrImageView(
+                                data: inviteUrl,
+                                size: 140,
+                                backgroundColor: Colors.white,
+                              ),
+                            if (canQr) ...[
                             const SizedBox(height: 4),
                             Text(
-                              ShareHelper.groupInviteUrl(code),
+                              inviteUrl,
                               textAlign: TextAlign.center,
                               style: const TextStyle(fontSize: 10, color: AppColors.gris),
                             ),
+                            ],
                             const SizedBox(height: 8),
                             Row(
                               children: [

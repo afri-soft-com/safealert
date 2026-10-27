@@ -10,7 +10,14 @@ const ALWAYS_OPEN = [
   /^\/api\/sos/,
   /^\/api\/public/,
   /^\/t\//,
+  /^\/s\//,
   /^\/invite\//,
+  /^\/g(\/|$)/,
+  /^\/group\//,
+  /^\/api\/g(\/|$)/,
+  /^\/api\/group\//,
+  /^\/\.well-known\//,
+  /^\/$/,
 ];
 
 const staffFromToken = async (req) => {

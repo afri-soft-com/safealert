@@ -223,16 +223,84 @@ app.get("/invite/:code", (req, res) => {
 
 // HTTPS landing for group invite QR (phone cameras need https://, not safealert://)
 const joinGroupHtml = path.join(__dirname, "public", "join-group.html");
-app.get("/g/:code", (req, res) => {
+const sendJoinGroupPage = (req, res) => {
   if (!fs.existsSync(joinGroupHtml)) {
-    return res.status(404).send("Page indisponible");
+    return res.status(404).type("html").send(
+      "<!DOCTYPE html><html lang=\"fr\"><body style=\"font-family:system-ui;padding:24px\"><h1>SafeAlert</h1><p>Page d'invitation indisponible. Ouvrez l'app → Groupes → Rejoindre.</p></body></html>"
+    );
   }
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.sendFile(joinGroupHtml);
-});
+  res.setHeader("Cache-Control", "no-store");
+  return res.sendFile(joinGroupHtml);
+};
+
+app.get(["/g", "/g/"], sendJoinGroupPage);
+app.get("/g/:code", sendJoinGroupPage);
 app.get("/group/:code", (req, res) => {
   const code = String(req.params.code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!code) return res.redirect(302, "/g");
   return res.redirect(302, `/g/${encodeURIComponent(code)}`);
+});
+// Legacy / mistaken QR that kept `/api` in the origin (Safari showed JSON 404).
+app.get(["/api/g", "/api/g/", "/api/g/:code"], (req, res) => {
+  const code = String(req.params.code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return res.redirect(302, code ? `/g/${encodeURIComponent(code)}` : "/g");
+});
+app.get(["/api/group/:code"], (req, res) => {
+  const code = String(req.params.code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return res.redirect(302, code ? `/g/${encodeURIComponent(code)}` : "/g");
+});
+
+// Friendly root (camera / bookmarks hitting the API host alone).
+app.get("/", (req, res) => {
+  res
+    .status(200)
+    .type("html")
+    .send(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SafeAlert</title><style>body{font-family:system-ui;padding:28px;background:#f4f7f7;color:#123;max-width:480px;margin:0 auto}a{color:#0B6E6E;font-weight:700}</style></head>
+<body><h1>SafeAlert</h1>
+<p>Application de sécurité citoyenne.</p>
+<p>Pour rejoindre un <strong>groupe de voisins</strong>, scannez le QR d'invitation (lien <code>/g/CODE</code>) ou ouvrez l'app → Groupes → Rejoindre.</p>
+<p><a href="safealert://">Ouvrir SafeAlert</a></p>
+</body></html>`);
+});
+
+// Universal Links / App Links metadata (best-effort; Team ID via env).
+app.get("/.well-known/apple-app-site-association", (req, res) => {
+  const teamId = (process.env.APPLE_TEAM_ID || "").trim();
+  const bundleId = (process.env.IOS_BUNDLE_ID || "com.kakiranya.safealert").trim();
+  const appID = teamId ? `${teamId}.${bundleId}` : bundleId;
+  res.setHeader("Content-Type", "application/json");
+  res.json({
+    applinks: {
+      apps: [],
+      details: [
+        {
+          appID,
+          paths: ["/g/*", "/group/*", "/invite/*", "/t/*", "/s/*"],
+        },
+      ],
+    },
+  });
+});
+app.get("/.well-known/assetlinks.json", (req, res) => {
+  const pkg = (process.env.ANDROID_PACKAGE_NAME || "com.safealert.safealert").trim();
+  const fingerprints = String(process.env.ANDROID_SHA256_CERT_FINGERPRINTS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  res.setHeader("Content-Type", "application/json");
+  if (fingerprints.length === 0) return res.json([]);
+  res.json([
+    {
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: pkg,
+        sha256_cert_fingerprints: fingerprints,
+      },
+    },
+  ]);
 });
 
 const adminWebDist = process.env.ADMIN_WEB_DIST;
@@ -245,6 +313,15 @@ if (adminWebDist) {
 }
 
 app.use((req, res) => {
+  const accept = String(req.headers.accept || "");
+  if (accept.includes("text/html")) {
+    return res.status(404).type("html").send(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Page introuvable — SafeAlert</title><style>body{font-family:system-ui;padding:28px;background:#f4f7f7;color:#123;max-width:480px;margin:0 auto}a{color:#0B6E6E}</style></head>
+<body><h1>Lien invalide</h1>
+<p>Cette adresse SafeAlert n'existe pas. Si vous voulez rejoindre un groupe, demandez un nouveau QR (lien <code>…/g/CODE</code>) ou saisissez le code dans l'app → Groupes → Rejoindre.</p>
+<p><a href="/">Accueil SafeAlert</a> · <a href="safealert://">Ouvrir l'app</a></p>
+</body></html>`);
+  }
   res.status(404).json({ error: "Page introuvable." });
 });
 
