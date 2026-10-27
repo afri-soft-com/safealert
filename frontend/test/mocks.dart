@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:safealert/services/alert_sound_service.dart';
 import 'package:safealert/services/api_service.dart';
 import 'package:safealert/services/local_database.dart';
+import 'package:safealert/services/notification_sound_prefs.dart';
 
 /// No-op sound service for unit tests (avoids AudioPlayer / Flutter binding).
 class FakeAlertSoundService implements AlertSoundService {
@@ -12,7 +13,22 @@ class FakeAlertSoundService implements AlertSoundService {
   bool get ready => true;
 
   @override
+  SafeAlertSoundId get preferredSound => SafeAlertSoundId.siren;
+
+  @override
+  String get activeSosChannelId => SafeAlertSoundId.siren.androidSosChannelId;
+
+  @override
   Future<void> initialize() async {}
+
+  @override
+  Future<void> setPreferredSound(SafeAlertSoundId id) async {}
+
+  @override
+  Future<void> previewSound([SafeAlertSoundId? id]) async {}
+
+  @override
+  Future<void> playGeneralAlert() async {}
 
   @override
   Future<void> playSosAlert() async {

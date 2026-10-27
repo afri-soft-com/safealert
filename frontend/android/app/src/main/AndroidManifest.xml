@@ -70,10 +70,13 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/sos_widget_info"/>
         </receiver>
-        <!-- Canal FCM par défaut ; les SOS passent par sos_alerts (sendPush serveur). -->
+        <!-- Canal FCM par défaut ; les SOS passent par safealert_sos_* (sendPush serveur). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="safealert_default" />
+            android:value="safealert_general_v1" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_sound"
+            android:resource="@raw/safealert_beacon" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -8,14 +8,22 @@ const SOS_PUSH_TYPES = new Set([
   "sos_alert",
   "nearby_alert",
   "group_sos",
+  "group_report",
   "sector_sos",
   "trust_zone_alert",
   "safety_ping_ask",
   "safety_ping_missed",
 ]);
 
-const SOS_CHANNEL_ID = "sos_alerts";
-const DEFAULT_CHANNEL_ID = "safealert_default";
+/** New channel with SafeAlert-branded sound (old sos_alerts was sticky / often silent). */
+const SOS_CHANNEL_ID = "safealert_sos_siren_v1";
+/** Legacy id still referenced by older clients — keep payload dual-compatible via sound name. */
+const SOS_CHANNEL_ID_LEGACY = "sos_alerts";
+const DEFAULT_CHANNEL_ID = "safealert_general_v1";
+const SOS_SOUND_ANDROID = "safealert_siren";
+const SOS_SOUND_IOS = "safealert_siren.caf";
+const DEFAULT_SOUND_ANDROID = "safealert_beacon";
+const DEFAULT_SOUND_IOS = "safealert_beacon.caf";
 
 const initFCM = () => {
   const projectId = process.env.FCM_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
@@ -58,18 +66,26 @@ const sendPush = async (token, payload) => {
         priority: "high",
         notification: {
           channelId: isSos ? SOS_CHANNEL_ID : DEFAULT_CHANNEL_ID,
-          sound: isSos ? "sos_alert" : "default",
+          sound: isSos ? SOS_SOUND_ANDROID : DEFAULT_SOUND_ANDROID,
           defaultVibrateTimings: true,
           priority: isSos ? "max" : "high",
           ...(isSos ? { visibility: "public" } : {}),
         },
       },
       apns: {
-        headers: { "apns-priority": "10" },
+        headers: {
+          "apns-priority": "10",
+          ...(isSos ? { "apns-push-type": "alert" } : {}),
+        },
         payload: {
           aps: {
-            sound: "default",
-            ...(isSos ? { "interruption-level": "time-sensitive" } : {}),
+            sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
+            ...(isSos
+              ? {
+                  "interruption-level": "time-sensitive",
+                  "mutable-content": 1,
+                }
+              : {}),
           },
         },
       },
@@ -87,5 +103,8 @@ module.exports = {
   sendPush,
   SOS_PUSH_TYPES,
   SOS_CHANNEL_ID,
+  SOS_CHANNEL_ID_LEGACY,
   DEFAULT_CHANNEL_ID,
+  SOS_SOUND_ANDROID,
+  SOS_SOUND_IOS,
 };

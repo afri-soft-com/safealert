@@ -77,13 +77,20 @@ class FCMService extends ChangeNotifier {
       }
       final messaging = FirebaseMessaging.instance;
 
-      // iOS + Android 13+ (POST_NOTIFICATIONS) — son demandé explicitement
       await messaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
         criticalAlert: false,
         announcement: false,
+        provisional: false,
+      );
+
+      // iOS: show alerts / sound while app is in foreground.
+      await messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
       );
 
       await AlertSoundService().initialize();
@@ -133,22 +140,31 @@ class FCMService extends ChangeNotifier {
 
   Future<void> _handleMessage(RemoteMessage message) async {
     final type = message.data['type'] as String?;
-    final title = message.notification?.title ?? 'SafeAlert';
-    final body = message.notification?.body ?? '';
+    final title = message.notification?.title ??
+        message.data['title']?.toString() ??
+        'SafeAlert';
+    final body = message.notification?.body ??
+        message.data['body']?.toString() ??
+        '';
     debugPrint('FCM foreground: $title type=$type');
 
-    if (AlertSoundService.isSosPayloadType(type) && !_isOwnPush(message)) {
+    if (_isOwnPush(message)) return;
+
+    if (AlertSoundService.isSosPayloadType(type)) {
       await AlertSoundService().playSosAlert();
-      // En avant-plan FCM n'affiche pas la notif système : notif locale canal SOS.
-      if (title.isNotEmpty || body.isNotEmpty) {
-        await AlertSoundService().showSosLocalNotification(
-          title: title.isNotEmpty ? title : '🚨 Alerte SafeAlert',
-          body: body.isNotEmpty
-              ? body
-              : 'Une alerte SOS nécessite votre attention.',
-          payload: type,
-        );
-      }
+      await AlertSoundService().showSosLocalNotification(
+        title: title.isNotEmpty ? title : '🚨 Alerte SafeAlert',
+        body: body.isNotEmpty
+            ? body
+            : 'Une alerte SOS nécessite votre attention.',
+        payload: type,
+      );
+      return;
+    }
+
+    // Non-SOS: still play SafeAlert beacon so the app is recognizable.
+    if (title.isNotEmpty || body.isNotEmpty) {
+      await AlertSoundService().playGeneralAlert();
     }
   }
 
@@ -159,7 +175,7 @@ class FCMService extends ChangeNotifier {
   }
 }
 
-/// Handler top-level (isolate). Canal Android `sos_alerts` + rejeu local.
+/// Handler top-level (isolate). Rejoue le son SafeAlert + notif locale.
 @pragma('vm:entry-point')
 Future<void> _handleBackgroundMessage(RemoteMessage message) async {
   final type = message.data['type'] as String?;
@@ -176,6 +192,17 @@ Future<void> _handleBackgroundMessage(RemoteMessage message) async {
     final sounds = AlertSoundService();
     await sounds.initialize();
     await sounds.playSosAlert();
+    final title = message.notification?.title ??
+        message.data['title']?.toString() ??
+        '🚨 Alerte SafeAlert';
+    final body = message.notification?.body ??
+        message.data['body']?.toString() ??
+        'Une alerte SOS nécessite votre attention.';
+    await sounds.showSosLocalNotification(
+      title: title,
+      body: body,
+      payload: type,
+    );
   } catch (e) {
     debugPrint('FCM background SOS sound failed: $e');
   }

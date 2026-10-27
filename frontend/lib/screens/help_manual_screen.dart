@@ -85,7 +85,7 @@ class HelpManualScreen extends StatelessWidget {
                   children: const [
                     _P('Onglet Confiance → « + Ajouter un contact » : nom et numéro du proche à alerter.'),
                     _P('Ces personnes reçoivent une notification sonore (avec lieu et coordonnées) lorsque vous déclenchez un SOS.'),
-                    _P('Alertes SOS (cercle, proximité, groupe, secteur) : son via notification et sirène in-app si l\'app est ouverte — toujours audibles, même en camouflage.'),
+                    _P('Alertes SOS (cercle, proximité, groupe, secteur) : son SafeAlert distinct (réglable dans Paramètres → Son SafeAlert) + sirène in-app — toujours audibles, même en camouflage.'),
                   ],
                 ),
                 _section(

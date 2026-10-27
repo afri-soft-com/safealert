@@ -8,8 +8,10 @@ import '../providers/auth_provider.dart';
 import '../providers/locale_provider.dart';
 import '../providers/contacts_provider.dart';
 import '../services/api_service.dart';
+import '../services/alert_sound_service.dart';
 import '../services/contact_backup_service.dart';
 import '../services/duress_pin_service.dart';
+import '../services/notification_sound_prefs.dart';
 import '../widgets/app_feedback.dart';
 import 'calculator_screen.dart' show kDiscreetUnlockCode;
 
@@ -44,6 +46,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _sosNotifyGroups = true;
   bool _deleting = false;
   bool _saving = false;
+  SafeAlertSoundId _alertSound = SafeAlertSoundId.siren;
 
   @override
   void initState() {
@@ -56,12 +59,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     // Mirror lock logic: local OR profile (so testers can always turn OFF what locks them).
     final localDiscreet = prefs.getBool('discreet_mode_local') ?? false;
+    final sound = await NotificationSoundPrefs().load();
     if (!mounted) return;
     setState(() {
       _discreetMode = localDiscreet || auth.isDiscreetMode;
       _sharePresence = auth.sharePresence;
       _sosNotifyGroups = auth.sosNotifyGroups;
+      _alertSound = sound;
     });
+  }
+
+  Future<void> _saveAlertSound(SafeAlertSoundId id) async {
+    setState(() => _alertSound = id);
+    await AlertSoundService().setPreferredSound(id);
+    await AlertSoundService().previewSound(id);
+    if (!mounted) return;
+    showAppSnackBar(context, 'Son d\'alerte : ${id.labelFr}');
   }
 
   Future<void> _saveDiscreet(bool value) async {
@@ -494,6 +507,90 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             activeColor: AppColors.orange,
                           ),
                         ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.blanc,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFEEEEEE)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('SON SAFEALERT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.gris, letterSpacing: 1)),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Son propre à SafeAlert, différent des autres apps. Joué à chaque alerte SOS reçue (push + in-app).',
+                        style: TextStyle(fontSize: 10, color: AppColors.gris),
+                      ),
+                      const SizedBox(height: 10),
+                      ...SafeAlertSoundId.values.map((s) {
+                        final selected = _alertSound == s;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Material(
+                            color: selected
+                                ? AppColors.orange.withValues(alpha: 0.08)
+                                : AppColors.grisClair,
+                            borderRadius: BorderRadius.circular(10),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(10),
+                              onTap: () => _saveAlertSound(s),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      selected
+                                          ? Icons.radio_button_checked
+                                          : Icons.radio_button_off,
+                                      size: 20,
+                                      color: selected ? AppColors.orange : AppColors.gris,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            s.labelFr,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.bleuFonce,
+                                            ),
+                                          ),
+                                          Text(
+                                            s.descriptionFr,
+                                            style: const TextStyle(fontSize: 10, color: AppColors.gris),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Écouter',
+                                      onPressed: () => AlertSoundService().previewSound(s),
+                                      icon: const Icon(Icons.volume_up, size: 20, color: AppColors.bleuFonce),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => AlertSoundService().previewSound(_alertSound),
+                          icon: const Icon(Icons.notifications_active, size: 16),
+                          label: const Text('Tester la notification sonore', style: TextStyle(fontSize: 12)),
+                        ),
                       ),
                     ],
                   ),
