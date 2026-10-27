@@ -1002,10 +1002,14 @@ describe("App version", () => {
   it("GET /api/app/version defaults latest versions when env is empty", async () => {
     delete process.env.APP_LATEST_VERSION;
     delete process.env.ADMIN_WEB_VERSION;
+    const {
+      DEFAULT_MOBILE_VERSION,
+      DEFAULT_ADMIN_WEB_VERSION,
+    } = require("../src/controllers/appVersionController");
     const res = await request(app).get("/api/app/version");
     expect(res.status).toBe(200);
-    expect(res.body.latestVersion).toBe("1.0.34");
-    expect(res.body.adminWebVersion).toBe("1.0.11");
+    expect(res.body.latestVersion).toBe(DEFAULT_MOBILE_VERSION);
+    expect(res.body.adminWebVersion).toBe(DEFAULT_ADMIN_WEB_VERSION);
     expect(res.body.iosStoreUrl).toContain("apps.apple.com");
     expect(res.body.adminWebUrl).toContain("safealert-admin");
   });
