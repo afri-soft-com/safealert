@@ -48,6 +48,8 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen> {
         return 'Message de groupe';
       case 'trip_ping':
         return 'Position trajet (hors ligne)';
+      case 'trip_action':
+        return 'Fin / annulation trajet (hors ligne)';
       default:
         return kind;
     }
@@ -67,9 +69,11 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen> {
 
   Future<void> _retryAll() async {
     setState(() => _flushing = true);
+    final trips = context.read<TripProvider>();
     final a = await context.read<IncidentProvider>().flushOfflineQueue();
-    final b = await context.read<TripProvider>().flushPendingPings();
-    final sent = a + b;
+    final b = await trips.flushPendingPings();
+    final c = await trips.flushPendingTripActions();
+    final sent = a + b + c;
     if (!mounted) return;
     setState(() {
       _flushing = false;

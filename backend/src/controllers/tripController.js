@@ -37,13 +37,37 @@ const assertTripEnabled = (res) => {
 };
 
 /** Persist a GPS breadcrumb (best-effort — trail must not break pings). */
-async function appendTrackPoint(tripId, lat, lng) {
+async function appendTrackPoint(tripId, lat, lng, { recordedAt = null, clientEventId = null } = {}) {
+  const eid = clientEventId ? String(clientEventId).slice(0, 64) : null;
   try {
-    await pool.query(
-      `INSERT INTO safe_trip_track_points (trip_id, lat, lng) VALUES ($1, $2, $3)`,
-      [tripId, lat, lng]
-    );
+    if (eid) {
+      await pool.query(
+        `INSERT INTO safe_trip_track_points (trip_id, lat, lng, recorded_at, client_event_id)
+         VALUES ($1, $2, $3, COALESCE($4::timestamptz, NOW()), $5)`,
+        [tripId, lat, lng, recordedAt || null, eid]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO safe_trip_track_points (trip_id, lat, lng, recorded_at)
+         VALUES ($1, $2, $3, COALESCE($4::timestamptz, NOW()))`,
+        [tripId, lat, lng, recordedAt || null]
+      );
+    }
   } catch (err) {
+    if (err.code === "23505") return; // duplicate offline replay
+    // Column not migrated yet — plain insert.
+    if (err.code === "42703") {
+      try {
+        await pool.query(
+          `INSERT INTO safe_trip_track_points (trip_id, lat, lng, recorded_at)
+           VALUES ($1, $2, $3, COALESCE($4::timestamptz, NOW()))`,
+          [tripId, lat, lng, recordedAt || null]
+        );
+      } catch (e2) {
+        console.error("appendTrackPoint fallback:", e2.message);
+      }
+      return;
+    }
     console.error("appendTrackPoint:", err.message);
   }
 }
@@ -355,7 +379,7 @@ const startTrip = async (req, res) => {
 const pingTrip = async (req, res) => {
   if (!assertTripEnabled(res)) return;
   const { id } = req.params;
-  const { lat, lng } = req.body;
+  const { lat, lng, at, client_event_id: clientEventId } = req.body;
   if (lat == null || lng == null) {
     return res.status(400).json({ error: "Position requise" });
   }
@@ -370,6 +394,17 @@ const pingTrip = async (req, res) => {
     }
     const trip = existing.rows[0];
 
+    // Prefer client timestamp when replaying offline queue (avoid false abnormal stops).
+    let pingAt = new Date();
+    if (typeof at === "string" && at.trim()) {
+      const parsed = new Date(at);
+      if (!Number.isNaN(parsed.getTime())) {
+        const skew = Math.abs(Date.now() - parsed.getTime());
+        // Reject absurd future/past clocks (> 48h)
+        if (skew <= 48 * 60 * 60 * 1000) pingAt = parsed;
+      }
+    }
+
     // Abnormal stop: moved < 30m since last ping and > 8 min elapsed
     let abnormal = trip.abnormal_stop_at;
     if (trip.last_lat != null && trip.last_lng != null) {
@@ -382,8 +417,8 @@ const pingTrip = async (req, res) => {
       );
       const meters = distRes.rows[0].meters;
       const lastPing = trip.last_ping_at ? new Date(trip.last_ping_at).getTime() : 0;
-      if (meters < 30 && Date.now() - lastPing > 8 * 60 * 1000 && !abnormal) {
-        abnormal = new Date();
+      if (meters < 30 && pingAt.getTime() - lastPing > 8 * 60 * 1000 && !abnormal) {
+        abnormal = pingAt;
       } else if (meters >= 30) {
         abnormal = null;
       }
@@ -408,23 +443,26 @@ const pingTrip = async (req, res) => {
       );
       const nearDest = arrivalRes.rows[0].meters < 80;
       const startedAt = trip.created_at ? new Date(trip.created_at).getTime() : 0;
-      const elapsedMs = Date.now() - startedAt;
+      const elapsedMs = pingAt.getTime() - startedAt;
       const autoArriveOk = originDestM >= 150 && elapsedMs > 60 * 1000;
       if (autoArriveOk && nearDest) {
         status = "arrived";
-        arrivedAt = new Date();
+        arrivedAt = pingAt;
       }
     }
 
     const updated = await pool.query(
       `UPDATE safe_trips SET
-         last_lat = $2, last_lng = $3, last_ping_at = NOW(),
+         last_lat = $2, last_lng = $3, last_ping_at = $7::timestamptz,
          abnormal_stop_at = $4, status = $5, arrived_at = $6
        WHERE id = $1 RETURNING *`,
-      [id, lat, lng, abnormal, status, arrivedAt]
+      [id, lat, lng, abnormal, status, arrivedAt, pingAt.toISOString()]
     );
 
-    await appendTrackPoint(id, Number(lat), Number(lng));
+    await appendTrackPoint(id, Number(lat), Number(lng), {
+      recordedAt: pingAt.toISOString(),
+      clientEventId: clientEventId || null,
+    });
 
     const io = req.app.get("io");
     if (io) {
@@ -434,7 +472,7 @@ const pingTrip = async (req, res) => {
         lat: Number(lat),
         lng: Number(lng),
         status,
-        at: new Date().toISOString(),
+        at: pingAt.toISOString(),
       };
       io.emit("trip_ping", payload);
       for (const cid of trip.escort_contact_ids || []) {

@@ -1266,13 +1266,28 @@ class _TripScreenState extends State<TripScreen> {
                               : 'Activez le GPS pour le suivi en direct.',
                           style: const TextStyle(fontSize: 12, color: AppColors.bleuFonce),
                         ),
-                        if (context.watch<TripProvider>().hasOfflinePings) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            '${context.watch<TripProvider>().pendingOfflinePings} position(s) en attente de sync réseau',
-                            style: const TextStyle(fontSize: 11, color: AppColors.orange, fontWeight: FontWeight.w600),
-                          ),
-                        ],
+                        Builder(builder: (ctx) {
+                          final p = ctx.watch<TripProvider>();
+                          if (!p.hasOfflinePings) return const SizedBox.shrink();
+                          final parts = <String>[];
+                          if (p.pendingOfflinePings > 0) {
+                            parts.add('${p.pendingOfflinePings} position(s)');
+                          }
+                          if (p.pendingOfflineActions > 0) {
+                            parts.add('${p.pendingOfflineActions} action(s)');
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              '${parts.join(' · ')} en attente de sync (réseau faible)',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.orange,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          );
+                        }),
                         const SizedBox(height: 8),
                         SelectableText(
                           'Code à donner aux proches :\n${trip['id']}',

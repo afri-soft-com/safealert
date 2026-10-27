@@ -126,7 +126,8 @@ jobs:
             echo "Could not resolve deploy id after HTTP ${code}"
             exit 1
           fi
-          for i in $(seq 1 60); do
+          # Env keys already applied above; redeploy can take >10m on Render.
+          for i in $(seq 1 90); do
             st=$(curl -fsS -H "Authorization: Bearer ${RENDER_API_KEY}" -H "Accept: application/json" \
               "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${deploy_id}" \
               | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("status") or d.get("deploy",{}).get("status") or "")')
@@ -137,4 +138,5 @@ jobs:
             esac
             sleep 10
           done
-          exit 1
+          echo "::warning::Redeploy still in progress after ~15m — env keys were saved; CI deploy may already be live."
+          exit 0

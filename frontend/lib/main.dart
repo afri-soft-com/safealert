@@ -264,9 +264,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         if (!mounted) return;
         await context.read<IncidentProvider>().flushOfflineQueue();
         if (!mounted) return;
-        await context.read<TripProvider>().flushPendingPings();
+        final trips = context.read<TripProvider>();
+        await trips.flushPendingPings();
         if (!mounted) return;
-        await context.read<TripProvider>().fetchActive();
+        await trips.flushPendingTripActions();
+        if (!mounted) return;
+        await trips.fetchActive();
       }
     });
   }
@@ -275,8 +278,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (!mounted) return;
     final auth = context.read<AuthProvider>();
     if (auth.isAuthenticated) {
-      context.read<TripProvider>().fetchActive();
-      context.read<TripProvider>().flushPendingPings();
+      final trips = context.read<TripProvider>();
+      trips.fetchActive();
+      trips.flushPendingPings();
+      trips.flushPendingTripActions();
     } else {
       context.read<TripProvider>().stopTracking();
     }
@@ -287,8 +292,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed && mounted) {
       _appUpdates.check(context);
       if (context.read<AuthProvider>().isAuthenticated) {
-        context.read<TripProvider>().flushPendingPings();
-        context.read<TripProvider>().fetchActive();
+        final trips = context.read<TripProvider>();
+        trips.flushPendingPings();
+        trips.flushPendingTripActions();
+        trips.fetchActive();
         context.read<IncidentProvider>().flushOfflineQueue();
       }
     }
@@ -479,7 +486,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             auth.exitGuestMode();
             FCMService().uploadToken();
             context.read<IncidentProvider>().flushOfflineQueue();
-            context.read<TripProvider>().flushPendingPings();
+            final trips = context.read<TripProvider>();
+            trips.flushPendingPings();
+            trips.flushPendingTripActions();
             _navigate('home');
           },
           onBack: _navStack.length > 1 ? _goBack : () {

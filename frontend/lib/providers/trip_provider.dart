@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 import '../services/api_service.dart';
 import '../services/local_database.dart';
 import '../services/location_service.dart';
@@ -9,6 +11,9 @@ import '../services/trip_tracking_service.dart';
 import '../utils/network_error.dart';
 
 class TripProvider extends ChangeNotifier {
+  static const _activeTripCacheKey = 'active_trip';
+  static const _uuid = Uuid();
+
   final ApiService _api = ApiService();
   final LocalDatabase _cache = LocalDatabase();
   Map<String, dynamic>? _activeTrip;
@@ -25,7 +30,9 @@ class TripProvider extends ChangeNotifier {
   String? _trackingTripId;
   Timer? _fallbackPing;
   Timer? _offlineFlushTimer;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   int _pendingOfflinePings = 0;
+  int _pendingOfflineActions = 0;
 
   Map<String, dynamic>? get activeTrip => _activeTrip;
   Map<String, dynamic>? get followedTrip => _followedTrip;
@@ -38,7 +45,9 @@ class TripProvider extends ChangeNotifier {
   bool get historyLoading => _historyLoading;
   String? get error => _error;
   int get pendingOfflinePings => _pendingOfflinePings;
-  bool get hasOfflinePings => _pendingOfflinePings > 0;
+  int get pendingOfflineActions => _pendingOfflineActions;
+  bool get hasOfflinePings =>
+      _pendingOfflinePings > 0 || _pendingOfflineActions > 0;
   bool get isTracking =>
       TripTrackingService().isRunning || _fallbackPing != null;
   bool get isPatrol =>
@@ -73,6 +82,46 @@ class TripProvider extends ChangeNotifier {
 
   TripProvider() {
     _bindSockets();
+    _bindConnectivity();
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    _offlineFlushTimer?.cancel();
+    _fallbackPing?.cancel();
+    super.dispose();
+  }
+
+  void _bindConnectivity() {
+    _connectivitySub?.cancel();
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      final online = results.any((r) => r != ConnectivityResult.none);
+      if (online) {
+        unawaited(flushPendingPings());
+        unawaited(flushPendingTripActions());
+        unawaited(fetchActive());
+      }
+    });
+  }
+
+  Future<void> _persistActiveTrip() async {
+    final trip = _activeTrip;
+    if (trip == null || trip['status']?.toString() != 'active') {
+      await _cache.remove(_activeTripCacheKey);
+      return;
+    }
+    await _cache.put(_activeTripCacheKey, trip);
+  }
+
+  Future<Map<String, dynamic>?> _loadCachedActiveTrip() async {
+    final raw = await _cache.get(_activeTripCacheKey);
+    if (raw is! Map) return null;
+    final trip = Map<String, dynamic>.from(raw);
+    if (trip['id'] == null || trip['status']?.toString() != 'active') {
+      return null;
+    }
+    return trip;
   }
 
   void _bindSockets() {
@@ -165,12 +214,26 @@ class TripProvider extends ChangeNotifier {
   Future<void> fetchActive() async {
     try {
       final res = await _api.get('/trips/active');
-      _activeTrip = res.isEmpty || res['id'] == null ? null : res;
+      if (res.isEmpty || res['id'] == null) {
+        _activeTrip = null;
+        await _cache.remove(_activeTripCacheKey);
+      } else {
+        _activeTrip = res;
+        await _persistActiveTrip();
+      }
       notifyListeners();
     } catch (_) {
-      _activeTrip = null;
+      // Offline / poor network: keep local snapshot so GPS tracking continues.
+      final cached = await _loadCachedActiveTrip();
+      if (cached != null) {
+        _activeTrip = cached;
+        notifyListeners();
+      }
     }
     await _syncTracking();
+    await refreshOfflinePingCount();
+    unawaited(flushPendingPings());
+    unawaited(flushPendingTripActions());
   }
 
   Future<void> fetchHistory() async {
@@ -304,6 +367,7 @@ class TripProvider extends ChangeNotifier {
       _activeTrip = res['trip'] as Map<String, dynamic>?;
       _shareUrl = res['share_url'] as String?;
       _shareText = res['share_text'] as String?;
+      await _persistActiveTrip();
       _loading = false;
       notifyListeners();
       await _syncTracking();
@@ -371,6 +435,9 @@ class TripProvider extends ChangeNotifier {
     final tripId = _activeTrip!['id']?.toString();
     if (tripId == null) return;
 
+    final at = DateTime.now().toUtc().toIso8601String();
+    final eventId = _uuid.v4();
+
     // Keep a local trail even offline so the traveler still sees progress.
     _activeTrip = _mergePing(_activeTrip!, {
       'lat': lat,
@@ -379,14 +446,17 @@ class TripProvider extends ChangeNotifier {
     }, {
       'lat': lat,
       'lng': lng,
-      'at': DateTime.now().toUtc().toIso8601String(),
+      'at': at,
     });
+    unawaited(_persistActiveTrip());
     notifyListeners();
 
     try {
       final res = await _api.post('/trips/$tripId/ping', {
         'lat': lat,
         'lng': lng,
+        'at': at,
+        'client_event_id': eventId,
       });
       final trip = res['trip'] as Map<String, dynamic>?;
       if (trip != null) {
@@ -396,14 +466,17 @@ class TripProvider extends ChangeNotifier {
                 'lat': lat,
                 'lng': lng,
                 'status': trip['status'],
-              }, {'lat': lat, 'lng': lng})
+              }, {'lat': lat, 'lng': lng, 'at': at})
             : trip;
+        await _persistActiveTrip();
       } else {
         _activeTrip = null;
+        await _cache.remove(_activeTripCacheKey);
       }
       notifyListeners();
-      // After reconnect, drain any queued pings.
+      // After reconnect, drain any queued pings / actions.
       unawaited(flushPendingPings());
+      unawaited(flushPendingTripActions());
       if (_activeTrip == null || _activeTrip!['status'] != 'active') {
         await _syncTracking();
         unawaited(fetchHistory());
@@ -411,17 +484,19 @@ class TripProvider extends ChangeNotifier {
     } catch (e) {
       if (e is ApiException && (e.statusCode == 404 || e.statusCode == 401)) {
         _activeTrip = null;
+        await _cache.remove(_activeTripCacheKey);
         notifyListeners();
         await _syncTracking();
         return;
       }
-      // Network / 5xx → queue for later sync
+      // Network / 5xx → queue for later sync (idempotent via client_event_id).
       try {
         await _cache.enqueue('trip_ping', {
           'trip_id': tripId,
           'lat': lat,
           'lng': lng,
-          'at': DateTime.now().toUtc().toIso8601String(),
+          'at': at,
+          'client_event_id': eventId,
         });
         _pendingOfflinePings += 1;
         notifyListeners();
@@ -433,7 +508,17 @@ class TripProvider extends ChangeNotifier {
   void _ensureOfflineFlushTimer() {
     _offlineFlushTimer ??= Timer.periodic(const Duration(seconds: 25), (_) {
       unawaited(flushPendingPings());
+      unawaited(flushPendingTripActions());
     });
+  }
+
+  void _maybeStopOfflineFlushTimer() {
+    if (_pendingOfflinePings == 0 && _pendingOfflineActions == 0) {
+      _offlineFlushTimer?.cancel();
+      _offlineFlushTimer = null;
+    } else {
+      _ensureOfflineFlushTimer();
+    }
   }
 
   /// Sync queued GPS pings once back online (order preserved).
@@ -441,8 +526,7 @@ class TripProvider extends ChangeNotifier {
     final pending = await _cache.listPending(kind: 'trip_ping', dueOnly: true);
     if (pending.isEmpty) {
       _pendingOfflinePings = 0;
-      _offlineFlushTimer?.cancel();
-      _offlineFlushTimer = null;
+      _maybeStopOfflineFlushTimer();
       notifyListeners();
       return 0;
     }
@@ -461,6 +545,9 @@ class TripProvider extends ChangeNotifier {
         await _api.post('/trips/$tripId/ping', {
           'lat': lat,
           'lng': lng,
+          if (payload['at'] != null) 'at': payload['at'],
+          if (payload['client_event_id'] != null)
+            'client_event_id': payload['client_event_id'],
         });
         await _cache.removePending(id);
         sent++;
@@ -475,25 +562,72 @@ class TripProvider extends ChangeNotifier {
     }
     final left = await _cache.listPending(kind: 'trip_ping');
     _pendingOfflinePings = left.length;
-    if (_pendingOfflinePings == 0) {
-      _offlineFlushTimer?.cancel();
-      _offlineFlushTimer = null;
-    } else {
-      _ensureOfflineFlushTimer();
-    }
+    _maybeStopOfflineFlushTimer();
     if (sent > 0 && _followTripId != null) {
       unawaited(fetchTrip(_followTripId!));
     }
-    if (sent > 0 && _activeTrip != null) {
+    if (sent > 0) {
       unawaited(fetchActive());
     }
     notifyListeners();
     return sent;
   }
 
+  /// Sync queued arrive/cancel when back online.
+  Future<int> flushPendingTripActions() async {
+    final pending = await _cache.listPending(kind: 'trip_action', dueOnly: true);
+    if (pending.isEmpty) {
+      _pendingOfflineActions = 0;
+      _maybeStopOfflineFlushTimer();
+      notifyListeners();
+      return 0;
+    }
+    var sent = 0;
+    for (final item in pending) {
+      final id = item['id'] as int;
+      final payload = item['payload'] as Map<String, dynamic>;
+      final tripId = payload['trip_id']?.toString();
+      final action = payload['action']?.toString();
+      if (tripId == null || (action != 'arrive' && action != 'cancel')) {
+        await _cache.removePending(id);
+        continue;
+      }
+      try {
+        await _api.post('/trips/$tripId/$action', {});
+        await _cache.removePending(id);
+        sent++;
+        if (action == 'cancel' || action == 'arrive') {
+          if (_activeTrip?['id']?.toString() == tripId) {
+            _activeTrip = action == 'cancel' ? null : {...?_activeTrip, 'status': 'arrived'};
+            await _persistActiveTrip();
+            await _syncTracking();
+          }
+        }
+      } catch (e) {
+        if (e is ApiException && (e.statusCode == 404 || e.statusCode == 401 || e.statusCode == 409)) {
+          await _cache.removePending(id);
+          continue;
+        }
+        await _cache.bumpPendingAttempt(id);
+        break;
+      }
+    }
+    final left = await _cache.listPending(kind: 'trip_action');
+    _pendingOfflineActions = left.length;
+    _maybeStopOfflineFlushTimer();
+    if (sent > 0) unawaited(fetchHistory());
+    notifyListeners();
+    return sent;
+  }
+
   Future<void> refreshOfflinePingCount() async {
-    final left = await _cache.listPending(kind: 'trip_ping');
-    _pendingOfflinePings = left.length;
+    final pings = await _cache.listPending(kind: 'trip_ping');
+    final actions = await _cache.listPending(kind: 'trip_action');
+    _pendingOfflinePings = pings.length;
+    _pendingOfflineActions = actions.length;
+    if (_pendingOfflinePings > 0 || _pendingOfflineActions > 0) {
+      _ensureOfflineFlushTimer();
+    }
     notifyListeners();
   }
 
@@ -550,22 +684,56 @@ class TripProvider extends ChangeNotifier {
 
   Future<void> arrive() async {
     if (_activeTrip == null) return;
+    final tripId = _activeTrip!['id']?.toString();
+    if (tripId == null) return;
     try {
-      final res = await _api.post('/trips/${_activeTrip!['id']}/arrive', {});
+      final res = await _api.post('/trips/$tripId/arrive', {});
       _activeTrip = res['trip'] as Map<String, dynamic>?;
+      await _persistActiveTrip();
       notifyListeners();
-    } catch (_) {}
+    } catch (e) {
+      if (e is! ApiException || (e.statusCode != 404 && e.statusCode != 401)) {
+        try {
+          await _cache.enqueue('trip_action', {
+            'trip_id': tripId,
+            'action': 'arrive',
+          });
+          _activeTrip = {..._activeTrip!, 'status': 'arrived'};
+          await _persistActiveTrip();
+          _pendingOfflineActions += 1;
+          notifyListeners();
+          _ensureOfflineFlushTimer();
+        } catch (_) {}
+      }
+    }
     await _syncTracking();
     unawaited(fetchHistory());
   }
 
   Future<void> cancel() async {
     if (_activeTrip == null) return;
+    final tripId = _activeTrip!['id']?.toString();
+    if (tripId == null) return;
     try {
-      await _api.post('/trips/${_activeTrip!['id']}/cancel', {});
+      await _api.post('/trips/$tripId/cancel', {});
       _activeTrip = null;
+      await _cache.remove(_activeTripCacheKey);
       notifyListeners();
-    } catch (_) {}
+    } catch (e) {
+      if (e is! ApiException || (e.statusCode != 404 && e.statusCode != 401)) {
+        try {
+          await _cache.enqueue('trip_action', {
+            'trip_id': tripId,
+            'action': 'cancel',
+          });
+          _activeTrip = null;
+          await _cache.remove(_activeTripCacheKey);
+          _pendingOfflineActions += 1;
+          notifyListeners();
+          _ensureOfflineFlushTimer();
+        } catch (_) {}
+      }
+    }
     await _syncTracking();
     unawaited(fetchHistory());
   }
