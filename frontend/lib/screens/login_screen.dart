@@ -120,9 +120,29 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  String _maskedPhone(String? phone) {
-    if (phone == null || phone.length < 4) return '';
-    return '•••• ${phone.substring(phone.length - 4)}';
+  /// Only real phone numbers — never last-4 of a UUID (Google-only PIN identity).
+  String _pinAccountHint(AuthProvider auth) {
+    for (final raw in <String?>[
+      auth.phone,
+      auth.user?['phone'] as String?,
+      auth.pinPhone,
+    ]) {
+      final digits = (raw ?? '').replaceAll(RegExp(r'\D'), '');
+      if (digits.length >= 8) {
+        return 'Numéro •••• ${digits.substring(digits.length - 4)}';
+      }
+    }
+    final email = auth.user?['email']?.toString();
+    if (email != null && email.contains('@')) {
+      final at = email.indexOf('@');
+      final local = email.substring(0, at);
+      final domain = email.substring(at + 1);
+      final maskedLocal = local.length <= 2
+          ? '••'
+          : '${local[0]}••${local[local.length - 1]}';
+      return 'Compte $maskedLocal@$domain';
+    }
+    return 'Compte connecté';
   }
 
   void _applyExposedCode(AuthProvider auth) {
@@ -621,16 +641,15 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   List<Widget> _pinUnlockFields(AuthProvider auth) {
-    final masked = _maskedPhone(auth.pinPhone ?? auth.phone ?? auth.user?['phone'] as String?);
+    final hint = _pinAccountHint(auth);
     return [
-      if (masked.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Text(
-            'Numéro $masked',
-            style: const TextStyle(color: Colors.white54, fontSize: 13),
-          ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Text(
+          hint,
+          style: const TextStyle(color: Colors.white54, fontSize: 13),
         ),
+      ),
       TextField(
         controller: _pinCtrl,
         keyboardType: TextInputType.number,
