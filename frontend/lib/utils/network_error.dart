@@ -93,8 +93,28 @@ String? mapKnownApiMessage(String message) {
     'erreur serveur': 'Une erreur est survenue. Réessayez.',
     'feature_premium': 'Cette fonction n\'est pas encore disponible.',
     'internal server': 'Une erreur est survenue. Réessayez.',
-    'impossible de démarrer': 'Impossible de démarrer le trajet. Réessayez.',
+    'pay_hub_not_configured':
+        'Paiement Mobile Money temporairement indisponible. Réessayez plus tard.',
+    'pay_hub_init_failed':
+        'Impossible de démarrer le paiement Mobile Money. Vérifiez le numéro et réessayez.',
+    'montant minimum': 'Montant trop bas pour Mobile Money.',
   };
+
+  // Payment / trip phrases share "impossible de démarrer" — match the more
+  // specific ones first so Premium never shows a trajet error.
+  if (lower.contains('paiement') || lower.contains('mobile money')) {
+    if (lower.contains('non configur')) {
+      return 'Paiement Mobile Money temporairement indisponible. Réessayez plus tard.';
+    }
+    if (lower.contains('démarrer') || lower.contains('initia')) {
+      return 'Impossible de démarrer le paiement Mobile Money. Vérifiez le numéro et l\'opérateur, puis réessayez.';
+    }
+    return null; // keep original French payment message from API
+  }
+  if (lower.contains('trajet') && lower.contains('démarrer')) {
+    return 'Impossible de démarrer le trajet. Réessayez.';
+  }
+
   for (final entry in known.entries) {
     if (lower.contains(entry.key)) return entry.value;
   }

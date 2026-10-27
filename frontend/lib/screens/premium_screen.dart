@@ -30,6 +30,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
     'contacts_elargis': 'Jusqu\'à 25 contacts de confiance',
     'historique_etendu': 'Historique étendu (100 alertes)',
     'sos_prioritaire': 'Priorité dans la file ops SOS',
+    'sos_mediation': 'Médiation SOS avec un opérateur',
+    'live_circles': 'Cercles famille en direct (jusqu\'à 5)',
+    'live_circles_max': 'Cercles famille en direct (jusqu\'à 5)',
   };
 
   @override
