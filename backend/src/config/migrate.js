@@ -535,7 +535,35 @@ const migrate = async () => {
     `);
 
     // ── AfriSoft pay hub: premium intents + platform treasury ──
+    // premium_payment_intents = table used by premiumPayments.js (live Mobile Money).
     await client.query(`
+      CREATE TABLE IF NOT EXISTS premium_payment_intents (
+        id UUID PRIMARY KEY,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        plan VARCHAR(20) NOT NULL DEFAULT 'monthly',
+        amount_usd NUMERIC(10,2),
+        amount_cdf INTEGER NOT NULL,
+        days INTEGER NOT NULL DEFAULT 30,
+        method VARCHAR(32) NOT NULL DEFAULT 'mobile_money',
+        telecom VARCHAR(8),
+        payer_phone VARCHAR(20),
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        hub_reference VARCHAR(160),
+        external_reference VARCHAR(160),
+        failure_reason TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        completed_at TIMESTAMP WITH TIME ZONE
+      );
+      CREATE INDEX IF NOT EXISTS idx_premium_payment_intents_user
+        ON premium_payment_intents(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_premium_payment_intents_ext
+        ON premium_payment_intents(external_reference)
+        WHERE external_reference IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_premium_payment_intents_hub_ref
+        ON premium_payment_intents(hub_reference)
+        WHERE hub_reference IS NOT NULL;
+
       CREATE TABLE IF NOT EXISTS payment_intents (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -565,27 +593,28 @@ const migrate = async () => {
         ON payment_intents(hub_reference)
         WHERE hub_reference IS NOT NULL;
 
-      CREATE TABLE IF NOT EXISTS platform_wallets (
+      -- Names used by platformWallet.js
+      CREATE TABLE IF NOT EXISTS platform_wallet (
         id UUID PRIMARY KEY,
         balance_cdf BIGINT NOT NULL DEFAULT 0,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS platform_wallet_ledger_entries (
+      CREATE TABLE IF NOT EXISTS platform_wallet_ledger (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        wallet_id UUID NOT NULL REFERENCES platform_wallets(id) ON DELETE CASCADE,
+        wallet_id UUID NOT NULL REFERENCES platform_wallet(id) ON DELETE CASCADE,
         direction VARCHAR(10) NOT NULL CHECK (direction IN ('CREDIT','DEBIT')),
         amount_cdf BIGINT NOT NULL,
         balance_after_cdf BIGINT NOT NULL,
         reason TEXT,
-        payment_intent_id UUID REFERENCES payment_intents(id) ON DELETE SET NULL,
+        payment_intent_id UUID,
         external_reference VARCHAR(160),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_platform_ledger_created
-        ON platform_wallet_ledger_entries(created_at DESC);
+        ON platform_wallet_ledger(created_at DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_platform_ledger_intent_credit
-        ON platform_wallet_ledger_entries(payment_intent_id)
+        ON platform_wallet_ledger(payment_intent_id)
         WHERE payment_intent_id IS NOT NULL AND direction = 'CREDIT';
 
       CREATE TABLE IF NOT EXISTS platform_wallet_withdrawals (
@@ -603,6 +632,13 @@ const migrate = async () => {
       );
       CREATE INDEX IF NOT EXISTS idx_platform_withdrawals_created
         ON platform_wallet_withdrawals(created_at DESC);
+
+      -- Legacy aliases (no-op if already created above under new names)
+      CREATE TABLE IF NOT EXISTS platform_wallets (
+        id UUID PRIMARY KEY,
+        balance_cdf BIGINT NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
     `);
 
     // ── Wave 1–3 extensions (vehicle, SOS share, broadcasts, circles, mediation) ──

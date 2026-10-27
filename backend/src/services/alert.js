@@ -1,34 +1,55 @@
 const { pool } = require("../config/database");
-const { sendPush } = require("../config/firebase");
 const { sendSMS } = require("./sms");
 const { cacheGet, cacheSet, isRedisReady } = require("../config/redis");
+const { phoneLookupVariants } = require("../utils/phone");
+const { sendPushToUser } = require("./pushTargets");
 
 const ALERT_RADIUS_KM = 0.5;
 const NEARBY_CACHE_KEY = "alerts:nearby_users";
 const NEARBY_CACHE_TTL = 30;
 
+const resolveContactUserId = async (client, contactPhone) => {
+  const variants = phoneLookupVariants(contactPhone);
+  if (!variants.length) return null;
+  const res = await client.query(
+    `SELECT id FROM users WHERE phone = ANY($1::text[]) LIMIT 1`,
+    [variants]
+  );
+  return res.rows[0]?.id || null;
+};
+
 const notifyContacts = async (client, userId, user, messageTitle, messageBody, smsBody, dataType) => {
   const contactsResult = await client.query(
-    `SELECT tc.contact_name, tc.contact_phone, u.fcm_token, u.id as contact_user_id
+    `SELECT tc.contact_name, tc.contact_phone
      FROM trust_contacts tc
-     LEFT JOIN users u ON tc.contact_phone = u.phone
      WHERE tc.user_id = $1`,
     [userId]
   );
 
+  let pushSent = 0;
   for (const contact of contactsResult.rows) {
-    if (contact.contact_user_id && String(contact.contact_user_id) === String(userId)) {
+    const contactUserId = await resolveContactUserId(client, contact.contact_phone);
+    if (contactUserId && String(contactUserId) === String(userId)) {
       continue;
     }
-    if (contact.contact_user_id && contact.fcm_token) {
-      await sendPush(contact.fcm_token, {
+    if (contactUserId) {
+      const n = await sendPushToUser(contactUserId, {
         notification: { title: messageTitle, body: messageBody },
         data: { type: dataType, userId: String(userId) },
       });
+      if (n > 0) pushSent += 1;
     }
-    await sendSMS(contact.contact_phone, smsBody);
+    try {
+      await sendSMS(contact.contact_phone, smsBody);
+    } catch (err) {
+      console.error("SOS contact SMS failed:", err.message);
+    }
   }
 
+  console.log("SOS contacts notified", {
+    contacts: contactsResult.rows.length,
+    pushSent,
+  });
   return contactsResult.rows.length;
 };
 
@@ -43,18 +64,23 @@ const getNearbyUsers = async (client, userId, lat, lng) => {
     }
   }
 
+  // Haversine approx in meters (avoids broken geometry casts on last_lat/lng columns).
   const nearbyResult = await client.query(
     `SELECT u.id, u.fcm_token, u.phone, u.last_lat, u.last_lng
      FROM users u
      WHERE u.id != $1
        AND u.last_lat IS NOT NULL
        AND u.last_lng IS NOT NULL
-       AND ST_DWithin(
-         u.last_lng::text::geometry,
-         ST_MakePoint($3, $2)::geography,
-         $4
-       )
-       AND u.last_seen_at > NOW() - INTERVAL '30 minutes'`,
+       AND u.last_seen_at > NOW() - INTERVAL '30 minutes'
+       AND (
+         6371000 * acos(
+           least(1.0, greatest(-1.0,
+             cos(radians($2)) * cos(radians(u.last_lat))
+             * cos(radians(u.last_lng) - radians($3))
+             + sin(radians($2)) * sin(radians(u.last_lat))
+           ))
+         )
+       ) <= $4`,
     [userId, lat, lng, ALERT_RADIUS_KM * 1000]
   );
 
@@ -109,22 +135,20 @@ const sendAlert = async (userId, lat, lng, incidentType, zoneName = null) => {
     const nearbyUsers = await getNearbyUsers(client, userId, lat, lng);
 
     for (const nu of nearbyUsers) {
-      if (nu.fcm_token) {
-        await sendPush(nu.fcm_token, {
-          notification: {
-            title: "🚨 Alerte dans votre quartier",
-            body: `${user.pseudo} signale un incident à proximité — ${where}`,
-          },
-          data: {
-            type: "nearby_alert",
-            userId: String(userId),
-            lat: String(lat),
-            lng: String(lng),
-            zone_name: zoneName ? String(zoneName) : "",
-            incidentType,
-          },
-        });
-      }
+      await sendPushToUser(nu.id, {
+        notification: {
+          title: "🚨 Alerte dans votre quartier",
+          body: `${user.pseudo} signale un incident à proximité — ${where}`,
+        },
+        data: {
+          type: "nearby_alert",
+          userId: String(userId),
+          lat: String(lat),
+          lng: String(lng),
+          zone_name: zoneName ? String(zoneName) : "",
+          incidentType,
+        },
+      });
     }
 
     return { contactsNotified, nearbyNotified: nearbyUsers.length };
@@ -156,18 +180,16 @@ const sendCancelAlert = async (userId, lat, lng) => {
     const nearbyUsers = await getNearbyUsers(client, userId, lat, lng);
 
     for (const nu of nearbyUsers) {
-      if (nu.fcm_token) {
-        await sendPush(nu.fcm_token, {
-          notification: {
-            title: "Fausse alerte — quartier",
-            body: `${user.pseudo} : fausse alerte. Situation sous contrôle.`,
-          },
-          data: {
-            type: "false_alarm",
-            userId: String(userId),
-          },
-        });
-      }
+      await sendPushToUser(nu.id, {
+        notification: {
+          title: "Fausse alerte — quartier",
+          body: `${user.pseudo} : fausse alerte. Situation sous contrôle.`,
+        },
+        data: {
+          type: "false_alarm",
+          userId: String(userId),
+        },
+      });
     }
 
     return { contactsNotified, nearbyNotified: nearbyUsers.length };

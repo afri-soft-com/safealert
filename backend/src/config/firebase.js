@@ -93,7 +93,8 @@ const sendPush = async (token, payload) => {
     const msg = await fcm.messaging().send(message);
     return msg;
   } catch (err) {
-    logError("FCM send error:", err);
+    const code = err?.errorInfo?.code || err?.code || "";
+    logError("FCM send error:", code || err.message, err?.errorInfo || "");
     return null;
   }
 };

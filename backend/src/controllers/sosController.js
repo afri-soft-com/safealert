@@ -6,8 +6,9 @@ const { resolveZoneName } = require("../utils/incidentZone");
 const { deliverEvent } = require("../services/partnerWebhooks");
 const { notifyLeadersForSOS } = require("../services/sectorNotify");
 const { findMatchingZones } = require("./trustZoneController");
-const { sendPush } = require("../config/firebase");
 const crypto = require("crypto");
+const { phoneLookupVariants } = require("../utils/phone");
+const { sendPushToUser } = require("../services/pushTargets");
 const {
   sosEnabled,
   maintenanceMode,
@@ -163,15 +164,20 @@ const triggerSOS = async (req, res) => {
       const zones = await findMatchingZones(lat, lng);
       for (const z of zones) {
         if (z.user_id === req.userId) continue;
-        const contacts = await pool.query(
-          `SELECT u.id AS uid, u.fcm_token FROM trust_contacts tc
-           LEFT JOIN users u ON tc.contact_phone = u.phone
-           WHERE tc.user_id = $1 AND u.fcm_token IS NOT NULL`,
+        const tzContacts = await pool.query(
+          `SELECT contact_phone FROM trust_contacts WHERE user_id = $1`,
           [z.user_id]
         );
-        for (const c of contacts.rows) {
-          if (c.uid && String(c.uid) === String(req.userId)) continue;
-          await sendPush(c.fcm_token, {
+        for (const tc of tzContacts.rows) {
+          const variants = phoneLookupVariants(tc.contact_phone);
+          if (!variants.length) continue;
+          const matched = await pool.query(
+            `SELECT id FROM users WHERE phone = ANY($1::text[]) LIMIT 1`,
+            [variants]
+          );
+          const uid = matched.rows[0]?.id;
+          if (!uid || String(uid) === String(req.userId)) continue;
+          await sendPushToUser(uid, {
             notification: {
               title: `📍 Alerte près de ${z.label}`,
               body: `SOS signalé dans votre zone ${z.zone_type}`,

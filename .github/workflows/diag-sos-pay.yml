@@ -1,0 +1,246 @@
+name: Diag SOS + Pay
+on:
+  workflow_dispatch:
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install pg
+        working-directory: backend
+        run: npm ci --omit=dev
+      - name: Query prod DB + probe hubs
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          AFRISOFT_PAY_HUB_URL: https://pay.afri-soft.com
+          AFRISOFT_PAY_HUB_APP_ID: safealert
+          AFRISOFT_PAY_HUB_API_KEY: ${{ secrets.AFRISOFT_PAY_HUB_API_KEY }}
+          FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
+          FCM_CLIENT_EMAIL: ${{ secrets.FCM_CLIENT_EMAIL }}
+          FCM_PRIVATE_KEY: ${{ secrets.FCM_PRIVATE_KEY }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_API_SERVICE_ID }}
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { Pool } = require("pg");
+          const crypto = require("crypto");
+          const admin = require("firebase-admin");
+
+          const pool = new Pool({
+            connectionString: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false },
+          });
+
+          function maskPhone(p) {
+            const s = String(p || "");
+            if (s.length < 6) return "***";
+            return s.slice(0, 4) + "****" + s.slice(-3);
+          }
+
+          (async () => {
+            console.log("=== HEALTH REMOTE ===");
+            for (const u of [
+              "https://safealert-api.onrender.com/health",
+              "https://safealert-api.onrender.com/health/ready",
+            ]) {
+              const r = await fetch(u);
+              console.log(u, await r.text());
+            }
+
+            console.log("\n=== TABLE CHECK ===");
+            const tables = await pool.query(`
+              SELECT table_name FROM information_schema.tables
+              WHERE table_schema='public'
+                AND table_name IN ('premium_payment_intents','trust_contacts','user_devices','incidents','users')
+              ORDER BY 1`);
+            console.log(tables.rows.map((r) => r.table_name).join(", "));
+
+            if (tables.rows.some((r) => r.table_name === "premium_payment_intents")) {
+              const pay = await pool.query(`
+                SELECT status, telecom, failure_reason, amount_cdf, created_at, payer_phone
+                FROM premium_payment_intents
+                ORDER BY created_at DESC LIMIT 12`);
+              console.log("\n=== RECENT PAYMENTS ===");
+              for (const row of pay.rows) {
+                console.log(
+                  JSON.stringify({
+                    ...row,
+                    payer_phone: maskPhone(row.payer_phone),
+                    created_at: row.created_at,
+                  })
+                );
+              }
+            } else {
+              console.log("MISSING premium_payment_intents");
+            }
+
+            const toks = await pool.query(`
+              SELECT COUNT(*)::int AS users,
+                     COUNT(*) FILTER (WHERE fcm_token IS NOT NULL AND length(trim(fcm_token))>0)::int AS with_fcm
+              FROM users`);
+            console.log("\n=== USERS FCM ===", toks.rows[0]);
+
+            try {
+              const dev = await pool.query(`
+                SELECT COUNT(*)::int AS devices,
+                       COUNT(*) FILTER (WHERE fcm_token IS NOT NULL AND revoked_at IS NULL)::int AS with_fcm
+                FROM user_devices`);
+              console.log("=== DEVICES FCM ===", dev.rows[0]);
+            } catch (e) {
+              console.log("user_devices error", e.message);
+            }
+
+            const matchExact = await pool.query(`
+              SELECT COUNT(*)::int AS exact_match
+              FROM trust_contacts tc JOIN users u ON tc.contact_phone = u.phone`);
+            const matchDigit = await pool.query(`
+              SELECT COUNT(*)::int AS digit_match
+              FROM trust_contacts tc
+              JOIN users u ON right(regexp_replace(tc.contact_phone,'\\D','','g'),9)
+                           = right(regexp_replace(COALESCE(u.phone,''),'\\D','','g'),9)`);
+            const contactTotal = await pool.query(`SELECT COUNT(*)::int AS n FROM trust_contacts`);
+            console.log("=== CONTACTS ===", {
+              total: contactTotal.rows[0].n,
+              exact_match: matchExact.rows[0].exact_match,
+              digit_match: matchDigit.rows[0].digit_match,
+            });
+
+            const sample = await pool.query(`
+              SELECT tc.contact_phone AS stored_contact, u.phone AS matched_user,
+                     (u.fcm_token IS NOT NULL AND length(trim(u.fcm_token))>0) AS has_fcm
+              FROM trust_contacts tc
+              LEFT JOIN users u ON right(regexp_replace(tc.contact_phone,'\\D','','g'),9)
+                                = right(regexp_replace(COALESCE(u.phone,''),'\\D','','g'),9)
+              LIMIT 10`);
+            console.log("=== CONTACT SAMPLE ===");
+            for (const row of sample.rows) {
+              console.log(JSON.stringify({
+                stored_contact: maskPhone(row.stored_contact),
+                matched_user: maskPhone(row.matched_user),
+                has_fcm: row.has_fcm,
+              }));
+            }
+
+            console.log("\n=== PAY HUB PROBE ===");
+            const appId = "safealert";
+            const key = process.env.AFRISOFT_PAY_HUB_API_KEY || "";
+            const ts = String(Math.floor(Date.now() / 1000));
+            const path = "/v1/health";
+            const method = "GET";
+            const rawBody = "";
+            const sig = crypto
+              .createHmac("sha256", key)
+              .update(`${ts}.${method}.${path}.${rawBody}`)
+              .digest("hex");
+            try {
+              const hr = await fetch(`https://pay.afri-soft.com${path}`, {
+                headers: {
+                  "X-AfriSoft-App-Id": appId,
+                  "X-AfriSoft-Api-Key": key,
+                  "X-AfriSoft-Timestamp": ts,
+                  "X-AfriSoft-Signature": sig,
+                },
+              });
+              console.log("pay hub health", hr.status, (await hr.text()).slice(0, 300));
+            } catch (e) {
+              console.log("pay hub error", e.message);
+            }
+
+            // Dry-run payment validation path (will fail on purpose with tiny amount)
+            const bodyObj = {
+              app_id: appId,
+              amount_cdf: 100,
+              currency: "CDF",
+              phone: "243970000000",
+              telecom: "MP",
+              reference: `diag-${Date.now()}`,
+              purpose: "pay",
+              idempotency_key: `diag-${Date.now()}`,
+            };
+            const raw = JSON.stringify(bodyObj);
+            const ts2 = String(Math.floor(Date.now() / 1000));
+            const path2 = "/v1/payments";
+            const sig2 = crypto
+              .createHmac("sha256", key)
+              .update(`${ts2}.POST.${path2}.${raw}`)
+              .digest("hex");
+            const pr = await fetch(`https://pay.afri-soft.com${path2}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-AfriSoft-App-Id": appId,
+                "X-AfriSoft-Api-Key": key,
+                "X-AfriSoft-Timestamp": ts2,
+                "X-AfriSoft-Signature": sig2,
+              },
+              body: raw,
+            });
+            const pt = await pr.text();
+            console.log("pay hub POST tiny amount", pr.status, pt.slice(0, 400));
+
+            console.log("\n=== FCM INIT + DRY SEND ===");
+            try {
+              admin.initializeApp({
+                credential: admin.credential.cert({
+                  projectId: process.env.FCM_PROJECT_ID,
+                  clientEmail: process.env.FCM_CLIENT_EMAIL,
+                  privateKey: (process.env.FCM_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+                }),
+              });
+              console.log("FCM admin init OK", process.env.FCM_PROJECT_ID);
+              const tokRow = await pool.query(`
+                SELECT fcm_token FROM users
+                WHERE fcm_token IS NOT NULL AND length(trim(fcm_token)) > 20
+                ORDER BY updated_at DESC NULLS LAST LIMIT 1`);
+              const token = tokRow.rows[0]?.fcm_token;
+              if (!token) {
+                console.log("No FCM token in DB to test");
+              } else {
+                try {
+                  await admin.messaging().send({
+                    token,
+                    data: { type: "diag_ping", ts: String(Date.now()) },
+                    android: { priority: "high" },
+                  });
+                  console.log("FCM dry send OK to token ending", token.slice(-8));
+                } catch (e) {
+                  console.log("FCM dry send FAIL", e.errorInfo || e.message);
+                }
+              }
+            } catch (e) {
+              console.log("FCM init FAIL", e.message);
+            }
+
+            console.log("\n=== RENDER LOGS (names) ===");
+            try {
+              const svc = await fetch(
+                `https://api.render.com/v1/services/${process.env.SERVICE_ID}`,
+                { headers: { Authorization: `Bearer ${process.env.RENDER_API_KEY}` } }
+              );
+              const sj = await svc.json();
+              console.log("service", sj.name || sj.service?.name, "status", sj.status || sj.service?.status);
+              const ownerId = sj.ownerId || sj.service?.ownerId || sj.owner?.id;
+              if (ownerId) {
+                const logs = await fetch(
+                  `https://api.render.com/v1/logs?ownerId=${ownerId}&resource=${process.env.SERVICE_ID}&limit=30&text=FCM|Pay hub|SMS|error`,
+                  { headers: { Authorization: `Bearer ${process.env.RENDER_API_KEY}` } }
+                );
+                const lj = await logs.text();
+                console.log(lj.slice(0, 2500));
+              }
+            } catch (e) {
+              console.log("render logs error", e.message);
+            }
+
+            await pool.end();
+          })().catch((e) => {
+            console.error(e);
+            process.exit(1);
+          });
+          NODE

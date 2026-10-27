@@ -142,6 +142,13 @@ app.get("/health", (req, res) => {
     redis: isRedisReady() ? "up" : "down",
     fcm: isFcmConfigured() ? "up" : "down",
     sms: isSMSConfigured() ? "up" : "down",
+    payHub: (() => {
+      try {
+        return require("./services/afrisoftPayHub").isConfigured() ? "up" : "down";
+      } catch (_) {
+        return "down";
+      }
+    })(),
   });
 });
 
