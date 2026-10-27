@@ -1,7 +1,7 @@
 name: safealert
 description: "SafeAlert - Application de Sécurité Citoyenne"
 publish_to: 'none'
-version: 1.0.41+62
+version: 1.0.42+63
 
 environment:
   sdk: ^3.8.1
