@@ -98,9 +98,12 @@ const sendPush = async (token, payload) => {
   }
 };
 
+const isFcmConfigured = () => Boolean(fcm);
+
 module.exports = {
   initFCM,
   sendPush,
+  isFcmConfigured,
   SOS_PUSH_TYPES,
   SOS_CHANNEL_ID,
   SOS_CHANNEL_ID_LEGACY,

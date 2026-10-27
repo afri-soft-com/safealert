@@ -87,8 +87,16 @@ String? mapKnownApiMessage(String message) {
     if (lower.contains('invalide') && lower.contains('numéro')) {
       return 'Numéro Mobile Money invalide. Utilisez un numéro RDC (+243 puis 9 chiffres).';
     }
+    if (lower.contains('orange') &&
+        (lower.contains('refus') ||
+            lower.contains('peu fiable') ||
+            lower.contains('préférez'))) {
+      // Keep server OM-specific guidance (already French).
+      return message.trim();
+    }
     if (lower.contains('impossible de démarrer') || lower.contains('initiation')) {
-      return 'Impossible de démarrer le paiement Mobile Money. Vérifiez le numéro et réessayez.';
+      return 'Impossible de démarrer le paiement Mobile Money. '
+          'Vérifiez le numéro (9 chiffres après +243) et préférez M-Pesa ou Airtel Money.';
     }
     if (lower.contains('échoué') || lower.contains('failed')) {
       return 'Paiement Mobile Money échoué. Réessayez ou changez d\'opérateur.';

@@ -20,8 +20,21 @@ const hubBaseUrl = () =>
     .trim()
     .replace(/\/$/, "");
 
-const hubAppId = () => (process.env.AFRISOFT_HUB_APP_ID || "").trim();
-const hubApiKey = () => (process.env.AFRISOFT_HUB_API_KEY || "").trim();
+/** Prefer SMS-specific credentials; fall back to pay-hub keys (same AfriSoft org). */
+const hubAppId = () =>
+  (
+    process.env.AFRISOFT_HUB_APP_ID ||
+    process.env.AFRISOFT_SMS_HUB_APP_ID ||
+    process.env.AFRISOFT_PAY_HUB_APP_ID ||
+    ""
+  ).trim();
+const hubApiKey = () =>
+  (
+    process.env.AFRISOFT_HUB_API_KEY ||
+    process.env.AFRISOFT_SMS_HUB_API_KEY ||
+    process.env.AFRISOFT_PAY_HUB_API_KEY ||
+    ""
+  ).trim();
 
 const normalizeHubPhone = (to) => {
   let p = String(to || "").replace(/\s/g, "");

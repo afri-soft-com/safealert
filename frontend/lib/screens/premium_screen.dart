@@ -97,18 +97,34 @@ class _PremiumScreenState extends State<PremiumScreen> {
     }
   }
 
-  /// RDC Mobile Money: +243 + 9 digits (e.g. 0970… → 243970…).
-  String? _validateMmPhone(String raw) {
+  /// Normalize to 243XXXXXXXXX (12 digits) or null if incomplete.
+  String? _normalizeMmDigits(String raw) {
     var digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('243') && digits.length > 12) {
+      digits = digits.substring(0, 12);
+    }
     if (digits.startsWith('0') && digits.length == 10) {
       digits = '243${digits.substring(1)}';
     } else if (digits.length == 9) {
       digits = '243$digits';
     }
-    if (!RegExp(r'^243\d{9}$').hasMatch(digits)) {
-      return 'Numéro incomplet ou invalide. Exemple : 0970123456 ou +243970123456';
-    }
-    return null;
+    if (!RegExp(r'^243\d{9}$').hasMatch(digits)) return null;
+    return digits;
+  }
+
+  int _nationalDigitCount(String raw) {
+    var digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('243')) digits = digits.substring(3);
+    if (digits.startsWith('0')) digits = digits.substring(1);
+    return digits.length.clamp(0, 9);
+  }
+
+  /// RDC Mobile Money: +243 + 9 digits (e.g. 0970… → 243970…).
+  String? _validateMmPhone(String raw) {
+    if (_normalizeMmDigits(raw) != null) return null;
+    final n = _nationalDigitCount(raw);
+    if (n == 0) return 'Entrez votre numéro Mobile Money';
+    return 'Numéro incomplet ($n/9 chiffres après +243). Exemple : 0970123456';
   }
 
   Future<void> _payMobileMoney() async {
@@ -394,13 +410,24 @@ class _PremiumScreenState extends State<PremiumScreen> {
                                   ),
                                 ],
                               ),
+                              if (_telecom == 'OM') ...[
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Orange Money échoue souvent. Choisissez M-Pesa ou Airtel Money.',
+                                  style: TextStyle(fontSize: 11, color: AppColors.rouge),
+                                ),
+                              ],
                               const SizedBox(height: 12),
                               TextField(
                                 controller: _phoneCtrl,
                                 keyboardType: TextInputType.phone,
+                                onChanged: (_) => setState(() {}),
                                 decoration: InputDecoration(
                                   labelText: 'Numéro Mobile Money',
-                                  hintText: '0970… ou +243…',
+                                  hintText: '0970123456 ou +243970123456',
+                                  helperText:
+                                      '${_nationalDigitCount(_phoneCtrl.text)}/9 chiffres locaux (RDC)',
+                                  helperMaxLines: 2,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),
@@ -410,7 +437,10 @@ class _PremiumScreenState extends State<PremiumScreen> {
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton(
-                                  onPressed: (_acting || _polling)
+                                  onPressed: (_acting ||
+                                          _polling ||
+                                          _validateMmPhone(_phoneCtrl.text.trim()) !=
+                                              null)
                                       ? null
                                       : _payMobileMoney,
                                   style: ElevatedButton.styleFrom(

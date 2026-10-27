@@ -181,11 +181,16 @@ async function createPayment({
 
   const { ok, status, data } = await sendSigned("POST", "/v1/payments", body);
   if (!ok) {
-    warn(
-      "Pay hub POST /v1/payments failed",
-      status,
-      tryReadErrorMessage(data) || ""
-    );
+    const hubMsg = tryReadErrorMessage(data);
+    warn("Pay hub POST /v1/payments failed", status, hubMsg || "");
+    let error =
+      hubMsg || "Impossible de démarrer le paiement Mobile Money.";
+    if (body.telecom === "OM" && !hubMsg) {
+      error =
+        "Orange Money a refusé l'initiation. Réessayez avec M-Pesa ou Airtel Money.";
+    } else if (body.telecom === "OM" && hubMsg) {
+      error = `${hubMsg} (Orange Money peu fiable — préférez M-Pesa ou Airtel Money.)`;
+    }
     return {
       ok: false,
       status: "FAILED",
@@ -196,9 +201,7 @@ async function createPayment({
       telecom: body.telecom,
       message: null,
       payment_url: null,
-      error:
-        tryReadErrorMessage(data) ||
-        "Impossible de démarrer le paiement Mobile Money.",
+      error,
       http_status: status,
     };
   }

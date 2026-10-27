@@ -2,7 +2,7 @@ const features = require("../config/features");
 const { getMaintenance } = require("../services/appSettings");
 
 /** Soft-update target (bump when a newer build is on the store / ready). */
-const DEFAULT_MOBILE_VERSION = "1.0.45";
+const DEFAULT_MOBILE_VERSION = "1.0.46";
 /** Soft-update target for admin-web (bump ahead of a deploy to show the banner). */
 const DEFAULT_ADMIN_WEB_VERSION = "1.0.14";
 
@@ -46,12 +46,26 @@ async function configPayload() {
   const banner = m.maintenance
     ? m.message
     : ((process.env.APP_MAINTENANCE_BANNER || "").trim() || "");
+  let fcmConfigured = false;
+  let smsConfigured = false;
+  try {
+    fcmConfigured = require("../config/firebase").isFcmConfigured();
+  } catch (_) {
+    /* ignore */
+  }
+  try {
+    smsConfigured = require("../services/sms").isSMSConfigured();
+  } catch (_) {
+    /* ignore */
+  }
 
   return {
     ...versionPayload(),
     maintenance: m.maintenance,
     sosEnabled,
     maintenanceBanner: banner,
+    pushConfigured: fcmConfigured,
+    smsConfigured,
     features: {
       checkIn: features.checkIn(),
       safeTrip: features.safeTrip(),

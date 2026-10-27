@@ -9,8 +9,8 @@ const { Server } = require("socket.io");
 const { apiLimiter } = require("./middleware/rateLimit");
 const { maintenanceGate } = require("./middleware/maintenance");
 const { pool } = require("./config/database");
-const { initFCM } = require("./config/firebase");
-const { initSMS } = require("./services/sms");
+const { initFCM, isFcmConfigured } = require("./config/firebase");
+const { initSMS, isSMSConfigured } = require("./services/sms");
 const { initRedis, isRedisReady } = require("./config/redis");
 const { socketRedisAdapter } = require("./config/features");
 const { log, warn } = require("./utils/logger");
@@ -140,6 +140,8 @@ app.get("/health", (req, res) => {
     service: "SafeAlert API",
     version: "1.0.0",
     redis: isRedisReady() ? "up" : "down",
+    fcm: isFcmConfigured() ? "up" : "down",
+    sms: isSMSConfigured() ? "up" : "down",
   });
 });
 
@@ -151,6 +153,8 @@ app.get("/health/ready", async (req, res) => {
       service: "SafeAlert API",
       db: "ok",
       redis: isRedisReady() ? "ok" : "disabled",
+      fcm: isFcmConfigured() ? "ok" : "missing",
+      sms: isSMSConfigured() ? "ok" : "missing",
     });
   } catch (err) {
     console.error("Readiness check failed:", err.message);

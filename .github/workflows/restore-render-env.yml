@@ -11,7 +11,7 @@ on:
       app_latest_version:
         description: APP_LATEST_VERSION
         required: true
-        default: "1.0.45"
+        default: "1.0.46"
       admin_web_version:
         description: ADMIN_WEB_VERSION
         required: true
@@ -50,6 +50,12 @@ jobs:
           GOOGLE_ANDROID_CLIENT_ID: ${{ inputs.google_android_client_id }}
           AFRISOFT_PAY_HUB_API_KEY: ${{ secrets.AFRISOFT_PAY_HUB_API_KEY }}
           AFRISOFT_PAY_HUB_WEBHOOK_SECRET: ${{ secrets.AFRISOFT_PAY_HUB_WEBHOOK_SECRET }}
+          AFRISOFT_HUB_APP_ID: ${{ secrets.AFRISOFT_HUB_APP_ID }}
+          AFRISOFT_HUB_API_KEY: ${{ secrets.AFRISOFT_HUB_API_KEY }}
+          AFRISOFT_SMS_HUB_URL: ${{ secrets.AFRISOFT_SMS_HUB_URL }}
+          FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
+          FCM_CLIENT_EMAIL: ${{ secrets.FCM_CLIENT_EMAIL }}
+          FCM_PRIVATE_KEY: ${{ secrets.FCM_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           put_key() {
@@ -89,8 +95,21 @@ jobs:
           if [ -n "${AFRISOFT_PAY_HUB_API_KEY:-}" ]; then
             put_key AFRISOFT_PAY_HUB_API_KEY "$AFRISOFT_PAY_HUB_API_KEY"
             put_key AFRISOFT_PAY_HUB_WEBHOOK_SECRET "${AFRISOFT_PAY_HUB_WEBHOOK_SECRET:-$AFRISOFT_PAY_HUB_API_KEY}"
+            # SMS hub often shares the same AfriSoft credentials (OTP + group SOS SMS).
+            put_key AFRISOFT_HUB_APP_ID "${AFRISOFT_HUB_APP_ID:-safealert}"
+            put_key AFRISOFT_HUB_API_KEY "${AFRISOFT_HUB_API_KEY:-$AFRISOFT_PAY_HUB_API_KEY}"
+            put_key AFRISOFT_SMS_HUB_URL "${AFRISOFT_SMS_HUB_URL:-https://sms.afri-soft.com}"
           else
             echo "WARN: AFRISOFT_PAY_HUB_API_KEY GitHub secret missing - hub keys not updated"
+          fi
+
+          # Firebase Cloud Messaging (optional — without these, SOS push is silent)
+          if [ -n "${FCM_PROJECT_ID:-}" ] && [ -n "${FCM_CLIENT_EMAIL:-}" ] && [ -n "${FCM_PRIVATE_KEY:-}" ]; then
+            put_key FCM_PROJECT_ID "$FCM_PROJECT_ID"
+            put_key FCM_CLIENT_EMAIL "$FCM_CLIENT_EMAIL"
+            put_key FCM_PRIVATE_KEY "$FCM_PRIVATE_KEY"
+          else
+            echo "WARN: FCM_* GitHub secrets missing — SOS push will stay disabled until set (see docs/FIREBASE_SETUP.md)"
           fi
 
       - name: List env keys (names only)
