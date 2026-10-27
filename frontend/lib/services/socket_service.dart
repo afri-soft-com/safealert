@@ -64,6 +64,14 @@ class SocketService {
         _onSosAlert?.call(Map<String, dynamic>.from(data));
       }
     });
+    // Group fan-out for online members (even without FCM).
+    _socket!.on('group_sos', (data) {
+      if (data is Map) {
+        final map = Map<String, dynamic>.from(data);
+        map.putIfAbsent('incident_type', () => 'group_sos');
+        _onSosAlert?.call(map);
+      }
+    });
     _socket!.on('sos_live', (data) {
       if (data is Map) {
         final map = Map<String, dynamic>.from(data);

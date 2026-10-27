@@ -132,14 +132,20 @@ const triggerSOS = async (req, res) => {
     );
 
     const userRes = await pool.query("SELECT pseudo FROM users WHERE id = $1", [req.userId]);
-    const groupNotification = await notifyUserGroupsOnSOS(
-      req.userId,
-      lat,
-      lng,
-      userRes.rows[0]?.pseudo || "Un membre",
-      incident.zone_name
-    );
-    notification.groupSos = groupNotification;
+    try {
+      const groupNotification = await notifyUserGroupsOnSOS(
+        req.userId,
+        lat,
+        lng,
+        userRes.rows[0]?.pseudo || "Un membre",
+        incident.zone_name,
+        req.app.get("io")
+      );
+      notification.groupSos = groupNotification;
+    } catch (groupErr) {
+      console.error("notifyUserGroupsOnSOS error:", groupErr.message);
+      notification.groupSos = { groupsNotified: 0, membersNotified: 0, alertsCreated: 0, error: true };
+    }
 
     await invalidateActiveAlerts();
 

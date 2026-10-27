@@ -224,7 +224,8 @@ const reportIncident = async (req, res) => {
         lng,
         displayName,
         incident.zone_name,
-        incident.incident_type
+        incident.incident_type,
+        req.app.get("io")
       );
     } catch (groupErr) {
       console.error("reportIncident group notify:", groupErr.message);

@@ -65,6 +65,19 @@ describe("notifyUserGroupsOnSOS", () => {
     expect(insertCall[1][3]).toMatch(/^SOS/);
     expect(mockSendPush).toHaveBeenCalledTimes(1);
   });
+
+  it("still creates feed alert when no FCM tokens", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ sos_notify_groups: true }] })
+      .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
+      .mockResolvedValueOnce({ rows: [{ id: "a1" }] })
+      .mockResolvedValueOnce({ rows: [] }); // no device tokens
+
+    const out = await notifyUserGroupsOnSOS("u1", -4.3, 15.3, "Alice");
+    expect(out.alertsCreated).toBe(1);
+    expect(out.membersNotified).toBe(0);
+    expect(mockSendPush).not.toHaveBeenCalled();
+  });
 });
 
 describe("notifyUserGroupsOnReport", () => {
