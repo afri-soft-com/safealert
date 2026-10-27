@@ -103,6 +103,14 @@ class AppUpdateService {
         return;
       }
 
+      // Surface soft banner even when Play handles the download (backend
+      // version env can lag behind the store listing).
+      if (!_updateAvailable) {
+        _updateAvailable = true;
+        _latestVersion ??= 'nouvelle';
+        _onStateChanged?.call();
+      }
+
       // Prefer flexible UX; fall back to immediate if only that is allowed.
       if (info.flexibleUpdateAllowed && !_flexibleDownloadStarted) {
         _flexibleDownloadStarted = true;
@@ -176,9 +184,15 @@ class AppUpdateService {
     final belowLatest =
         latest.isNotEmpty && compareVersions(current, latest) < 0;
 
-    // Installed >= latest: hide immediately (ignore stale force flag / cache).
+    // Installed >= API latest: only clear if Play also did not flag an update.
     if (!belowMin && !belowLatest) {
-      if (_updateAvailable || _latestVersion != null || _forceUpdate) {
+      if (!_flexibleDownloadStarted &&
+          (_updateAvailable || _latestVersion != null || _forceUpdate)) {
+        // Keep banner if Play already reported an available store update.
+        if (_latestVersion == 'nouvelle') {
+          _onStateChanged?.call();
+          return;
+        }
         _updateAvailable = false;
         _forceUpdate = false;
         _latestVersion = null;

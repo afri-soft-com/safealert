@@ -1,7 +1,8 @@
 const path = require("path");
 
 const mockQuery = vi.fn();
-const mockSendPush = vi.fn().mockResolvedValue(true);
+const mockSendPush = vi.fn().mockResolvedValue("msg-1");
+const mockSendSMS = vi.fn().mockResolvedValue(true);
 
 const dbPath = path.resolve(__dirname, "../src/config/database.js");
 require.cache[dbPath] = {
@@ -19,7 +20,14 @@ require.cache[firebasePath] = {
   exports: { sendPush: mockSendPush },
 };
 
-// Clear cached module so it picks up our mocks
+const smsPath = path.resolve(__dirname, "../src/services/sms.js");
+require.cache[smsPath] = {
+  id: smsPath,
+  filename: smsPath,
+  loaded: true,
+  exports: { sendSMS: mockSendSMS },
+};
+
 const servicePath = path.resolve(__dirname, "../src/services/groupNotify.js");
 delete require.cache[servicePath];
 
@@ -32,38 +40,37 @@ describe("notifyUserGroupsOnSOS", () => {
   beforeEach(() => {
     mockQuery.mockReset();
     mockSendPush.mockClear();
+    mockSendSMS.mockClear();
   });
 
   it("skips when sos_notify_groups is false", async () => {
     mockQuery.mockResolvedValueOnce({ rows: [{ sos_notify_groups: false }] });
     const out = await notifyUserGroupsOnSOS("u1", -4.3, 15.3, "Alice");
-    expect(out).toEqual({ groupsNotified: 0, membersNotified: 0, alertsCreated: 0 });
+    expect(out.groupsNotified).toBe(0);
+    expect(out.alertsCreated).toBe(0);
     expect(mockQuery).toHaveBeenCalledTimes(1);
   });
 
-  it("inserts a group_alerts row and notifies members", async () => {
+  it("inserts alert, pushes and SMS other members", async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [{ sos_notify_groups: true }] })
       .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
-      .mockResolvedValueOnce({ rows: [{ id: "a1" }] })
+      .mockResolvedValueOnce({ rows: [{ id: "a1" }] }) // INSERT alert
       .mockResolvedValueOnce({
         rows: [{ id: "u2", fcm_token: "tok", pseudo: "Bob" }],
-      });
+      }) // tokens
+      .mockResolvedValueOnce({
+        rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000000" }],
+      }); // contactable for SMS
 
     const out = await notifyUserGroupsOnSOS("u1", -4.321, 15.312, "Alice", "Gombe");
 
     expect(out.groupsNotified).toBe(1);
     expect(out.alertsCreated).toBe(1);
-    expect(out.membersNotified).toBe(1);
-
-    const insertCall = mockQuery.mock.calls.find(
-      ([sql]) => typeof sql === "string" && sql.includes("INSERT INTO group_alerts")
-    );
-    expect(insertCall).toBeTruthy();
-    expect(insertCall[1][0]).toBe("g1");
-    expect(insertCall[1][1]).toBe("u1");
-    expect(insertCall[1][3]).toMatch(/^SOS/);
+    expect(out.pushNotified).toBe(1);
+    expect(out.smsNotified).toBe(1);
     expect(mockSendPush).toHaveBeenCalledTimes(1);
+    expect(mockSendSMS).toHaveBeenCalledTimes(1);
   });
 
   it("still creates feed alert when no FCM tokens", async () => {
@@ -71,11 +78,12 @@ describe("notifyUserGroupsOnSOS", () => {
       .mockResolvedValueOnce({ rows: [{ sos_notify_groups: true }] })
       .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
       .mockResolvedValueOnce({ rows: [{ id: "a1" }] })
-      .mockResolvedValueOnce({ rows: [] }); // no device tokens
+      .mockResolvedValueOnce({ rows: [] }) // no tokens
+      .mockResolvedValueOnce({ rows: [] }); // no phones
 
     const out = await notifyUserGroupsOnSOS("u1", -4.3, 15.3, "Alice");
     expect(out.alertsCreated).toBe(1);
-    expect(out.membersNotified).toBe(0);
+    expect(out.pushNotified).toBe(0);
     expect(mockSendPush).not.toHaveBeenCalled();
   });
 });
@@ -84,9 +92,10 @@ describe("notifyUserGroupsOnReport", () => {
   beforeEach(() => {
     mockQuery.mockReset();
     mockSendPush.mockClear();
+    mockSendSMS.mockClear();
   });
 
-  it("publishes signalement into group feed and pushes members", async () => {
+  it("publishes signalement without SMS", async () => {
     mockQuery
       .mockResolvedValueOnce({ rows: [{ sos_notify_groups: true }] })
       .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
@@ -105,11 +114,8 @@ describe("notifyUserGroupsOnReport", () => {
     );
 
     expect(out.alertsCreated).toBe(1);
-    expect(out.membersNotified).toBe(1);
-    const insertCall = mockQuery.mock.calls.find(
-      ([sql]) => typeof sql === "string" && sql.includes("INSERT INTO group_alerts")
-    );
-    expect(insertCall[1][3]).toMatch(/Signalement/);
+    expect(out.pushNotified).toBe(1);
+    expect(mockSendSMS).not.toHaveBeenCalled();
     expect(mockSendPush.mock.calls[0][1].data.type).toBe("group_report");
   });
 });

@@ -192,10 +192,29 @@ class _SOSScreenState extends State<SOSScreen> {
     _shareUrl = result['share_url']?.toString();
     final approx = note != null && note.isNotEmpty;
 
-    setState(() {
-      if (note != null && note.isNotEmpty) {
-        _statusMsg = note;
+    final groupSos = result['notification'] is Map
+        ? Map<String, dynamic>.from(result['notification'] as Map)['groupSos']
+        : null;
+    String? groupHint;
+    if (groupSos is Map) {
+      final g = (groupSos['groupsNotified'] as num?)?.toInt() ?? 0;
+      final a = (groupSos['alertsCreated'] as num?)?.toInt() ?? 0;
+      final m = (groupSos['membersNotified'] as num?)?.toInt() ?? 0;
+      if (g == 0) {
+        groupHint =
+            'Aucun groupe de voisins lié — rejoignez un groupe pour les alerter.';
+      } else if (a > 0) {
+        groupHint =
+            'Groupe(s) : $g notifié(s), $a alerte(s) publiée(s), $m membre(s) contacté(s).';
       }
+    }
+
+    setState(() {
+      final parts = <String>[
+        if (note != null && note.isNotEmpty) note,
+        if (groupHint != null) groupHint,
+      ];
+      if (parts.isNotEmpty) _statusMsg = parts.join('\n');
       _zoneName = incident?['zone_name']?.toString();
       _sosLat = (incident?['lat'] as num?)?.toDouble() ?? (result['lat'] as num?)?.toDouble();
       _sosLng = (incident?['lng'] as num?)?.toDouble() ?? (result['lng'] as num?)?.toDouble();
