@@ -54,6 +54,7 @@ class AppUpdateService {
   bool get forceUpdate => _forceUpdate;
   String? get latestVersion => _latestVersion;
   String? get currentVersion => _currentVersion;
+  int? get currentBuild => _currentBuild;
   bool get dismissedForCurrentLatest => _dismissedForCurrentLatest;
 
   VoidCallback? _onStateChanged;
