@@ -23,6 +23,7 @@ void main() {
       MaterialApp(
         home: AppUpdateBanner(
           latestVersion: '1.0.8',
+          currentVersion: '1.0.7',
           onUpdate: () {},
           onDismiss: () {},
         ),
@@ -30,7 +31,7 @@ void main() {
     );
 
     expect(find.text('Nouvelle version disponible'), findsOneWidget);
-    expect(find.textContaining('SafeAlert 1.0.8'), findsOneWidget);
+    expect(find.textContaining('1.0.7 → 1.0.8'), findsOneWidget);
     expect(find.text('Mettre à jour'), findsOneWidget);
   });
 }

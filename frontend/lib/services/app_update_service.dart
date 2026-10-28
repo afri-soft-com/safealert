@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme.dart';
@@ -20,7 +21,9 @@ const _kPlayStoreUrl =
 /// ASC / App Store numeric id for com.kakiranya.safealert (override via APP_STORE_URL_IOS).
 const _kAppStoreUrl = 'https://apps.apple.com/app/id6824983610';
 
-/// In-app updates: Google Play (Android release) + backend version fallback.
+const _kDismissPrefsKey = 'safealert_soft_update_dismissed_version';
+
+/// In-app updates: backend version (soft banner) + Google Play (Android release).
 class AppUpdateService {
   AppUpdateService._();
   static final AppUpdateService instance = AppUpdateService._();
@@ -34,7 +37,6 @@ class AppUpdateService {
   Timer? _pollTimer;
   DateTime? _lastCheckAt;
   bool _checking = false;
-  bool _bannerVisible = false;
   bool _forceDialogShown = false;
   bool _flexibleDownloadStarted = false;
   bool _restartPromptShown = false;
@@ -42,12 +44,17 @@ class AppUpdateService {
   String? _storeUrl;
   String? _iosStoreUrl;
   String? _latestVersion;
+  String? _currentVersion;
+  int? _currentBuild;
   bool _updateAvailable = false;
   bool _forceUpdate = false;
+  bool _dismissedForCurrentLatest = false;
 
   bool get updateAvailable => _updateAvailable;
   bool get forceUpdate => _forceUpdate;
   String? get latestVersion => _latestVersion;
+  String? get currentVersion => _currentVersion;
+  bool get dismissedForCurrentLatest => _dismissedForCurrentLatest;
 
   VoidCallback? _onStateChanged;
 
@@ -64,13 +71,24 @@ class AppUpdateService {
     _pollTimer = Timer.periodic(pollInterval, (_) {
       if (context.mounted) check(context);
     });
-    check(context);
+    check(context, force: true);
   }
 
   void dispose() {
     _pollTimer?.cancel();
     _pollTimer = null;
     detach();
+  }
+
+  Future<void> dismissSoftBanner() async {
+    final latest = _latestVersion;
+    if (latest == null || latest.isEmpty) return;
+    _dismissedForCurrentLatest = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kDismissPrefsKey, latest);
+    } catch (_) {}
+    _onStateChanged?.call();
   }
 
   Future<void> check(BuildContext context, {bool force = false}) async {
@@ -84,9 +102,16 @@ class AppUpdateService {
     _lastCheckAt = DateTime.now();
 
     try {
-      await _checkPlayInAppUpdate(context);
-      if (!context.mounted) return;
+      // Backend first — Play In-App Update can hang on some devices and used to
+      // block the soft banner entirely.
       await _checkBackendVersion(context);
+      if (!context.mounted) return;
+      await _checkPlayInAppUpdate(context).timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          debugPrint('AppUpdateService: Play check timed out');
+        },
+      );
     } catch (e) {
       debugPrint('AppUpdateService: check failed ($e)');
     } finally {
@@ -108,6 +133,7 @@ class AppUpdateService {
       if (!_updateAvailable) {
         _updateAvailable = true;
         _latestVersion ??= 'nouvelle';
+        _dismissedForCurrentLatest = false;
         _onStateChanged?.call();
       }
 
@@ -159,13 +185,28 @@ class AppUpdateService {
     );
   }
 
+  Future<void> _loadDismissState(String latest) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _dismissedForCurrentLatest = prefs.getString(_kDismissPrefsKey) == latest;
+    } catch (_) {
+      _dismissedForCurrentLatest = false;
+    }
+  }
+
   Future<void> _checkBackendVersion(BuildContext context) async {
-    Map<String, dynamic> data;
+    Map<String, dynamic>? data;
     try {
       final stamp = DateTime.now().millisecondsSinceEpoch;
       data = await _api.get('/app/version?t=$stamp');
-    } catch (_) {
-      return;
+    } catch (e) {
+      debugPrint('AppUpdateService: /app/version failed ($e)');
+      try {
+        data = await _api.get('/app/config');
+      } catch (e2) {
+        debugPrint('AppUpdateService: /app/config fallback failed ($e2)');
+        return;
+      }
     }
 
     final latest = (data['latestVersion'] as String?)?.trim() ?? '';
@@ -173,16 +214,26 @@ class AppUpdateService {
     final store = (data['storeUrl'] as String?)?.trim();
     final iosStore = (data['iosStoreUrl'] as String?)?.trim();
     final forceFlag = data['forceUpdate'] == true;
+    final latestBuildRaw = data['latestBuild'];
+    final latestBuild = latestBuildRaw is int
+        ? latestBuildRaw
+        : int.tryParse('$latestBuildRaw');
 
     if (store != null && store.isNotEmpty) _storeUrl = store;
     if (iosStore != null && iosStore.isNotEmpty) _iosStoreUrl = iosStore;
 
     final info = await PackageInfo.fromPlatform();
     final current = info.version;
+    final build = int.tryParse(info.buildNumber) ?? 0;
+    _currentVersion = current;
+    _currentBuild = build;
 
     final belowMin = min.isNotEmpty && compareVersions(current, min) < 0;
-    final belowLatest =
+    final belowLatestVersion =
         latest.isNotEmpty && compareVersions(current, latest) < 0;
+    final belowLatestBuild =
+        latestBuild != null && latestBuild > 0 && build > 0 && build < latestBuild;
+    final belowLatest = belowLatestVersion || belowLatestBuild;
 
     // Installed >= API latest: only clear if Play also did not flag an update.
     if (!belowMin && !belowLatest) {
@@ -196,24 +247,30 @@ class AppUpdateService {
         _updateAvailable = false;
         _forceUpdate = false;
         _latestVersion = null;
-        _bannerVisible = false;
+        _dismissedForCurrentLatest = false;
         _onStateChanged?.call();
       }
       return;
     }
 
-    _latestVersion = latest.isNotEmpty ? latest : null;
+    final displayLatest = latest.isNotEmpty
+        ? latest
+        : (latestBuild != null ? 'build $latestBuild' : null);
+    if (displayLatest != null) {
+      await _loadDismissState(displayLatest);
+    }
+
+    _latestVersion = displayLatest;
     _forceUpdate = forceFlag || belowMin;
     _updateAvailable = true;
+    // Force updates ignore soft dismiss.
+    if (_forceUpdate) _dismissedForCurrentLatest = false;
     _onStateChanged?.call();
 
     if (!context.mounted) return;
 
     if (_forceUpdate) {
       await _showForceDialog(context);
-    } else if (!_bannerVisible) {
-      // Soft prompt handled by AppShell banner; also show a one-shot snack once.
-      _bannerVisible = true;
     }
   }
 
@@ -247,7 +304,9 @@ class AppUpdateService {
     // Try Play flexible/immediate first on Android.
     if (_isAndroid) {
       try {
-        final info = await InAppUpdate.checkForUpdate();
+        final info = await InAppUpdate.checkForUpdate().timeout(
+          const Duration(seconds: 8),
+        );
         if (info.updateAvailability == UpdateAvailability.updateAvailable) {
           if (info.immediateUpdateAllowed || _forceUpdate) {
             await InAppUpdate.performImmediateUpdate();
@@ -294,12 +353,14 @@ class AppUpdateService {
 /// Soft non-blocking banner: « Nouvelle version disponible ».
 class AppUpdateBanner extends StatelessWidget {
   final String? latestVersion;
+  final String? currentVersion;
   final VoidCallback onUpdate;
   final VoidCallback onDismiss;
 
   const AppUpdateBanner({
     super.key,
     this.latestVersion,
+    this.currentVersion,
     required this.onUpdate,
     required this.onDismiss,
   });
@@ -307,12 +368,20 @@ class AppUpdateBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
+    final fromTo = (currentVersion != null &&
+            currentVersion!.isNotEmpty &&
+            latestVersion != null &&
+            latestVersion!.isNotEmpty)
+        ? 'Vous avez $currentVersion → $latestVersion disponible.'
+        : (latestVersion != null && latestVersion!.isNotEmpty
+            ? 'SafeAlert $latestVersion est prête. Mettez à jour quand vous voulez.'
+            : 'Une version plus récente est prête. Mettez à jour quand vous voulez.');
+
     return Material(
+      elevation: 2,
       color: AppColors.tealDeep,
       child: Padding(
-        // Parent Column already sits under the system UI when needed;
-        // only pad the notch once here (avoid double SafeArea with StatusBar).
-        padding: EdgeInsets.fromLTRB(16, 10 + topInset, 8, 10),
+        padding: EdgeInsets.fromLTRB(16, 10 + topInset, 8, 12),
         child: Row(
           children: [
             const Icon(Icons.system_update_alt, color: Colors.white, size: 22),
@@ -330,10 +399,9 @@ class AppUpdateBanner extends StatelessWidget {
                       fontSize: 13,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
-                    latestVersion != null && latestVersion!.isNotEmpty
-                        ? 'SafeAlert $latestVersion est prête. Mettez à jour quand vous voulez.'
-                        : 'Une version plus récente est prête. Mettez à jour quand vous voulez.',
+                    fromTo,
                     style: const TextStyle(
                       color: Color(0xFFB8E0D2),
                       fontSize: 11,

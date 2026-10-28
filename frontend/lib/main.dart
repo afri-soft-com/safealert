@@ -138,8 +138,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final List<String> _navStack = ['splash'];
   bool _discreetLocked = false;
   bool _discreetChecked = false;
-  bool _softUpdateDismissed = false;
-  String? _softUpdateLatestSeen;
   final QuickActions _quickActions = const QuickActions();
   final AppLinks _appLinks = AppLinks();
   final AppUpdateService _appUpdates = AppUpdateService();
@@ -226,15 +224,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _appUpdates.attach(() {
       if (!mounted) return;
-      final latest = _appUpdates.latestVersion;
-      if (_appUpdates.updateAvailable && latest != null && latest != _softUpdateLatestSeen) {
-        _softUpdateLatestSeen = latest;
-        _softUpdateDismissed = false;
-      }
-      if (!_appUpdates.updateAvailable) {
-        _softUpdateDismissed = false;
-        _softUpdateLatestSeen = null;
-      }
       setState(() {});
     });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -290,7 +279,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
-      _appUpdates.check(context);
+      _appUpdates.check(context, force: true);
       if (context.read<AuthProvider>().isAuthenticated) {
         final trips = context.read<TripProvider>();
         trips.flushPendingPings();
@@ -578,7 +567,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     final showSoftBanner = _appUpdates.updateAvailable &&
         !_appUpdates.forceUpdate &&
-        !_softUpdateDismissed &&
+        !_appUpdates.dismissedForCurrentLatest &&
         !_discreetLocked &&
         _currentScreen != 'splash' &&
         _currentScreen != 'calculator';
@@ -620,8 +609,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           if (showSoftBanner)
             AppUpdateBanner(
               latestVersion: _appUpdates.latestVersion,
+              currentVersion: _appUpdates.currentVersion,
               onUpdate: () => _appUpdates.openStoreOrUpdate(context),
-              onDismiss: () => setState(() => _softUpdateDismissed = true),
+              onDismiss: () async {
+                await _appUpdates.dismissSoftBanner();
+                if (mounted) setState(() {});
+              },
             ),
           Expanded(
             child: topBannerShown

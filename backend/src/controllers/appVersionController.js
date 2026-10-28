@@ -2,18 +2,25 @@ const features = require("../config/features");
 const { getMaintenance } = require("../services/appSettings");
 
 /** Soft-update target (bump when a newer build is on the store / ready). */
-const DEFAULT_MOBILE_VERSION = "1.0.50";
+const DEFAULT_MOBILE_VERSION = "1.0.51";
+/** Android versionCode / iOS CFBundleVersion soft target (optional). */
+const DEFAULT_MOBILE_BUILD = 73;
 /** Soft-update target for admin-web (bump ahead of a deploy to show the banner). */
 const DEFAULT_ADMIN_WEB_VERSION = "1.0.14";
 
 /**
  * Public app version policy for soft / force update prompts.
- * Env: APP_LATEST_VERSION, APP_MIN_VERSION, APP_FORCE_UPDATE, APP_STORE_URL,
- *      APP_STORE_URL_IOS, ADMIN_WEB_VERSION, ADMIN_WEB_URL
+ * Env: APP_LATEST_VERSION, APP_LATEST_BUILD, APP_MIN_VERSION, APP_FORCE_UPDATE,
+ *      APP_STORE_URL, APP_STORE_URL_IOS, ADMIN_WEB_VERSION, ADMIN_WEB_URL
  */
 function versionPayload() {
   const latestVersion =
     (process.env.APP_LATEST_VERSION || "").trim() || DEFAULT_MOBILE_VERSION;
+  const latestBuildParsed = Number.parseInt(
+    String(process.env.APP_LATEST_BUILD || DEFAULT_MOBILE_BUILD).trim(),
+    10
+  );
+  const latestBuild = Number.isFinite(latestBuildParsed) ? latestBuildParsed : DEFAULT_MOBILE_BUILD;
   const minVersion = (process.env.APP_MIN_VERSION || "").trim();
   const forceRaw = process.env.APP_FORCE_UPDATE || "";
   const forceUpdate = ["1", "true", "yes", "on"].includes(String(forceRaw).toLowerCase());
@@ -32,6 +39,7 @@ function versionPayload() {
   return {
     minVersion,
     latestVersion,
+    latestBuild,
     forceUpdate,
     storeUrl,
     iosStoreUrl,
