@@ -323,7 +323,19 @@ class IncidentProvider extends ChangeNotifier {
       if (pos != null) {
         await LocationService().updatePosition(useLat, useLng);
       }
-      final res = await _api.post('/sos/trigger', payload);
+      // Wake Render (cold start) before the critical SOS call.
+      try {
+        await _api.get('/app/config');
+      } catch (_) {}
+      Map<String, dynamic> res;
+      try {
+        res = await _api.post('/sos/trigger', payload);
+      } catch (first) {
+        // One quick retry for transient timeouts / blips — still not "offline".
+        if (first is ApiException) rethrow;
+        await Future<void>.delayed(const Duration(seconds: 2));
+        res = await _api.post('/sos/trigger', payload);
+      }
       if (resolved.source == 'last_known' || resolved.source == 'cache') {
         res['positionNote'] =
             'Position approximative (dernière connue). Activez le GPS pour une localisation plus précise.';
@@ -338,28 +350,52 @@ class IncidentProvider extends ChangeNotifier {
       }
       return res;
     } catch (e) {
-      if (e is ApiException && (e.statusCode == 400 || e.statusCode == 422)) {
-        return {
-          'blocked': true,
-          'message': userFacingError(
-            e,
-            fallback:
-                'Position GPS indisponible. Activez la localisation et réessayez, ou utilisez l\'annuaire d\'urgence.',
-          ),
-        };
+      // Server answered with an HTTP error → not "offline". Never fake a successful send.
+      if (e is ApiException) {
+        final code = e.statusCode;
+        if (code == 400 || code == 422) {
+          return {
+            'blocked': true,
+            'message': userFacingError(
+              e,
+              fallback:
+                  'Position GPS indisponible. Activez la localisation et réessayez, ou utilisez l\'annuaire d\'urgence.',
+            ),
+          };
+        }
+        if (code >= 400) {
+          return {
+            'blocked': true,
+            'message': userFacingError(
+              e,
+              fallback:
+                  'Le serveur a refusé l\'alerte (erreur $code). Réessayez dans quelques secondes.',
+            ),
+          };
+        }
       }
+
+      // True network failure (timeout / no route) → queue + local SMS draft.
       await _cache.enqueuePendingSos(payload);
       _isOffline = true;
       notifyListeners();
-      // Optional SMS fallback if we have trust contacts cached
       await _trySmsFallback(payload);
       _markOwnOutgoing();
       if (isDiscrete) {
         await _sounds.feedbackDiscreteSosTrigger();
       }
+      // Best-effort: retry flush shortly in case it was a brief blip.
+      Future<void>.delayed(const Duration(seconds: 8), () async {
+        try {
+          await flushPendingSos();
+        } catch (_) {}
+      });
       return {
         'queued': true,
-        'message': 'Alerte enregistrée hors ligne — envoi automatique dès que le réseau revient',
+        'message':
+            'Alerte enregistrée hors ligne — pas encore transmise aux contacts. '
+            'Elle partira automatiquement dès que le réseau revient '
+            '(Paramètres → Envois en attente).',
         ...payload,
       };
     }

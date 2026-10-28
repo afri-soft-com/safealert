@@ -57,6 +57,13 @@ class _SOSScreenState extends State<SOSScreen> {
     _StepData('🚨', 'Alerte transmise !', AppColors.rouge),
   ];
 
+  static const _queuedStepLabels = [
+    'GPS localisé (appareil)',
+    'Contacts — en attente réseau',
+    'Communauté — en attente réseau',
+    'Transmission — en attente réseau',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -176,14 +183,18 @@ class _SOSScreenState extends State<SOSScreen> {
         _queued = true;
         _failed = false;
         _sending = false;
-        _completed = true;
-        _step = 4;
-        _statusMsg = result['message']?.toString();
+        // Not a successful delivery — do not show ENVOYÉ / all green steps.
+        _completed = false;
+        _step = 1; // GPS only (local). Contacts / communauté encore en attente.
+        _statusMsg = result['message']?.toString() ??
+            'Alerte enregistrée hors ligne — pas encore envoyée aux contacts.';
         _sosLat = qLat;
         _sosLng = qLng;
         _zoneName = result['zone_name']?.toString();
         _positionApprox = true;
       });
+      // Retry flush when connectivity may return.
+      unawaited(context.read<IncidentProvider>().flushPendingSos());
       return;
     }
 
@@ -481,9 +492,11 @@ class _SOSScreenState extends State<SOSScreen> {
                     button: true,
                     label: _failed
                         ? 'Réessayer d\'envoyer l\'alerte SOS'
-                        : _completed
-                            ? 'Alerte SOS envoyée'
-                            : 'Maintenir pour envoyer une alerte SOS',
+                        : _queued
+                            ? 'Alerte SOS en attente hors ligne'
+                            : _completed
+                                ? 'Alerte SOS envoyée'
+                                : 'Maintenir pour envoyer une alerte SOS',
                     child: GestureDetector(
                       onTapDown: busy ? null : (_) => _startHold(),
                       onTapUp: busy ? null : (_) => _cancelHold(),
@@ -508,10 +521,15 @@ class _SOSScreenState extends State<SOSScreen> {
                             width: 160, height: 160,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: _step > 0 ? AppColors.rougeDark : AppColors.rouge,
+                              color: _queued
+                                  ? AppColors.orange
+                                  : _step > 0
+                                      ? AppColors.rougeDark
+                                      : AppColors.rouge,
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.rouge.withValues(alpha: _step > 0 ? 0.2 : 0.15),
+                                  color: (_queued ? AppColors.orange : AppColors.rouge)
+                                      .withValues(alpha: _step > 0 ? 0.2 : 0.15),
                                   blurRadius: _step > 0 ? 32 : 12,
                                   spreadRadius: _step > 0 ? 16 : 0,
                                 ),
@@ -521,13 +539,15 @@ class _SOSScreenState extends State<SOSScreen> {
                               child: Text(
                                 _failed
                                     ? '📶\nRÉESSAYER'
-                                    : _holding
-                                        ? '⏳\nMaintenir...'
-                                        : _step == 0
-                                            ? '🆘\nMAINTENIR'
-                                            : _completed
-                                                ? '✅\nENVOYÉ !'
-                                                : '⏳\nEnvoi...',
+                                    : _queued
+                                        ? '📶\nEN ATTENTE'
+                                        : _holding
+                                            ? '⏳\nMaintenir...'
+                                            : _step == 0
+                                                ? '🆘\nMAINTENIR'
+                                                : _completed
+                                                    ? '✅\nENVOYÉ !'
+                                                    : '⏳\nEnvoi...',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800, height: 1.2),
                               ),
@@ -540,7 +560,8 @@ class _SOSScreenState extends State<SOSScreen> {
                   const SizedBox(height: 24),
                   ...List.generate(_steps.length, (i) {
                     final s = _steps[i];
-                    final done = _step > i;
+                    // Queued offline: only GPS is local; do not claim contacts/community notified.
+                    final done = _queued ? (i == 0 && _step > 0) : _step > i;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 6),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -554,7 +575,9 @@ class _SOSScreenState extends State<SOSScreen> {
                           Text(done ? '✅' : s.icon, style: const TextStyle(fontSize: 18)),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: Text(s.label, style: TextStyle(
+                            child: Text(
+                              _queued ? _queuedStepLabels[i] : s.label,
+                              style: TextStyle(
                               fontSize: 12, fontWeight: FontWeight.w600,
                               color: done ? s.color : AppColors.gris,
                             ), overflow: TextOverflow.ellipsis),
@@ -576,7 +599,42 @@ class _SOSScreenState extends State<SOSScreen> {
                       child: Text(_statusMsg!, style: const TextStyle(fontSize: 12, color: AppColors.vert)),
                     ),
                   ],
-                  if (_completed && !_cancelling) ...[
+                  if (_queued) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final n = await context
+                              .read<IncidentProvider>()
+                              .flushPendingSos();
+                          if (!mounted) return;
+                          if (n > 0) {
+                            setState(() {
+                              _queued = false;
+                              _completed = true;
+                              _step = 4;
+                              _statusMsg =
+                                  'Alerte envoyée après reconnexion ($n).';
+                            });
+                            showAppSnackBar(
+                              context,
+                              'SOS transmis après reconnexion',
+                            );
+                          } else {
+                            showAppSnackBar(
+                              context,
+                              'Toujours hors ligne — réessayez dans un instant',
+                              isError: true,
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                        label: const Text('Réessayer l\'envoi maintenant'),
+                      ),
+                    ),
+                  ],
+                  if ((_completed || _queued) && !_cancelling) ...[
                     if (_sosLat != null && _sosLng != null) ...[
                       Container(
                         width: double.infinity,
