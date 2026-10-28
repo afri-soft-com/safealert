@@ -57,6 +57,13 @@ class _SOSScreenState extends State<SOSScreen> {
     _StepData('🚨', 'Alerte transmise !', AppColors.rouge),
   ];
 
+  static const _failedStepLabels = [
+    'GPS — non confirmé',
+    'Contacts — non alertés',
+    'Communauté — non notifiée',
+    'Alerte — non transmise',
+  ];
+
   static const _queuedStepLabels = [
     'GPS localisé (appareil)',
     'Contacts — en attente réseau',
@@ -165,6 +172,10 @@ class _SOSScreenState extends State<SOSScreen> {
       setState(() {
         _failed = true;
         _sending = false;
+        _completed = false;
+        _queued = false;
+        _step = 0;
+        _statusMsg = 'L\'alerte n\'a pas pu être envoyée. Réessayez.';
       });
       return;
     }
@@ -173,7 +184,11 @@ class _SOSScreenState extends State<SOSScreen> {
       setState(() {
         _failed = true;
         _sending = false;
-        _statusMsg = result['message']?.toString();
+        _completed = false;
+        _queued = false;
+        _step = 0; // Never leave success checklist lit after a refusal.
+        _statusMsg = result['message']?.toString() ??
+            'L\'alerte n\'a pas pu être envoyée. Réessayez.';
       });
       return;
     }
@@ -601,9 +616,18 @@ class _SOSScreenState extends State<SOSScreen> {
                   const SizedBox(height: 28),
                   ...List.generate(_steps.length, (i) {
                     final s = _steps[i];
-                    // Queued offline: only GPS is local; do not claim contacts/community notified.
-                    final done = _queued ? (i == 0 && _step > 0) : _step > i;
-                    final pending = _queued && i > 0;
+                    // Failed / rate-limited: never claim transmission. Queued: GPS only.
+                    final done = _failed
+                        ? false
+                        : _queued
+                            ? (i == 0 && _step > 0)
+                            : _step > i;
+                    final pending = !_failed && _queued && i > 0;
+                    final label = _failed
+                        ? _failedStepLabels[i]
+                        : _queued
+                            ? _queuedStepLabels[i]
+                            : s.label;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -612,26 +636,36 @@ class _SOSScreenState extends State<SOSScreen> {
                             ? s.color.withValues(alpha: 0.1)
                             : pending
                                 ? const Color(0xFFFFF8F0)
-                                : const Color(0xFFF8F9FB),
+                                : _failed
+                                    ? const Color(0xFFFDECEC)
+                                    : const Color(0xFFF8F9FB),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: done
                               ? s.color.withValues(alpha: 0.45)
                               : pending
                                   ? AppColors.orange.withValues(alpha: 0.35)
-                                  : const Color(0xFFE8ECEF),
+                                  : _failed
+                                      ? AppColors.rouge.withValues(alpha: 0.25)
+                                      : const Color(0xFFE8ECEF),
                         ),
                       ),
                       child: Row(
                         children: [
                           Text(
-                            done ? '✅' : pending ? '⏳' : s.icon,
+                            done
+                                ? '✅'
+                                : pending
+                                    ? '⏳'
+                                    : _failed
+                                        ? '❌'
+                                        : s.icon,
                             style: const TextStyle(fontSize: 18),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              _queued ? _queuedStepLabels[i] : s.label,
+                              label,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -639,7 +673,9 @@ class _SOSScreenState extends State<SOSScreen> {
                                     ? s.color
                                     : pending
                                         ? AppColors.orange
-                                        : AppColors.gris,
+                                        : _failed
+                                            ? AppColors.rougeDark
+                                            : AppColors.gris,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),

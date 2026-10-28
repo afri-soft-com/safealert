@@ -11,7 +11,7 @@ on:
       app_latest_version:
         description: APP_LATEST_VERSION
         required: true
-        default: "1.0.51"
+        default: "1.0.52"
       admin_web_version:
         description: ADMIN_WEB_VERSION
         required: true
@@ -44,7 +44,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           RESTORE_JWT: ${{ inputs.restore_jwt }}
           APP_LATEST_VERSION: ${{ inputs.app_latest_version }}
-          APP_LATEST_BUILD: "74"
+          APP_LATEST_BUILD: "75"
           ADMIN_WEB_VERSION: ${{ inputs.admin_web_version }}
           APPLE_CLIENT_IDS: ${{ inputs.apple_client_ids }}
           GOOGLE_CLIENT_ID: ${{ inputs.google_client_id }}
@@ -83,7 +83,7 @@ jobs:
             put_key JWT_SECRET "$JWT_SECRET"
           fi
           put_key APP_LATEST_VERSION "$APP_LATEST_VERSION"
-          put_key APP_LATEST_BUILD "${APP_LATEST_BUILD:-74}"
+          put_key APP_LATEST_BUILD "${APP_LATEST_BUILD:-75}"
           put_key ADMIN_WEB_VERSION "$ADMIN_WEB_VERSION"
           put_key APPLE_CLIENT_IDS "$APPLE_CLIENT_IDS"
           put_key GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID"

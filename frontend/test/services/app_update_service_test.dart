@@ -34,4 +34,19 @@ void main() {
     expect(find.textContaining('1.0.7 → 1.0.8'), findsOneWidget);
     expect(find.text('Mettre à jour'), findsOneWidget);
   });
+
+  testWidgets('AppUpdateBanner shows build when versions match', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppUpdateBanner(
+          latestVersion: '1.0.51 (74)',
+          currentVersion: '1.0.51 (73)',
+          onUpdate: () {},
+          onDismiss: () {},
+        ),
+      ),
+    );
+
+    expect(find.textContaining('1.0.51 (73) → 1.0.51 (74)'), findsOneWidget);
+  });
 }

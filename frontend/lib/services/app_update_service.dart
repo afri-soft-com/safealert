@@ -46,6 +46,7 @@ class AppUpdateService {
   String? _latestVersion;
   String? _currentVersion;
   int? _currentBuild;
+  int? _latestBuild;
   bool _updateAvailable = false;
   bool _forceUpdate = false;
   bool _dismissedForCurrentLatest = false;
@@ -55,6 +56,7 @@ class AppUpdateService {
   String? get latestVersion => _latestVersion;
   String? get currentVersion => _currentVersion;
   int? get currentBuild => _currentBuild;
+  int? get latestBuild => _latestBuild;
   bool get dismissedForCurrentLatest => _dismissedForCurrentLatest;
 
   VoidCallback? _onStateChanged;
@@ -228,6 +230,7 @@ class AppUpdateService {
     final build = int.tryParse(info.buildNumber) ?? 0;
     _currentVersion = current;
     _currentBuild = build;
+    _latestBuild = latestBuild;
 
     final belowMin = min.isNotEmpty && compareVersions(current, min) < 0;
     final belowLatestVersion =
@@ -248,15 +251,29 @@ class AppUpdateService {
         _updateAvailable = false;
         _forceUpdate = false;
         _latestVersion = null;
+        _latestBuild = null;
         _dismissedForCurrentLatest = false;
         _onStateChanged?.call();
       }
       return;
     }
 
-    final displayLatest = latest.isNotEmpty
-        ? latest
-        : (latestBuild != null ? 'build $latestBuild' : null);
+    // Prefer a label that differs when only the build number moved
+    // (avoids "1.0.51 → 1.0.51" which looks broken).
+    String? displayLatest;
+    String? displayCurrent = current;
+    if (belowLatestVersion && latest.isNotEmpty) {
+      displayLatest = latest;
+    } else if (belowLatestBuild && latestBuild != null) {
+      final ver = latest.isNotEmpty ? latest : current;
+      displayLatest = '$ver ($latestBuild)';
+      displayCurrent = '$current ($build)';
+    } else if (latest.isNotEmpty) {
+      displayLatest = latest;
+    } else if (latestBuild != null) {
+      displayLatest = 'build $latestBuild';
+    }
+    _currentVersion = displayCurrent;
     if (displayLatest != null) {
       await _loadDismissState(displayLatest);
     }

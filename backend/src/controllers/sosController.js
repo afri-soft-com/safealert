@@ -109,31 +109,53 @@ const triggerSOS = async (req, res) => {
     );
     const incident = result.rows[0];
 
-    // Optional evidence attached at trigger (SOS audio / photo)
+    // Optional evidence attached at trigger (SOS audio / photo) — never fail the SOS.
     if (witnessEvidence() && sosAudio() && req.body.consent_evidence === true && req.body.evidence) {
-      const items = Array.isArray(req.body.evidence) ? req.body.evidence : [req.body.evidence];
-      for (const item of items.slice(0, 3)) {
-        const mediaType = item.media_type === "photo" ? "photo" : "audio";
-        const key = item.data_url || item.storage_key;
-        if (!key || String(key).length < 20) continue;
-        await pool.query(
-          `INSERT INTO incident_evidence (incident_id, user_id, media_type, storage_key, retention_until)
-           VALUES ($1, $2, $3, $4, NOW() + INTERVAL '7 days')`,
-          [incident.id, req.userId, mediaType, String(key).slice(0, 500000)]
-        );
+      try {
+        const items = Array.isArray(req.body.evidence) ? req.body.evidence : [req.body.evidence];
+        for (const item of items.slice(0, 3)) {
+          const mediaType = item.media_type === "photo" ? "photo" : "audio";
+          const key = item.data_url || item.storage_key;
+          if (!key || String(key).length < 20) continue;
+          await pool.query(
+            `INSERT INTO incident_evidence (incident_id, user_id, media_type, storage_key, retention_until)
+             VALUES ($1, $2, $3, $4, NOW() + INTERVAL '7 days')`,
+            [incident.id, req.userId, mediaType, String(key).slice(0, 500000)]
+          );
+        }
+      } catch (evErr) {
+        console.error("SOS evidence attach error:", evErr.message);
       }
     }
 
-    const notification = await sendAlert(
-      req.userId,
-      lat,
-      lng,
-      incident_type || "sos",
-      incident.zone_name
-    );
-
-    const userRes = await pool.query("SELECT pseudo FROM users WHERE id = $1", [req.userId]);
+    // Notifications are best-effort: the SOS row must still return 201.
+    let notification = {
+      contactsNotified: 0,
+      contactsPush: 0,
+      contactsSms: 0,
+      nearbyNotified: 0,
+      nearbyPush: 0,
+      degraded: false,
+    };
     try {
+      notification = {
+        ...notification,
+        ...(await sendAlert(
+          req.userId,
+          lat,
+          lng,
+          incident_type || "sos",
+          incident.zone_name
+        )),
+      };
+    } catch (alertErr) {
+      console.error("sendAlert error:", alertErr.message);
+      notification.degraded = true;
+      notification.error = true;
+    }
+
+    try {
+      const userRes = await pool.query("SELECT pseudo FROM users WHERE id = $1", [req.userId]);
       const groupNotification = await notifyUserGroupsOnSOS(
         req.userId,
         lat,
@@ -154,10 +176,18 @@ const triggerSOS = async (req, res) => {
       };
     }
 
-    await invalidateActiveAlerts();
+    try {
+      await invalidateActiveAlerts();
+    } catch (cacheErr) {
+      console.error("invalidateActiveAlerts error:", cacheErr.message);
+    }
 
-    const sectorNotify = await notifyLeadersForSOS(incident);
-    notification.sectorLeaders = sectorNotify;
+    try {
+      notification.sectorLeaders = await notifyLeadersForSOS(incident);
+    } catch (sectorErr) {
+      console.error("notifyLeadersForSOS error:", sectorErr.message);
+      notification.sectorLeaders = { leadersNotified: 0, error: true };
+    }
 
     // Targeted alerts for trust zones containing this SOS
     try {
@@ -229,7 +259,7 @@ const triggerSOS = async (req, res) => {
       sos_audio_enabled: sosAudio(),
     });
   } catch (err) {
-    console.error("triggerSOS error:", err);
+    console.error("triggerSOS error:", err.code || "", err.message, err.stack);
     // Fallback without new columns (pre-migration)
     if (err.code === "42703") {
       try {
@@ -245,7 +275,11 @@ const triggerSOS = async (req, res) => {
         console.error("triggerSOS fallback error:", e2);
       }
     }
-    return res.status(500).json({ error: "Erreur lors de l'envoi de l'alerte" });
+    const hint =
+      err.code === "57P01" || /terminat|connect|ECONN|timeout/i.test(String(err.message || ""))
+        ? "Base de données temporairement indisponible. Réessayez dans quelques secondes."
+        : "Erreur lors de l'envoi de l'alerte. Réessayez ou utilisez l'annuaire d'urgence.";
+    return res.status(500).json({ error: hint });
   }
 };
 
