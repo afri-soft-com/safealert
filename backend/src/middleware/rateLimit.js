@@ -104,10 +104,10 @@ const apiLimiter = rateLimit({
   store: new RedisRateLimitStore({ prefix: "rl:api:", windowMs: WINDOW_15M }),
 });
 
-/** Soft SOS anti-abuse: 20 SOS / 15 min per user (or IP if unauthenticated). */
+/** Soft SOS anti-abuse: 30 successful SOS / 15 min per user (failures do not burn quota). */
 const sosLimiter = rateLimit({
   windowMs: WINDOW_15M,
-  max: 20,
+  max: 30,
   message: {
     error:
       "Trop d'alertes envoyées récemment. Attendez quelques minutes ou utilisez l'annuaire d'urgence si besoin immédiat.",
@@ -115,6 +115,8 @@ const sosLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: skipInTest,
+  // Retries after 5xx / network blips must not lock the user out of SOS.
+  skipFailedRequests: true,
   keyGenerator: (req) => String(req.userId || req.ip || "anon"),
   validate: { ip: false },
   store: new RedisRateLimitStore({ prefix: "rl:sos:", windowMs: WINDOW_15M }),

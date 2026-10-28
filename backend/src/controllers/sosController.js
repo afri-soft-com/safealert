@@ -76,38 +76,80 @@ const triggerSOS = async (req, res) => {
   }
 
   try {
-    const zoneName = await resolveZoneName(lat, lng);
-    const ents = await getEntitlementsForUser(req.userId);
-    const priorityBoost = !!ents.sos_priority;
-    const wantMediation =
-      sosMediation() && (!!ents.sos_mediation || !!ents.sos_priority) && req.body.request_mediation !== false;
+    let zoneName = null;
+    try {
+      zoneName = await resolveZoneName(lat, lng);
+    } catch (zErr) {
+      console.warn("resolveZoneName error:", zErr.message);
+    }
+    // DB column is VARCHAR(100) — long Nominatim labels must not fail the SOS.
+    if (typeof zoneName === "string" && zoneName.length > 100) {
+      zoneName = zoneName.slice(0, 97) + "…";
+    }
+
+    let priorityBoost = false;
+    let wantMediation = false;
+    try {
+      const ents = await getEntitlementsForUser(req.userId);
+      priorityBoost = !!ents.sos_priority;
+      wantMediation =
+        sosMediation() &&
+        (!!ents.sos_mediation || !!ents.sos_priority) &&
+        req.body.request_mediation !== false;
+    } catch (entErr) {
+      console.warn("getEntitlementsForUser error:", entErr.message);
+    }
+
     const shareToken = sosPublicShare() ? crypto.randomBytes(12).toString("hex") : null;
-    const result = await pool.query(
-      `INSERT INTO incidents (
-         user_id, incident_type, lat, lng, location, description, severity, zone_name,
-         priority_boost, mediation_requested, mediation_status, share_token, share_expires_at
-       )
-       VALUES (
-         $1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, 'alert', $8,
-         $9, $10, $11, $12, CASE WHEN $12::text IS NOT NULL THEN NOW() + INTERVAL '6 hours' ELSE NULL END
-       )
-       RETURNING *`,
-      [
-        req.userId,
-        incident_type || "sos",
-        lat,
-        lng,
-        lng,
-        lat,
-        description,
-        zoneName,
-        priorityBoost,
-        wantMediation,
-        wantMediation ? "requested" : null,
-        shareToken,
-      ]
-    );
-    const incident = result.rows[0];
+    const insertFull = async () =>
+      pool.query(
+        `INSERT INTO incidents (
+           user_id, incident_type, lat, lng, location, description, severity, zone_name,
+           priority_boost, mediation_requested, mediation_status, share_token, share_expires_at
+         )
+         VALUES (
+           $1, $2, $3, $4,
+           ST_SetSRID(ST_MakePoint($5, $6), 4326),
+           $7, 'alert', $8,
+           $9, $10, $11, $12,
+           CASE WHEN $12::text IS NOT NULL THEN NOW() + INTERVAL '6 hours' ELSE NULL END
+         )
+         RETURNING *`,
+        [
+          req.userId,
+          incident_type || "sos",
+          lat,
+          lng,
+          lng,
+          lat,
+          description,
+          zoneName,
+          priorityBoost,
+          wantMediation,
+          wantMediation ? "requested" : null,
+          shareToken,
+        ]
+      );
+
+    const insertMinimal = async () =>
+      pool.query(
+        `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name)
+         VALUES (
+           $1, $2, $3, $4,
+           ST_SetSRID(ST_MakePoint($5, $6), 4326),
+           $7, 'alert', $8
+         )
+         RETURNING *`,
+        [req.userId, incident_type || "sos", lat, lng, lng, lat, description, zoneName]
+      );
+
+    let incident;
+    try {
+      incident = (await insertFull()).rows[0];
+    } catch (insErr) {
+      console.error("triggerSOS full insert error:", insErr.code || "", insErr.message);
+      incident = (await insertMinimal()).rows[0];
+    }
 
     // Optional evidence attached at trigger (SOS audio / photo) — never fail the SOS.
     if (witnessEvidence() && sosAudio() && req.body.consent_evidence === true && req.body.evidence) {
@@ -260,26 +302,34 @@ const triggerSOS = async (req, res) => {
     });
   } catch (err) {
     console.error("triggerSOS error:", err.code || "", err.message, err.stack);
-    // Fallback without new columns (pre-migration)
-    if (err.code === "42703") {
-      try {
-        const zoneName = await resolveZoneName(lat, lng);
-        const result = await pool.query(
-          `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name)
-           VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, 'alert', $8)
-           RETURNING *`,
-          [req.userId, incident_type || "sos", lat, lng, lng, lat, description, zoneName]
-        );
-        return res.status(201).json({ incident: result.rows[0], notification: { degraded: true } });
-      } catch (e2) {
-        console.error("triggerSOS fallback error:", e2);
-      }
+    // Last-chance minimal insert (any failure above).
+    try {
+      const zoneName = await resolveZoneName(lat, lng).catch(() => null);
+      const result = await pool.query(
+        `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name)
+         VALUES (
+           $1, $2, $3, $4,
+           ST_SetSRID(ST_MakePoint($5, $6), 4326),
+           $7, 'alert', $8
+         )
+         RETURNING *`,
+        [req.userId, incident_type || "sos", lat, lng, lng, lat, description, zoneName]
+      );
+      return res.status(201).json({
+        incident: result.rows[0],
+        notification: { degraded: true, error: true },
+      });
+    } catch (e2) {
+      console.error("triggerSOS last-chance insert error:", e2.code || "", e2.message);
     }
     const hint =
       err.code === "57P01" || /terminat|connect|ECONN|timeout/i.test(String(err.message || ""))
         ? "Base de données temporairement indisponible. Réessayez dans quelques secondes."
         : "Erreur lors de l'envoi de l'alerte. Réessayez ou utilisez l'annuaire d'urgence.";
-    return res.status(500).json({ error: hint });
+    return res.status(500).json({
+      error: hint,
+      code: typeof err.code === "string" ? err.code : undefined,
+    });
   }
 };
 
