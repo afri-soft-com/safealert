@@ -44,7 +44,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           RESTORE_JWT: ${{ inputs.restore_jwt }}
           APP_LATEST_VERSION: ${{ inputs.app_latest_version }}
-          APP_LATEST_BUILD: "76"
+          APP_LATEST_BUILD: "77"
           ADMIN_WEB_VERSION: ${{ inputs.admin_web_version }}
           APPLE_CLIENT_IDS: ${{ inputs.apple_client_ids }}
           GOOGLE_CLIENT_ID: ${{ inputs.google_client_id }}

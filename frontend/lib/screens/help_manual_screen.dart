@@ -86,6 +86,8 @@ class HelpManualScreen extends StatelessWidget {
                     _P('Onglet Confiance → « + Ajouter un contact » : nom et numéro du proche à alerter.'),
                     _P('Ces personnes reçoivent une notification sonore (avec lieu et coordonnées) lorsque vous déclenchez un SOS.'),
                     _P('Alertes SOS (cercle, proximité, groupe, secteur) : son SafeAlert distinct (réglable dans Paramètres → Son SafeAlert) + sirène in-app — toujours audibles, même en camouflage.'),
+                    _P('En cas de SOS reçu : ouvrez le lien Carte du SMS, appelez la personne, rejoignez-la si c\'est sûr, ou composez les numéros d\'urgence (Annuaire).'),
+                    _P('« Fausse alerte » / « Je suis en sécurité » : vous êtes aussi notifié(e) pour arrêter l\'intervention.'),
                   ],
                 ),
                 _section(
@@ -107,6 +109,9 @@ class HelpManualScreen extends StatelessWidget {
                     _P('Rejoindre un groupe envoie une demande à l\'administrateur du groupe.'),
                     _P('Les admins du groupe voient les demandes en attente et peuvent les traiter.'),
                     _P('Alertes locales : le lieu s\'affiche lorsque la position est disponible.'),
+                    _P('SOS d\'un membre : push + SMS + onglet Alertes du groupe (lieu / coords).'),
+                    _P('En cas d\'alerte reçue : ouvrez Groupe → Alertes, allez sur place si c\'est sûr, appelez le membre, publiez une alerte d\'entraide, ou contactez l\'annuaire d\'urgence.'),
+                    _P('Fausse alerte / En sécurité : le groupe est aussi notifié (push + SMS + fil Alertes).'),
                   ],
                 ),
                 _section(

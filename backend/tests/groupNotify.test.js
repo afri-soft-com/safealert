@@ -34,6 +34,8 @@ delete require.cache[servicePath];
 const {
   notifyUserGroupsOnSOS,
   notifyUserGroupsOnReport,
+  notifyUserGroupsOnFalseAlarm,
+  notifyUserGroupsOnSafe,
 } = require("../src/services/groupNotify");
 
 describe("notifyUserGroupsOnSOS", () => {
@@ -126,5 +128,65 @@ describe("notifyUserGroupsOnReport", () => {
     expect(out.pushNotified).toBe(1);
     expect(mockSendSMS).not.toHaveBeenCalled();
     expect(mockSendPush.mock.calls[0][1].data.type).toBe("group_report");
+  });
+});
+
+describe("notifyUserGroupsOnFalseAlarm / OnSafe", () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+    mockSendPush.mockClear();
+    mockSendSMS.mockClear();
+  });
+
+  it("notifies groups of false alarm with SMS and info feed", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ sos_notify_groups: true }] })
+      .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
+      .mockResolvedValueOnce({ rows: [{ id: "a1" }] })
+      .mockResolvedValueOnce({
+        rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000002" }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ id: "u2", fcm_token: "tok", pseudo: "Bob" }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000002" }],
+      });
+
+    const out = await notifyUserGroupsOnFalseAlarm(
+      "u1",
+      -4.3,
+      15.3,
+      "Alice",
+      "Gombe"
+    );
+
+    expect(out.alertsCreated).toBe(1);
+    expect(out.pushNotified).toBe(1);
+    expect(out.smsNotified).toBe(1);
+    expect(mockSendPush.mock.calls[0][1].data.type).toBe("group_false_alarm");
+    expect(mockQuery.mock.calls[2][0]).toMatch(/INSERT INTO group_alerts/);
+    expect(mockQuery.mock.calls[2][1][2]).toBe("info");
+  });
+
+  it("notifies groups when member confirms safe", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ sos_notify_groups: true }] })
+      .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
+      .mockResolvedValueOnce({ rows: [{ id: "a1" }] })
+      .mockResolvedValueOnce({
+        rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000003" }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ id: "u2", fcm_token: "tok", pseudo: "Bob" }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000003" }],
+      });
+
+    const out = await notifyUserGroupsOnSafe("u1", -4.3, 15.3, "Alice");
+    expect(out.alertsCreated).toBe(1);
+    expect(mockSendPush.mock.calls[0][1].data.type).toBe("group_safe");
+    expect(mockSendSMS).toHaveBeenCalled();
   });
 });

@@ -1,35 +1,52 @@
 const { pool } = require("../config/database");
-const { sendPush } = require("../config/firebase");
 const { sendSMS } = require("../services/sms");
 const { checkIn: checkInEnabled } = require("../config/features");
+const { notifyUserGroupsOnSafe } = require("../services/groupNotify");
+const { phoneLookupVariants } = require("../utils/phone");
+const { sendPushToUser } = require("../services/pushTargets");
 
 const notifyTrustCircle = async (userId, title, body, dataType, smsBody) => {
   const userRes = await pool.query("SELECT pseudo FROM users WHERE id = $1", [userId]);
   const pseudo = userRes.rows[0]?.pseudo || "Un contact";
   const contacts = await pool.query(
-    `SELECT tc.contact_phone, u.fcm_token, u.id as contact_user_id
-     FROM trust_contacts tc
-     LEFT JOIN users u ON tc.contact_phone = u.phone
-     WHERE tc.user_id = $1`,
+    `SELECT contact_name, contact_phone FROM trust_contacts WHERE user_id = $1`,
     [userId]
   );
 
+  let pushSent = 0;
+  let smsSent = 0;
   for (const c of contacts.rows) {
     try {
-      if (c.fcm_token) {
-        await sendPush(c.fcm_token, {
+      const variants = phoneLookupVariants(c.contact_phone);
+      let contactUserId = null;
+      if (variants.length) {
+        const matched = await pool.query(
+          `SELECT id FROM users WHERE phone = ANY($1::text[]) LIMIT 1`,
+          [variants]
+        );
+        contactUserId = matched.rows[0]?.id || null;
+      }
+      if (contactUserId && String(contactUserId) !== String(userId)) {
+        const n = await sendPushToUser(contactUserId, {
           notification: { title, body: body.replace("{pseudo}", pseudo) },
           data: { type: dataType, userId: String(userId) },
         });
+        if (n > 0) pushSent += 1;
       }
-      if (smsBody) {
-        await sendSMS(c.contact_phone, smsBody.replace("{pseudo}", pseudo));
+      if (smsBody && c.contact_phone) {
+        const smsRes = await sendSMS(c.contact_phone, smsBody.replace("{pseudo}", pseudo));
+        if (smsRes && !smsRes.simulated && !smsRes.failed) smsSent += 1;
       }
     } catch (err) {
       console.error("notifyTrustCircle contact failed:", err.message);
     }
   }
-  return { contactsNotified: contacts.rows.length, pseudo };
+  return {
+    contactsNotified: contacts.rows.length,
+    contactsPush: pushSent,
+    contactsSms: smsSent,
+    pseudo,
+  };
 };
 
 /** POST /api/checkin — "Je suis en sécurité" */
@@ -64,6 +81,20 @@ const createCheckIn = async (req, res) => {
     );
 
     const io = req.app.get("io");
+    try {
+      notify.groupSos = await notifyUserGroupsOnSafe(
+        req.userId,
+        lat || null,
+        lng || null,
+        notify.pseudo,
+        null,
+        io
+      );
+    } catch (groupErr) {
+      console.error("notifyUserGroupsOnSafe error:", groupErr.message);
+      notify.groupSos = { error: true };
+    }
+
     if (io) {
       io.emit("check_in", {
         user_id: req.userId,

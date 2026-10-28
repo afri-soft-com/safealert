@@ -94,10 +94,13 @@ const notifyGroupMembers = async (
         title: notification?.title,
         body: notification?.body,
       };
+      const critical =
+        data?.type === "group_sos" || data?.type === "group_report";
       for (const member of members) {
         const uid = member.id;
-        io.to(`user:${uid}`).emit("group_sos", payload);
-        if (data?.type === "group_sos" || data?.type === "group_report") {
+        // Resolutions (false alarm / safe) must not trigger the SOS siren path.
+        io.to(`user:${uid}`).emit(critical ? "group_sos" : "group_resolution", payload);
+        if (critical) {
           io.to(`user:${uid}`).emit("sos_alert", {
             user_id: data.userId,
             lat: data.lat != null ? Number(data.lat) : null,
@@ -197,17 +200,9 @@ const notifyUserGroups = async ({
   }
 
   const { where, la, ln } = locationWhere(lat, lng, zoneName);
-  const isSos = kind !== "report";
   const typeLabel = incidentType ? String(incidentType) : "incident";
-  const alertTitle = isSos ? `SOS — ${pseudo}` : `Signalement — ${typeLabel}`;
-  const alertBody = isSos
-    ? (groupName) => `Alerte SOS déclenchée dans ${groupName}. ${where}`
-    : (groupName) => `${pseudo} a signalé « ${typeLabel} » dans ${groupName}. ${where}`;
-  const pushTitle = isSos ? "🚨 SOS — membre du groupe" : "⚠️ Signalement — groupe";
-  const pushBody = isSos
-    ? (groupName) => `${pseudo} a déclenché une alerte SOS dans ${groupName} ! ${where}`
-    : (groupName) => `${pseudo} a signalé « ${typeLabel} » dans ${groupName}. ${where}`;
-  const pushType = isSos ? "group_sos" : "group_report";
+  const copy = groupNotifyCopy(kind, pseudo, typeLabel, where);
+  const withSms = kind === "sos" || kind === "false_alarm" || kind === "safe";
 
   let membersNotified = 0;
   let pushNotified = 0;
@@ -218,8 +213,8 @@ const notifyUserGroups = async ({
     try {
       await pool.query(
         `INSERT INTO group_alerts (group_id, author_id, type, title, body, lat, lng)
-         VALUES ($1, $2, 'danger', $3, $4, $5, $6)`,
-        [group.id, userId, alertTitle, alertBody(group.name), la, ln]
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [group.id, userId, copy.feedType, copy.alertTitle, copy.alertBody(group.name), la, ln]
       );
       alertsCreated += 1;
     } catch (err) {
@@ -234,20 +229,20 @@ const notifyUserGroups = async ({
         group.id,
         userId,
         {
-          title: pushTitle,
-          body: pushBody(group.name),
+          title: copy.pushTitle,
+          body: copy.pushBody(group.name),
         },
         {
-          type: pushType,
+          type: copy.pushType,
           groupId: String(group.id),
           userId: String(userId),
-          lat: String(lat),
-          lng: String(lng),
+          lat: String(lat ?? ""),
+          lng: String(lng ?? ""),
           zone_name: zoneName ? String(zoneName) : "",
           incidentType: incidentType ? String(incidentType) : "",
         },
         io,
-        { sms: isSos }
+        { sms: withSms }
       );
       pushNotified += result.pushNotified || 0;
       smsNotified += result.smsNotified || 0;
@@ -279,6 +274,54 @@ const notifyUserGroups = async ({
   };
 };
 
+const groupNotifyCopy = (kind, pseudo, typeLabel, where) => {
+  if (kind === "false_alarm") {
+    return {
+      feedType: "info",
+      alertTitle: `Fausse alerte — ${pseudo}`,
+      alertBody: (groupName) =>
+        `${pseudo} a annulé son SOS dans ${groupName}. Situation sous contrôle. ${where}`,
+      pushTitle: "✅ Fausse alerte — groupe",
+      pushBody: (groupName) =>
+        `${pseudo} : fausse alerte dans ${groupName}. Situation sous contrôle. ${where}`,
+      pushType: "group_false_alarm",
+    };
+  }
+  if (kind === "safe") {
+    return {
+      feedType: "info",
+      alertTitle: `En sécurité — ${pseudo}`,
+      alertBody: (groupName) =>
+        `${pseudo} confirme être en sécurité (${groupName}). ${where}`,
+      pushTitle: "✅ En sécurité — groupe",
+      pushBody: (groupName) =>
+        `${pseudo} confirme : je suis en sécurité (${groupName}). ${where}`,
+      pushType: "group_safe",
+    };
+  }
+  if (kind === "report") {
+    return {
+      feedType: "danger",
+      alertTitle: `Signalement — ${typeLabel}`,
+      alertBody: (groupName) =>
+        `${pseudo} a signalé « ${typeLabel} » dans ${groupName}. ${where}`,
+      pushTitle: "⚠️ Signalement — groupe",
+      pushBody: (groupName) =>
+        `${pseudo} a signalé « ${typeLabel} » dans ${groupName}. ${where}`,
+      pushType: "group_report",
+    };
+  }
+  return {
+    feedType: "danger",
+    alertTitle: `SOS — ${pseudo}`,
+    alertBody: (groupName) => `Alerte SOS déclenchée dans ${groupName}. ${where}`,
+    pushTitle: "🚨 SOS — membre du groupe",
+    pushBody: (groupName) =>
+      `${pseudo} a déclenché une alerte SOS dans ${groupName} ! ${where}`,
+    pushType: "group_sos",
+  };
+};
+
 const notifyUserGroupsOnSOS = (userId, lat, lng, pseudo, zoneName = null, io = null) =>
   notifyUserGroups({ userId, lat, lng, pseudo, zoneName, kind: "sos", io });
 
@@ -294,11 +337,19 @@ const notifyUserGroupsOnReport = (userId, lat, lng, pseudo, zoneName, incidentTy
     io,
   });
 
+const notifyUserGroupsOnFalseAlarm = (userId, lat, lng, pseudo, zoneName = null, io = null) =>
+  notifyUserGroups({ userId, lat, lng, pseudo, zoneName, kind: "false_alarm", io });
+
+const notifyUserGroupsOnSafe = (userId, lat, lng, pseudo, zoneName = null, io = null) =>
+  notifyUserGroups({ userId, lat, lng, pseudo, zoneName, kind: "safe", io });
+
 module.exports = {
   notifyGroupMembers,
   notifyUserGroups,
   notifyUserGroupsOnSOS,
   notifyUserGroupsOnReport,
+  notifyUserGroupsOnFalseAlarm,
+  notifyUserGroupsOnSafe,
   getGroupMemberTokens,
   groupsNotifyEnabled,
 };

@@ -1,6 +1,9 @@
 const { pool } = require("../config/database");
 const { sendAlert, sendCancelAlert } = require("../services/alert");
-const { notifyUserGroupsOnSOS } = require("../services/groupNotify");
+const {
+  notifyUserGroupsOnSOS,
+  notifyUserGroupsOnFalseAlarm,
+} = require("../services/groupNotify");
 const { invalidateActiveAlerts } = require("../config/redis");
 const { resolveZoneName } = require("../utils/incidentZone");
 const { deliverEvent } = require("../services/partnerWebhooks");
@@ -448,13 +451,28 @@ const cancelSOS = async (req, res) => {
     await pool.query(`DELETE FROM sos_live_status WHERE incident_id = $1`, [incident.id]);
     await invalidateActiveAlerts();
 
+    const io = req.app.get("io");
+    try {
+      const userRes = await pool.query("SELECT pseudo FROM users WHERE id = $1", [req.userId]);
+      notification.groupSos = await notifyUserGroupsOnFalseAlarm(
+        req.userId,
+        incident.lat,
+        incident.lng,
+        userRes.rows[0]?.pseudo || "Un membre",
+        incident.zone_name,
+        io
+      );
+    } catch (groupErr) {
+      console.error("notifyUserGroupsOnFalseAlarm error:", groupErr.message);
+      notification.groupSos = { error: true };
+    }
+
     deliverEvent("cancel", {
       id: incident.id,
       resolution: "false_alarm",
       message: "Fausse alerte — alerte annulée par l'utilisateur",
     }).catch(() => {});
 
-    const io = req.app.get("io");
     if (io) {
       io.emit("sos_cancelled", {
         id: incident.id,
@@ -465,7 +483,7 @@ const cancelSOS = async (req, res) => {
     }
 
     return res.json({
-      message: "Fausse alerte — vos contacts ont été notifiés",
+      message: "Fausse alerte — vos contacts et groupes ont été notifiés",
       resolution: "false_alarm",
       incident: result.rows[0],
       notification,
@@ -502,13 +520,28 @@ const cancelLatestSOS = async (req, res) => {
     await pool.query(`DELETE FROM sos_live_status WHERE incident_id = $1`, [incident.id]);
     await invalidateActiveAlerts();
 
+    const io = req.app.get("io");
+    try {
+      const userRes = await pool.query("SELECT pseudo FROM users WHERE id = $1", [req.userId]);
+      notification.groupSos = await notifyUserGroupsOnFalseAlarm(
+        req.userId,
+        incident.lat,
+        incident.lng,
+        userRes.rows[0]?.pseudo || "Un membre",
+        incident.zone_name,
+        io
+      );
+    } catch (groupErr) {
+      console.error("notifyUserGroupsOnFalseAlarm error:", groupErr.message);
+      notification.groupSos = { error: true };
+    }
+
     deliverEvent("cancel", {
       id: incident.id,
       resolution: "false_alarm",
       message: "Fausse alerte — alerte annulée par l'utilisateur",
     }).catch(() => {});
 
-    const io = req.app.get("io");
     if (io) {
       io.emit("sos_cancelled", {
         id: incident.id,
@@ -519,7 +552,7 @@ const cancelLatestSOS = async (req, res) => {
     }
 
     return res.json({
-      message: "Fausse alerte — vos contacts ont été notifiés",
+      message: "Fausse alerte — vos contacts et groupes ont été notifiés",
       resolution: "false_alarm",
       incident: result.rows[0],
       notification,

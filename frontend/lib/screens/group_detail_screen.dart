@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme.dart';
 import '../providers/groups_provider.dart';
 import '../services/location_service.dart';
@@ -518,6 +519,34 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
               '📍 ${LocationFormat.displayLine(lat: a['lat'] as num?, lng: a['lng'] as num?)}',
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
             ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                TextButton.icon(
+                  onPressed: () => _openMaps(a['lat'], a['lng']),
+                  icon: const Icon(Icons.map_outlined, size: 16),
+                  label: const Text('Itinéraire', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.bleuFonce,
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+                if (type == 'danger' || type == 'help_needed')
+                  TextButton.icon(
+                    onPressed: () => _openEmergencyDial(),
+                    icon: const Icon(Icons.phone_in_talk_outlined, size: 16),
+                    label: const Text('Urgences', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.rouge,
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+              ],
+            ),
           ],
           const SizedBox(height: 6),
           Text('Par $author${createdAt.isNotEmpty ? ' · ${_formatDate(createdAt)}' : ''}',
@@ -525,6 +554,23 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
         ],
       ),
     );
+  }
+
+  Future<void> _openMaps(dynamic lat, dynamic lng) async {
+    final la = (lat as num?)?.toDouble();
+    final ln = (lng as num?)?.toDouble();
+    if (la == null || ln == null) return;
+    final uri = Uri.parse('https://maps.google.com/?q=$la,$ln');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _openEmergencyDial() async {
+    final uri = Uri.parse('tel:112');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
   }
 
   String _formatDate(String iso) {
