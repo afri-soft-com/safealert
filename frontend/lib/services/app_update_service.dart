@@ -266,8 +266,8 @@ class AppUpdateService {
       displayLatest = latest;
     } else if (belowLatestBuild) {
       final ver = latest.isNotEmpty ? latest : current;
-      final remoteBuild = latestBuild ?? 0;
-      displayLatest = '$ver ($remoteBuild)';
+      // belowLatestBuild implies latestBuild is a positive int.
+      displayLatest = '$ver ($latestBuild)';
       displayCurrent = '$current ($build)';
     } else if (latest.isNotEmpty) {
       displayLatest = latest;
