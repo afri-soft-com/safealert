@@ -1,6 +1,9 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+﻿import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:safealert/providers/incident_provider.dart';
+import 'package:safealert/utils/network_error.dart';
 import '../mocks.dart';
 
 void main() {
@@ -180,7 +183,12 @@ void main() {
       expect(fakeSounds.feedbackDiscreteCalls, 1);
     });
 
-    test('queues SOS offline on failure without siren', () async {
+    test('queues SOS offline on network failure without siren', () async {
+      fakeApi.onPost(
+        '/sos/trigger',
+        () => throw const SocketException('Network unreachable'),
+      );
+
       final result = await provider.triggerSOS(-4.3, 15.3);
 
       expect(result, isNotNull);
@@ -189,6 +197,22 @@ void main() {
       expect(fakeSounds.playSosAlertCalls, 0);
       final pending = await fakeDb.listPendingSos();
       expect(pending, isNotEmpty);
+    });
+
+    test('does not queue SOS offline on HTTP API error', () async {
+      fakeApi.onPost(
+        '/sos/trigger',
+        () => throw ApiException('Serveur indisponible', 503),
+      );
+
+      final result = await provider.triggerSOS(-4.3, 15.3);
+
+      expect(result, isNotNull);
+      expect(result!['queued'], isNot(true));
+      expect(result['blocked'], true);
+      expect(provider.isOffline, false);
+      final pending = await fakeDb.listPendingSos();
+      expect(pending, isEmpty);
     });
   });
 
