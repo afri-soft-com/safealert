@@ -80,7 +80,8 @@ class _SOSScreenState extends State<SOSScreen> {
   }
 
   void _startHold() {
-    if (_sending || _completed) return;
+    // Allow retry while queued/failed; block only during in-flight or success.
+    if (_sending || (_completed && !_queued)) return;
     _holdTimer?.cancel();
     setState(() {
       _holding = true;
@@ -127,7 +128,8 @@ class _SOSScreenState extends State<SOSScreen> {
   }
 
   Future<void> _sendSOS() async {
-    if (_completed || _sending) return;
+    if (_sending) return;
+    if (_completed && !_queued) return;
     if (!AppConfigService().canSendSos) {
       setState(() {
         _failed = true;
@@ -454,40 +456,79 @@ class _SOSScreenState extends State<SOSScreen> {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                 children: [
-                  if (_failed || (_queued == true) || (_statusMsg != null && _statusMsg!.isNotEmpty))
+                  // Warn / error banners ONLY — never for successful delivery notes.
+                  if (_failed || _queued)
                     Container(
                       width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFF3CD),
-                        border: Border.all(color: AppColors.orange),
-                        borderRadius: BorderRadius.circular(10),
+                        color: _failed
+                            ? const Color(0xFFFDECEC)
+                            : const Color(0xFFFFF6E8),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _failed
+                              ? AppColors.rouge.withValues(alpha: 0.35)
+                              : AppColors.orange.withValues(alpha: 0.45),
+                        ),
                       ),
-                      child: Text(
-                        _statusMsg ??
-                            (_queued == true
-                                ? '📶 Alerte enregistrée hors ligne — elle sera envoyée dès que le réseau revient. Voir « Envois en attente » dans Paramètres.'
-                                : '📶 Pas de connexion — L\'alerte n\'a pas pu être envoyée. Réessayez dès que le réseau est disponible.'),
-                        style: const TextStyle(fontSize: 11, color: Color(0xFF7A4F00)),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            _failed
+                                ? Icons.error_outline_rounded
+                                : Icons.wifi_off_rounded,
+                            size: 20,
+                            color: _failed ? AppColors.rouge : AppColors.orange,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _statusMsg ??
+                                  (_queued
+                                      ? 'Alerte enregistrée sur l\'appareil — pas encore transmise. Réessayez ou ouvrez Paramètres → Envois en attente.'
+                                      : 'L\'alerte n\'a pas pu être envoyée. Réessayez.'),
+                              style: TextStyle(
+                                fontSize: 13,
+                                height: 1.35,
+                                fontWeight: FontWeight.w500,
+                                color: _failed
+                                    ? AppColors.rougeDark
+                                    : const Color(0xFF7A4F00),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.grisClair,
-                      borderRadius: BorderRadius.circular(10),
+                  if (!_completed && !_queued && !_failed && !_sending)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.grisClair,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'Maintenez le bouton rouge ~1,5 s pour envoyer. '
+                        'GPS recommandé. Les contacts et groupes reçoivent push + SMS.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: AppColors.gris,
+                        ),
+                      ),
                     ),
-                    child: const Text(
-                      'Maintenez le bouton environ 2 secondes pour envoyer. '
-                      'Pour une meilleure localisation, activez le GPS. '
-                      'Gardez une batterie suffisante pendant l\'alerte.',
-                      style: TextStyle(fontSize: 11, color: AppColors.gris),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   Semantics(
                     button: true,
                     label: _failed
@@ -557,53 +598,101 @@ class _SOSScreenState extends State<SOSScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
                   ...List.generate(_steps.length, (i) {
                     final s = _steps[i];
                     // Queued offline: only GPS is local; do not claim contacts/community notified.
                     final done = _queued ? (i == 0 && _step > 0) : _step > i;
+                    final pending = _queued && i > 0;
                     return Container(
-                      margin: const EdgeInsets.only(bottom: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                       decoration: BoxDecoration(
-                        color: done ? s.color.withValues(alpha: 0.1) : const Color(0xFFF8F8F8),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: done ? s.color : const Color(0xFFEEEEEE)),
+                        color: done
+                            ? s.color.withValues(alpha: 0.1)
+                            : pending
+                                ? const Color(0xFFFFF8F0)
+                                : const Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: done
+                              ? s.color.withValues(alpha: 0.45)
+                              : pending
+                                  ? AppColors.orange.withValues(alpha: 0.35)
+                                  : const Color(0xFFE8ECEF),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          Text(done ? '✅' : s.icon, style: const TextStyle(fontSize: 18)),
+                          Text(
+                            done ? '✅' : pending ? '⏳' : s.icon,
+                            style: const TextStyle(fontSize: 18),
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               _queued ? _queuedStepLabels[i] : s.label,
                               style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600,
-                              color: done ? s.color : AppColors.gris,
-                            ), overflow: TextOverflow.ellipsis),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: done
+                                    ? s.color
+                                    : pending
+                                        ? AppColors.orange
+                                        : AppColors.gris,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
                     );
                   }),
                   if (_statusMsg != null && !_failed && !_queued) ...[
+                    const SizedBox(height: 4),
                     Container(
                       width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 12, top: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.vertClair,
-                        border: Border.all(color: AppColors.vert),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.vert.withValues(alpha: 0.35),
+                        ),
                       ),
-                      child: Text(_statusMsg!, style: const TextStyle(fontSize: 12, color: AppColors.vert)),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.check_circle_outline_rounded,
+                            size: 20,
+                            color: AppColors.vert,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _statusMsg!,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                height: 1.35,
+                                color: AppColors.vert,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                   if (_queued) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
-                      child: OutlinedButton.icon(
+                      child: FilledButton.icon(
                         onPressed: () async {
                           final n = await context
                               .read<IncidentProvider>()
@@ -624,13 +713,24 @@ class _SOSScreenState extends State<SOSScreen> {
                           } else {
                             showAppSnackBar(
                               context,
-                              'Toujours hors ligne — réessayez dans un instant',
+                              'Serveur encore injoignable — réessayez dans 20 s',
                               isError: true,
                             );
                           }
                         },
-                        icon: const Icon(Icons.cloud_upload_outlined, size: 18),
-                        label: const Text('Réessayer l\'envoi maintenant'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.cloud_upload_outlined, size: 20),
+                        label: const Text(
+                          'Réessayer l\'envoi maintenant',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ),
                   ],
@@ -638,21 +738,35 @@ class _SOSScreenState extends State<SOSScreen> {
                     if (_sosLat != null && _sosLng != null) ...[
                       Container(
                         width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(top: 14, bottom: 10),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: AppColors.rougeLight,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.rouge),
+                          color: _queued
+                              ? const Color(0xFFFFF8F0)
+                              : AppColors.rougeLight,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: _queued
+                                ? AppColors.orange.withValues(alpha: 0.4)
+                                : AppColors.rouge.withValues(alpha: 0.35),
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Lieu partagé avec vos contacts',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.rouge),
+                            Text(
+                              _queued
+                                  ? 'Position enregistrée (envoi en attente)'
+                                  : 'Lieu partagé avec vos contacts',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: _queued
+                                    ? AppColors.orange
+                                    : AppColors.rouge,
+                              ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
                             Text(
                               LocationFormat.displayLine(
                                 zoneName: _zoneName,

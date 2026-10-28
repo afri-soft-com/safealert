@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../services/alert_sound_service.dart';
 import '../services/api_service.dart';
@@ -329,12 +333,20 @@ class IncidentProvider extends ChangeNotifier {
       } catch (_) {}
       Map<String, dynamic> res;
       try {
-        res = await _api.post('/sos/trigger', payload);
+        res = await _api.post(
+          '/sos/trigger',
+          payload,
+          timeout: const Duration(seconds: 45),
+        );
       } catch (first) {
-        // One quick retry for transient timeouts / blips — still not "offline".
+        // One retry after wake delay — timeouts are NOT treated as offline.
         if (first is ApiException) rethrow;
-        await Future<void>.delayed(const Duration(seconds: 2));
-        res = await _api.post('/sos/trigger', payload);
+        await Future<void>.delayed(const Duration(seconds: 3));
+        res = await _api.post(
+          '/sos/trigger',
+          payload,
+          timeout: const Duration(seconds: 60),
+        );
       }
       if (resolved.source == 'last_known' || resolved.source == 'cache') {
         res['positionNote'] =
@@ -375,7 +387,29 @@ class IncidentProvider extends ChangeNotifier {
         }
       }
 
-      // True network failure (timeout / no route) → queue + local SMS draft.
+      // Slow server / cold start — phone network may be fine.
+      if (e is TimeoutException) {
+        return {
+          'blocked': true,
+          'serverSlow': true,
+          'message':
+              'Votre réseau répond, mais le serveur SafeAlert met trop de temps '
+              '(réveil). Attendez 20 s puis maintenez à nouveau le bouton SOS.',
+        };
+      }
+
+      final isNet = e is SocketException || e is http.ClientException;
+      if (!isNet) {
+        return {
+          'blocked': true,
+          'message': userFacingError(
+            e,
+            fallback: 'Envoi SOS impossible. Réessayez.',
+          ),
+        };
+      }
+
+      // True network failure → queue + local SMS draft.
       await _cache.enqueuePendingSos(payload);
       _isOffline = true;
       notifyListeners();
@@ -384,7 +418,6 @@ class IncidentProvider extends ChangeNotifier {
       if (isDiscrete) {
         await _sounds.feedbackDiscreteSosTrigger();
       }
-      // Best-effort: retry flush shortly in case it was a brief blip.
       Future<void>.delayed(const Duration(seconds: 8), () async {
         try {
           await flushPendingSos();
@@ -393,8 +426,8 @@ class IncidentProvider extends ChangeNotifier {
       return {
         'queued': true,
         'message':
-            'Alerte enregistrée hors ligne — pas encore transmise aux contacts. '
-            'Elle partira automatiquement dès que le réseau revient '
+            'Pas d\'accès au serveur SafeAlert pour le moment. '
+            'Alerte enregistrée localement — envoi auto dès reconnexion '
             '(Paramètres → Envois en attente).',
         ...payload,
       };

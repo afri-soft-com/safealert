@@ -140,10 +140,14 @@ class ApiService {
     return _handle(res);
   }
 
-  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> post(
+    String path,
+    Map<String, dynamic> body, {
+    Duration? timeout,
+  }) async {
     final res = await http
         .post(Uri.parse('$baseUrl$path'), headers: _headers, body: jsonEncode(body))
-        .timeout(requestTimeout);
+        .timeout(timeout ?? requestTimeout);
     return _handle(res);
   }
 
