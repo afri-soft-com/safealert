@@ -94,20 +94,28 @@ const authVerifyLimiter = rateLimit({
   store: new RedisRateLimitStore({ prefix: "rl:auth:verify:", windowMs: WINDOW_15M }),
 });
 
+const isSosApiPath = (req) => {
+  const url = String(req.originalUrl || req.url || "");
+  return url.startsWith("/api/sos");
+};
+
 const apiLimiter = rateLimit({
   windowMs: WINDOW_15M,
-  max: 300,
+  // Polling (config, map, live) burns quota during QA — keep room for real use.
+  max: 1200,
   message: { error: "Trop de requêtes, réessayez plus tard" },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: skipInTest,
+  // SOS has its own limiter — never block an emergency on the global API quota.
+  skip: (req) => skipInTest() || isSosApiPath(req),
+  skipFailedRequests: true,
   store: new RedisRateLimitStore({ prefix: "rl:api:", windowMs: WINDOW_15M }),
 });
 
-/** Soft SOS anti-abuse: 30 successful SOS / 15 min per user (failures do not burn quota). */
+/** Soft SOS anti-abuse: 40 successful SOS / 15 min per user (failures do not burn quota). */
 const sosLimiter = rateLimit({
   windowMs: WINDOW_15M,
-  max: 30,
+  max: 40,
   message: {
     error:
       "Trop d'alertes envoyées récemment. Attendez quelques minutes ou utilisez l'annuaire d'urgence si besoin immédiat.",
