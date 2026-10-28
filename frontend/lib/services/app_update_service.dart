@@ -264,9 +264,9 @@ class AppUpdateService {
     String? displayCurrent = current;
     if (belowLatestVersion && latest.isNotEmpty) {
       displayLatest = latest;
-    } else if (belowLatestBuild && latestBuild != null) {
+    } else if (belowLatestBuild) {
       final ver = latest.isNotEmpty ? latest : current;
-      displayLatest = '$ver ($latestBuild)';
+      displayLatest = '$ver (${latestBuild!})';
       displayCurrent = '$current ($build)';
     } else if (latest.isNotEmpty) {
       displayLatest = latest;
