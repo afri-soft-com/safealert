@@ -217,7 +217,79 @@ jobs:
               console.log("FCM init FAIL", e.message);
             }
 
-            console.log("\n=== RENDER LOGS (names) ===");
+            console.log("\n=== INCIDENT COLUMNS ===");
+            const cols = await pool.query(`
+              SELECT column_name, data_type, udt_name
+              FROM information_schema.columns
+              WHERE table_schema='public' AND table_name='incidents'
+              ORDER BY ordinal_position`);
+            console.log(cols.rows.map((r) => `${r.column_name}:${r.udt_name}`).join(", "));
+            const need = [
+              "priority_boost",
+              "mediation_requested",
+              "mediation_status",
+              "share_token",
+              "share_expires_at",
+              "location",
+            ];
+            const have = new Set(cols.rows.map((r) => r.column_name));
+            console.log(
+              "missing:",
+              need.filter((c) => !have.has(c)).join(", ") || "(none)"
+            );
+
+            console.log("\n=== RECENT INCIDENTS ===");
+            const recent = await pool.query(`
+              SELECT id, incident_type, status, zone_name, created_at,
+                     (location IS NOT NULL) AS has_location
+              FROM incidents ORDER BY created_at DESC LIMIT 8`);
+            for (const row of recent.rows) {
+              console.log(JSON.stringify(row));
+            }
+
+            console.log("\n=== DRY INSERT SOS ===");
+            const u = await pool.query(
+              `SELECT id FROM users ORDER BY created_at DESC NULLS LAST LIMIT 1`
+            );
+            const uid = u.rows[0]?.id;
+            if (!uid) {
+              console.log("no user for dry insert");
+            } else {
+              const lat = -4.3276;
+              const lng = 15.3136;
+              try {
+                const ins = await pool.query(
+                  `INSERT INTO incidents (
+                     user_id, incident_type, lat, lng, location, description, severity, zone_name,
+                     priority_boost, mediation_requested, mediation_status, share_token, share_expires_at
+                   )
+                   VALUES (
+                     $1, 'sos_diag', $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, 'alert', $7,
+                     false, false, null, $8, NOW() + INTERVAL '1 hour'
+                   )
+                   RETURNING id`,
+                  [uid, lat, lng, lng, lat, "diag dry insert", "Diag", "diag" + Date.now().toString(36)]
+                );
+                console.log("full insert OK", ins.rows[0].id);
+                await pool.query(`DELETE FROM incidents WHERE id = $1`, [ins.rows[0].id]);
+              } catch (e) {
+                console.log("full insert FAIL", e.code, e.message);
+                try {
+                  const ins2 = await pool.query(
+                    `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name)
+                     VALUES ($1, 'sos_diag', $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, 'alert', $7)
+                     RETURNING id`,
+                    [uid, lat, lng, lng, lat, "diag minimal", "Diag"]
+                  );
+                  console.log("minimal insert OK", ins2.rows[0].id);
+                  await pool.query(`DELETE FROM incidents WHERE id = $1`, [ins2.rows[0].id]);
+                } catch (e2) {
+                  console.log("minimal insert FAIL", e2.code, e2.message);
+                }
+              }
+            }
+
+            console.log("\n=== RENDER LOGS (triggerSOS) ===");
             try {
               const svc = await fetch(
                 `https://api.render.com/v1/services/${process.env.SERVICE_ID}`,
@@ -228,11 +300,11 @@ jobs:
               const ownerId = sj.ownerId || sj.service?.ownerId || sj.owner?.id;
               if (ownerId) {
                 const logs = await fetch(
-                  `https://api.render.com/v1/logs?ownerId=${ownerId}&resource=${process.env.SERVICE_ID}&limit=30&text=FCM|Pay hub|SMS|error`,
+                  `https://api.render.com/v1/logs?ownerId=${ownerId}&resource=${process.env.SERVICE_ID}&limit=50&text=triggerSOS|sendAlert|error`,
                   { headers: { Authorization: `Bearer ${process.env.RENDER_API_KEY}` } }
                 );
                 const lj = await logs.text();
-                console.log(lj.slice(0, 2500));
+                console.log(lj.slice(0, 4000));
               }
             } catch (e) {
               console.log("render logs error", e.message);
