@@ -526,23 +526,23 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
               children: [
                 TextButton.icon(
                   onPressed: () => _openMaps(a['lat'], a['lng']),
-                  icon: const Icon(Icons.map_outlined, size: 16),
-                  label: const Text('Itinéraire', style: TextStyle(fontSize: 12)),
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: const Text('Itinéraire', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.bleuFonce,
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
+                    minimumSize: const Size(48, 40),
+                    tapTargetSize: MaterialTapTargetSize.padded,
                   ),
                 ),
                 if (type == 'danger' || type == 'help_needed')
                   TextButton.icon(
                     onPressed: () => _openEmergencyDial(),
-                    icon: const Icon(Icons.phone_in_talk_outlined, size: 16),
-                    label: const Text('Urgences', style: TextStyle(fontSize: 12)),
+                    icon: const Icon(Icons.phone_in_talk_outlined, size: 18),
+                    label: const Text('Urgences', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                     style: TextButton.styleFrom(
                       foregroundColor: AppColors.rouge,
-                      padding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
+                      minimumSize: const Size(48, 40),
+                      tapTargetSize: MaterialTapTargetSize.padded,
                     ),
                   ),
               ],
@@ -556,20 +556,68 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     );
   }
 
+  double? _toCoord(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString().trim());
+  }
+
   Future<void> _openMaps(dynamic lat, dynamic lng) async {
-    final la = (lat as num?)?.toDouble();
-    final ln = (lng as num?)?.toDouble();
-    if (la == null || ln == null) return;
-    final uri = Uri.parse('https://maps.google.com/?q=$la,$ln');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final la = _toCoord(lat);
+    final ln = _toCoord(lng);
+    if (la == null || ln == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Position indisponible pour l\'itinéraire')),
+      );
+      return;
     }
+
+    // Prefer geo: on Android (opens Maps / any nav app). Fallback to HTTPS.
+    final candidates = <Uri>[
+      Uri.parse('geo:$la,$ln?q=$la,$ln'),
+      Uri.parse('google.navigation:q=$la,$ln'),
+      Uri.parse('https://maps.google.com/?q=$la,$ln'),
+      Uri.parse('https://www.google.com/maps/search/?api=1&query=$la,$ln'),
+    ];
+
+    Object? lastError;
+    for (final uri in candidates) {
+      try {
+        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (ok) return;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          lastError == null
+              ? 'Impossible d\'ouvrir la carte. Installez Google Maps.'
+              : 'Ouverture carte impossible.',
+        ),
+      ),
+    );
   }
 
   Future<void> _openEmergencyDial() async {
-    final uri = Uri.parse('tel:112');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
+    final uri = Uri(scheme: 'tel', path: '112');
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible d\'ouvrir le composeur')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Appel d\'urgence impossible')),
+        );
+      }
     }
   }
 

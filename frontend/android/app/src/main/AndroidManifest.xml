@@ -108,6 +108,24 @@
             <action android:name="android.intent.action.CALL"/>
             <data android:scheme="tel"/>
         </intent>
+        <!-- Maps / itinéraire (url_launcher https + geo) — Android 11+ package visibility -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="geo"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="http"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="google.navigation"/>
+        </intent>
+        <package android:name="com.google.android.apps.maps"/>
         <package android:name="com.google.android.gms"/>
     </queries>
 </manifest>
