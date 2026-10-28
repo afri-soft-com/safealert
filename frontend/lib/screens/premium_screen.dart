@@ -97,6 +97,26 @@ class _PremiumScreenState extends State<PremiumScreen> {
     }
   }
 
+  /// RDC prefixes → Mobile Money operator (national 2 digits).
+  static const _prefixTelecom = <String, String>{
+    '81': 'MP', '82': 'MP', '83': 'MP',
+    '97': 'AM', '98': 'AM', '99': 'AM',
+    '80': 'OM', '84': 'OM', '85': 'OM', '89': 'OM',
+    '90': 'AF', '91': 'AF',
+  };
+  static const _telecomLabel = <String, String>{
+    'MP': 'M-Pesa (Vodacom)',
+    'AM': 'Airtel Money',
+    'OM': 'Orange Money',
+    'AF': 'AfriMoney',
+  };
+  static const _telecomHint = <String, String>{
+    'MP': '081 / 082 / 083',
+    'AM': '097 / 098 / 099',
+    'OM': '080 / 084 / 085 / 089',
+    'AF': '090 / 091',
+  };
+
   /// Normalize to 243XXXXXXXXX (12 digits) or null if incomplete.
   String? _normalizeMmDigits(String raw) {
     var digits = raw.replaceAll(RegExp(r'\D'), '');
@@ -119,12 +139,40 @@ class _PremiumScreenState extends State<PremiumScreen> {
     return digits.length.clamp(0, 9);
   }
 
-  /// RDC Mobile Money: +243 + 9 digits (e.g. 0970… → 243970…).
+  String? _detectTelecomFromPhone(String raw) {
+    final digits = _normalizeMmDigits(raw);
+    if (digits == null || digits.length < 5) return null;
+    return _prefixTelecom[digits.substring(3, 5)];
+  }
+
+  /// RDC Mobile Money: format + opérateur cohérent avec le préfixe.
   String? _validateMmPhone(String raw) {
-    if (_normalizeMmDigits(raw) != null) return null;
-    final n = _nationalDigitCount(raw);
-    if (n == 0) return 'Entrez votre numéro Mobile Money';
-    return 'Numéro incomplet ($n/9 chiffres après +243). Exemple : 0970123456';
+    final digits = _normalizeMmDigits(raw);
+    if (digits == null) {
+      final n = _nationalDigitCount(raw);
+      if (n == 0) return 'Entrez votre numéro Mobile Money';
+      return 'Numéro incomplet ($n/9 chiffres après +243). Exemple : ${_telecomHint[_telecom] ?? '0970…'}';
+    }
+    final detected = _detectTelecomFromPhone(raw);
+    if (detected == null) {
+      return 'Préfixe inconnu. ${_telecomLabel[_telecom]} utilise ${_telecomHint[_telecom]}.';
+    }
+    if (detected != _telecom) {
+      return 'Ce numéro est ${_telecomLabel[detected]}, pas ${_telecomLabel[_telecom]}. '
+          'Sélectionnez ${_telecomLabel[detected]} ou saisissez un numéro ${_telecomHint[_telecom]}.';
+    }
+    return null;
+  }
+
+  void _onPhoneChanged(String _) {
+    final detected = _detectTelecomFromPhone(_phoneCtrl.text);
+    if (detected != null &&
+        detected != _telecom &&
+        (detected == 'MP' || detected == 'AM' || detected == 'OM')) {
+      setState(() => _telecom = detected);
+    } else {
+      setState(() {});
+    }
   }
 
   Future<void> _payMobileMoney() async {
@@ -421,13 +469,33 @@ class _PremiumScreenState extends State<PremiumScreen> {
                               TextField(
                                 controller: _phoneCtrl,
                                 keyboardType: TextInputType.phone,
-                                onChanged: (_) => setState(() {}),
+                                onChanged: _onPhoneChanged,
                                 decoration: InputDecoration(
                                   labelText: 'Numéro Mobile Money',
-                                  hintText: '0970123456 ou +243970123456',
-                                  helperText:
-                                      '${_nationalDigitCount(_phoneCtrl.text)}/9 chiffres locaux (RDC)',
-                                  helperMaxLines: 2,
+                                  hintText: _telecom == 'MP'
+                                      ? '081… / 082… (Vodacom)'
+                                      : _telecom == 'OM'
+                                          ? '084… / 089… (Orange)'
+                                          : '097… / 099… (Airtel)',
+                                  helperText: () {
+                                    final n = _nationalDigitCount(_phoneCtrl.text);
+                                    final err = _phoneCtrl.text.trim().isEmpty
+                                        ? null
+                                        : _validateMmPhone(_phoneCtrl.text.trim());
+                                    if (err != null) return err;
+                                    return '$n/9 — ${_telecomLabel[_telecom]} '
+                                        '(${_telecomHint[_telecom]})';
+                                  }(),
+                                  helperMaxLines: 3,
+                                  helperStyle: TextStyle(
+                                    fontSize: 11,
+                                    color: (_phoneCtrl.text.trim().isNotEmpty &&
+                                            _validateMmPhone(
+                                                    _phoneCtrl.text.trim()) !=
+                                                null)
+                                        ? AppColors.rouge
+                                        : AppColors.gris,
+                                  ),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(10),
                                   ),

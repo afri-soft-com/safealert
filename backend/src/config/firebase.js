@@ -15,10 +15,13 @@ const SOS_PUSH_TYPES = new Set([
   "safety_ping_missed",
 ]);
 
-/** New channel with SafeAlert-branded sound (old sos_alerts was sticky / often silent). */
-const SOS_CHANNEL_ID = "safealert_sos_siren_v1";
-/** Legacy id still referenced by older clients — keep payload dual-compatible via sound name. */
+/**
+ * Prefer sticky legacy channel so ALL installed builds receive SOS
+ * (new builds also create safealert_sos_*_v1 + re-create sos_alerts with siren).
+ */
+const SOS_CHANNEL_ID = "sos_alerts";
 const SOS_CHANNEL_ID_LEGACY = "sos_alerts";
+const SOS_CHANNEL_ID_V2 = "safealert_sos_siren_v1";
 const DEFAULT_CHANNEL_ID = "safealert_general_v1";
 const SOS_SOUND_ANDROID = "safealert_siren";
 const SOS_SOUND_IOS = "safealert_siren.caf";
@@ -56,7 +59,13 @@ const stringifyData = (data) => {
 const sendPush = async (token, payload) => {
   if (!fcm) return null;
   try {
-    const data = stringifyData(payload.data);
+    const data = stringifyData({
+      ...(payload.data || {}),
+      // Mirror notification fields into data so background/data handlers can play sound
+      // even when the OS consumes the system tray notification.
+      title: payload.notification?.title || payload.data?.title,
+      body: payload.notification?.body || payload.data?.body,
+    });
     const isSos = data?.type && SOS_PUSH_TYPES.has(data.type);
     const message = {
       token,
@@ -64,12 +73,19 @@ const sendPush = async (token, payload) => {
       notification: payload.notification,
       android: {
         priority: "high",
+        ttl: isSos ? 60 * 1000 : undefined,
         notification: {
           channelId: isSos ? SOS_CHANNEL_ID : DEFAULT_CHANNEL_ID,
           sound: isSos ? SOS_SOUND_ANDROID : DEFAULT_SOUND_ANDROID,
           defaultVibrateTimings: true,
           priority: isSos ? "max" : "high",
-          ...(isSos ? { visibility: "public" } : {}),
+          ...(isSos
+            ? {
+                visibility: "public",
+                defaultSound: false,
+                notificationCount: 1,
+              }
+            : {}),
         },
       },
       apns: {
@@ -94,6 +110,7 @@ const sendPush = async (token, payload) => {
     return msg;
   } catch (err) {
     const code = err?.errorInfo?.code || err?.code || "";
+    // Stale tokens: clear is handled elsewhere; log for ops.
     logError("FCM send error:", code || err.message, err?.errorInfo || "");
     return null;
   }

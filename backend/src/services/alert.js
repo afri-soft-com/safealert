@@ -27,6 +27,7 @@ const notifyContacts = async (client, userId, user, messageTitle, messageBody, s
   );
 
   let pushSent = 0;
+  let smsSent = 0;
   for (const contact of contactsResult.rows) {
     const contactUserId = await resolveContactUserId(client, contact.contact_phone);
     if (contactUserId && String(contactUserId) === String(userId)) {
@@ -40,7 +41,9 @@ const notifyContacts = async (client, userId, user, messageTitle, messageBody, s
       if (n > 0) pushSent += 1;
     }
     try {
-      await sendSMS(contact.contact_phone, smsBody);
+      const smsRes = await sendSMS(contact.contact_phone, smsBody);
+      // Count only real deliveries (not console simulation / failed fallback).
+      if (smsRes && !smsRes.simulated && !smsRes.failed) smsSent += 1;
     } catch (err) {
       console.error("SOS contact SMS failed:", err.message);
     }
@@ -49,8 +52,13 @@ const notifyContacts = async (client, userId, user, messageTitle, messageBody, s
   console.log("SOS contacts notified", {
     contacts: contactsResult.rows.length,
     pushSent,
+    smsSent,
   });
-  return contactsResult.rows.length;
+  return {
+    contacts: contactsResult.rows.length,
+    pushSent,
+    smsSent,
+  };
 };
 
 const getNearbyUsers = async (client, userId, lat, lng) => {
@@ -122,7 +130,7 @@ const sendAlert = async (userId, lat, lng, incidentType, zoneName = null) => {
     const where = locationSnippet(lat, lng, zoneName);
     const maps = `https://maps.google.com/?q=${lat},${lng}`;
 
-    const contactsNotified = await notifyContacts(
+    const contactStats = await notifyContacts(
       client,
       userId,
       user,
@@ -133,9 +141,10 @@ const sendAlert = async (userId, lat, lng, incidentType, zoneName = null) => {
     );
 
     const nearbyUsers = await getNearbyUsers(client, userId, lat, lng);
+    let nearbyPush = 0;
 
     for (const nu of nearbyUsers) {
-      await sendPushToUser(nu.id, {
+      const n = await sendPushToUser(nu.id, {
         notification: {
           title: "🚨 Alerte dans votre quartier",
           body: `${user.pseudo} signale un incident à proximité — ${where}`,
@@ -149,9 +158,16 @@ const sendAlert = async (userId, lat, lng, incidentType, zoneName = null) => {
           incidentType,
         },
       });
+      if (n > 0) nearbyPush += 1;
     }
 
-    return { contactsNotified, nearbyNotified: nearbyUsers.length };
+    return {
+      contactsNotified: contactStats.contacts,
+      contactsPush: contactStats.pushSent,
+      contactsSms: contactStats.smsSent,
+      nearbyNotified: nearbyUsers.length,
+      nearbyPush,
+    };
   } finally {
     client.release();
   }
@@ -167,7 +183,7 @@ const sendCancelAlert = async (userId, lat, lng) => {
     const user = userResult.rows[0];
     if (!user) return { contactsNotified: 0, nearbyNotified: 0 };
 
-    const contactsNotified = await notifyContacts(
+    const contactStats = await notifyContacts(
       client,
       userId,
       user,
@@ -192,7 +208,12 @@ const sendCancelAlert = async (userId, lat, lng) => {
       });
     }
 
-    return { contactsNotified, nearbyNotified: nearbyUsers.length };
+    return {
+      contactsNotified: contactStats.contacts,
+      contactsPush: contactStats.pushSent,
+      contactsSms: contactStats.smsSent,
+      nearbyNotified: nearbyUsers.length,
+    };
   } finally {
     client.release();
   }

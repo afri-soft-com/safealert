@@ -193,9 +193,25 @@ class _SOSScreenState extends State<SOSScreen> {
     _shareUrl = result['share_url']?.toString();
     final approx = note != null && note.isNotEmpty;
 
-    final groupSos = result['notification'] is Map
-        ? Map<String, dynamic>.from(result['notification'] as Map)['groupSos']
+    final notification = result['notification'] is Map
+        ? Map<String, dynamic>.from(result['notification'] as Map)
         : null;
+    final groupSos = notification?['groupSos'];
+    final contactsN = (notification?['contactsNotified'] as num?)?.toInt() ?? 0;
+    final contactsPush = (notification?['contactsPush'] as num?)?.toInt() ?? 0;
+    final contactsSms = (notification?['contactsSms'] as num?)?.toInt() ?? 0;
+    String? contactHint;
+    if (contactsN == 0) {
+      contactHint =
+          'Aucun contact de confiance enregistré. Ajoutez des contacts (Paramètres) pour les alerter par push/SMS.';
+    } else {
+      contactHint =
+          'Contacts : $contactsN · Push : $contactsPush · SMS : $contactsSms.';
+      if (contactsPush == 0 && contactsSms == 0) {
+        contactHint =
+            '$contactHint Aucune notification délivrée — le contact doit avoir SafeAlert (même numéro) ou un SMS actif.';
+      }
+    }
     String? groupHint;
     if (groupSos is Map) {
       final g = (groupSos['groupsNotified'] as num?)?.toInt() ?? 0;
@@ -228,6 +244,7 @@ class _SOSScreenState extends State<SOSScreen> {
     setState(() {
       final parts = <String>[
         if (note != null && note.isNotEmpty) note,
+        if (contactHint != null) contactHint,
         if (groupHint != null) groupHint,
       ];
       if (parts.isNotEmpty) _statusMsg = parts.join('\n');

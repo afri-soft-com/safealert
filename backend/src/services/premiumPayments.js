@@ -122,7 +122,8 @@ async function createIntent({
   const amountCdf =
     plan.code === "yearly" ? pricing.yearly_cdf : pricing.monthly_cdf;
   const telecomCode = payHub.operatorToTelecom(telecom || "MP");
-  const phoneNorm = payHub.normalizeHubPhone(phone);
+  const matched = payHub.assertPhoneMatchesTelecom(phone, telecomCode);
+  const phoneNorm = matched.phone;
   const intentId = crypto.randomUUID();
   const app = payHub.appId() || "safealert";
   const hubReference = `${app}_premium_${intentId}`;

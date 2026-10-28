@@ -84,6 +84,14 @@ String? mapKnownApiMessage(String message) {
     if (lower.contains('non configuré') || lower.contains('not configured')) {
       return 'Paiement Mobile Money temporairement indisponible. Réessayez plus tard.';
     }
+    if (lower.contains('invalide') && lower.contains('numéro') &&
+        (lower.contains('opérateur') || lower.contains('operator'))) {
+      return message.trim();
+    }
+    if (lower.contains('préfixe') ||
+        (lower.contains('numéro est') && lower.contains('money'))) {
+      return message.trim();
+    }
     if (lower.contains('invalide') && lower.contains('numéro')) {
       return 'Numéro Mobile Money invalide. Utilisez un numéro RDC (+243 puis 9 chiffres).';
     }

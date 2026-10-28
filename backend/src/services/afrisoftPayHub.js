@@ -59,6 +59,40 @@ const timingSafeEqualHex = (a, b) => {
   return crypto.timingSafeEqual(aa, bb);
 };
 
+/** RDC mobile prefixes → Mobile Money telecom (national 2 digits after 243). */
+const RDC_PREFIX_TELECOM = {
+  // Vodacom → M-Pesa
+  "81": "MP",
+  "82": "MP",
+  "83": "MP",
+  // Airtel → Airtel Money
+  "97": "AM",
+  "98": "AM",
+  "99": "AM",
+  // Orange → Orange Money
+  "80": "OM",
+  "84": "OM",
+  "85": "OM",
+  "89": "OM",
+  // Africell → AfriMoney
+  "90": "AF",
+  "91": "AF",
+};
+
+const TELECOM_LABEL = {
+  MP: "M-Pesa (Vodacom)",
+  AM: "Airtel Money",
+  OM: "Orange Money",
+  AF: "AfriMoney",
+};
+
+const TELECOM_PREFIX_HINT = {
+  MP: "081, 082, 083",
+  AM: "097, 098, 099",
+  OM: "080, 084, 085, 089",
+  AF: "090, 091",
+};
+
 /** Normalize to 243XXXXXXXXX (no +). */
 const normalizeHubPhone = (raw) => {
   let digits = String(raw || "").replace(/\D/g, "");
@@ -74,6 +108,45 @@ const normalizeHubPhone = (raw) => {
     throw err;
   }
   return digits;
+};
+
+/** Detect MM operator from RDC national prefix (81/97/84…). */
+const detectTelecomFromPhone = (rawOrNormalized) => {
+  const digits = normalizeHubPhone(rawOrNormalized);
+  const prefix = digits.slice(3, 5);
+  return RDC_PREFIX_TELECOM[prefix] || null;
+};
+
+/**
+ * Ensure the MSISDN belongs to the selected Mobile Money operator.
+ * Throws 400 INVALID_PHONE_OPERATOR on mismatch.
+ */
+const assertPhoneMatchesTelecom = (rawPhone, telecom) => {
+  const phone = normalizeHubPhone(rawPhone);
+  const code = normalizeTelecom(telecom);
+  const detected = detectTelecomFromPhone(phone);
+  if (!detected) {
+    const err = new Error(
+      `Préfixe inconnu pour ${TELECOM_LABEL[code] || code}. ` +
+        `Utilisez un numéro ${TELECOM_PREFIX_HINT[code] || "RDC"}.`
+    );
+    err.status = 400;
+    err.code = "UNKNOWN_PHONE_PREFIX";
+    err.detected = null;
+    throw err;
+  }
+  if (detected !== code) {
+    const err = new Error(
+      `Ce numéro est ${TELECOM_LABEL[detected]} (${TELECOM_PREFIX_HINT[detected]}), ` +
+        `pas ${TELECOM_LABEL[code]}. Changez d'opérateur ou de numéro.`
+    );
+    err.status = 400;
+    err.code = "INVALID_PHONE_OPERATOR";
+    err.detected = detected;
+    err.expected = code;
+    throw err;
+  }
+  return { phone, telecom: code, detected };
 };
 
 const normalizeTelecom = (raw) => {
@@ -167,12 +240,13 @@ async function createPayment({
     err.code = "AMOUNT_TOO_LOW";
     throw err;
   }
+  const matched = assertPhoneMatchesTelecom(phone, telecom);
   const body = {
     app_id: appId(),
     amount_cdf: amount,
     currency: "CDF",
-    phone: normalizeHubPhone(phone),
-    telecom: normalizeTelecom(telecom),
+    phone: matched.phone,
+    telecom: matched.telecom,
     reference,
     purpose: purpose || "pay",
     idempotency_key: idempotencyKey,
@@ -235,12 +309,13 @@ async function createPayout({
     err.code = "AMOUNT_TOO_LOW";
     throw err;
   }
+  const matched = assertPhoneMatchesTelecom(phone, telecom);
   const body = {
     app_id: appId(),
     amount_cdf: amount,
     currency: "CDF",
-    phone: normalizeHubPhone(phone),
-    telecom: normalizeTelecom(telecom),
+    phone: matched.phone,
+    telecom: matched.telecom,
     reference,
     purpose: "withdraw",
     idempotency_key: idempotencyKey,
@@ -317,6 +392,9 @@ function verifyIncomingWebhook(timestamp, signatureHex, path, rawBody) {
 module.exports = {
   MIN_CDF,
   TELECOMS,
+  RDC_PREFIX_TELECOM,
+  TELECOM_LABEL,
+  TELECOM_PREFIX_HINT,
   isConfigured,
   hubConfigured,
   appId,
@@ -324,6 +402,8 @@ module.exports = {
   normalizeHubPhone,
   normalizeTelecom,
   operatorToTelecom,
+  detectTelecomFromPhone,
+  assertPhoneMatchesTelecom,
   createPayment,
   createPayout,
   getPayment,
