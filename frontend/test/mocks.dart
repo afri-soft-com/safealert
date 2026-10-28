@@ -229,7 +229,11 @@ class FakeApiService implements ApiService {
   }
 
   @override
-  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> post(
+    String path,
+    Map<String, dynamic> body, {
+    Duration? timeout,
+  }) async {
     lastPath = path;
     lastBody = body;
     final factory = _postResponses[path];
