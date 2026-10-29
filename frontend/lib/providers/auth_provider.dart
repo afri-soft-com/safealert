@@ -15,6 +15,8 @@ import '../services/google_sign_in_service.dart';
 import '../services/apple_auth_service.dart';
 
 const _kCachedUserKey = 'safealert_cached_user_v1';
+/// Persists across app kills: false only after explicit « Verrouiller ».
+const _kSessionUnlockedKey = 'safealert_session_unlocked_v1';
 
 /// Routes nécessitant une authentification (US-14 mode invité).
 const kAuthRequiredScreens = {
@@ -146,21 +148,27 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
-  void _applyPinGateAfterAuth() {
+  Future<bool> _readSessionUnlocked() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Default true: closing the app must not force the PIN screen.
+      return prefs.getBool(_kSessionUnlockedKey) ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> _writeSessionUnlocked(bool unlocked) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kSessionUnlockedKey, unlocked);
+    } catch (_) {}
+  }
+
+  Future<void> _applyPinGateAfterAuth() async {
     if (_hasLocalPin) {
-      // Cold start / restore: always require PIN again.
-      _pinUnlocked = false;
       _needsPinSetup = false;
-      final profilePhone = _user?['phone'] as String?;
-      final identity = (profilePhone != null && profilePhone.isNotEmpty)
-          ? profilePhone
-          : _user?['id']?.toString();
-      if (identity != null &&
-          _pinPhone != null &&
-          identity.isNotEmpty &&
-          identity != _pinPhone) {
-        // Phone mismatch handled by caller (clear pin).
-      }
+      _pinUnlocked = await _readSessionUnlocked();
     } else {
       _needsPinSetup = true;
       _pinUnlocked = false;
@@ -182,19 +190,21 @@ class AuthProvider extends ChangeNotifier {
             ? profilePhone
             : res['id']?.toString();
         if (_hasLocalPin) {
-          _pinUnlocked = false;
           _needsPinSetup = false;
           if (identity != null && _pinPhone != null && identity != _pinPhone) {
             await _pin.clear();
             await _refreshPinState();
             _needsPinSetup = true;
+            _pinUnlocked = false;
+            await _writeSessionUnlocked(false);
+          } else {
+            _pinUnlocked = await _readSessionUnlocked();
           }
         } else {
           _needsPinSetup = true;
           _pinUnlocked = false;
         }
         _applyPrivacySettings();
-        // Realtime starts after PIN unlock (or immediately if no PIN yet — setup first).
         if (!_hasLocalPin || _pinUnlocked) {
           _startRealtimeServices();
         }
@@ -203,6 +213,7 @@ class AuthProvider extends ChangeNotifier {
           // Session revoked / expired — full sign-out.
           await _api.clearToken();
           await _cacheUser(null);
+          await _writeSessionUnlocked(false);
           _user = null;
           _isAuthenticated = false;
         } else {
@@ -220,23 +231,22 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _restoreCachedSessionKeepingToken() async {
     final cached = await _loadCachedUser();
     if (cached == null) {
-      // Token present but no profile yet — still treat as logged-in for PIN gate.
       _isAuthenticated = _api.hasToken;
-      _applyPinGateAfterAuth();
+      await _applyPinGateAfterAuth();
       return;
     }
     _user = cached;
     _isAuthenticated = true;
     _isGuest = false;
-    _applyPinGateAfterAuth();
+    await _applyPinGateAfterAuth();
     _applyPrivacySettings();
   }
 
-  /// Lock behind PIN without clearing the server session (app background / Verrouiller).
-  void lockSession() {
+  /// Lock behind PIN without clearing the server session (explicit « Verrouiller »).
+  Future<void> lockSession() async {
     if (!_hasLocalPin) return;
-    if (!_pinUnlocked && !_isAuthenticated) return;
     _pinUnlocked = false;
+    await _writeSessionUnlocked(false);
     _stopRealtimeServices();
     notifyListeners();
   }
@@ -550,6 +560,7 @@ class AuthProvider extends ChangeNotifier {
       await _refreshPinState();
       _needsPinSetup = false;
       _pinUnlocked = true;
+      await _writeSessionUnlocked(true);
       _startRealtimeServices();
       _loading = false;
       notifyListeners();
@@ -585,6 +596,7 @@ class AuthProvider extends ChangeNotifier {
         final restored = await _restoreSessionFromStoredToken();
         if (!restored) {
           _pinUnlocked = false;
+          await _writeSessionUnlocked(false);
           _error =
               'Session expirée. Un code SMS est nécessaire. Utilisez « Code PIN oublié ».';
           _loading = false;
@@ -592,6 +604,7 @@ class AuthProvider extends ChangeNotifier {
           return false;
         }
       }
+      await _writeSessionUnlocked(true);
       _startRealtimeServices();
       _loading = false;
       notifyListeners();
@@ -667,7 +680,7 @@ class AuthProvider extends ChangeNotifier {
   /// Verrouille l'app derrière le PIN. Garde le jeton et le PIN (pas de SMS).
   Future<void> logout() async {
     await _refreshPinState();
-    lockSession();
+    await lockSession();
     _isGuest = false;
     _devCode = null;
     if (_hasLocalPin) {
@@ -684,6 +697,7 @@ class AuthProvider extends ChangeNotifier {
     _stopRealtimeServices();
     await _api.clearToken();
     await _cacheUser(null);
+    await _writeSessionUnlocked(false);
     await _pin.clear();
     _user = null;
     _isAuthenticated = false;

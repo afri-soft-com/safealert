@@ -313,22 +313,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!mounted) return;
-    final auth = context.read<AuthProvider>();
-
-    // App left foreground (home / kill) → require PIN again, keep session.
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden ||
-        state == AppLifecycleState.detached) {
-      if (auth.hasLocalPin && auth.pinUnlocked) {
-        auth.lockSession();
-      }
-      return;
-    }
-
+    // Closing / backgrounding the app must NOT force the PIN screen.
+    // PIN is required only after explicit « Verrouiller » (persisted flag).
     if (state == AppLifecycleState.resumed) {
       _appUpdates.check(context, force: true);
-      if (auth.needsPinUnlock ||
-          (auth.hasLocalPin && !auth.pinUnlocked && auth.isAuthenticated)) {
+      final auth = context.read<AuthProvider>();
+      if (auth.needsPinUnlock) {
         setState(() {
           _navStack
             ..clear()

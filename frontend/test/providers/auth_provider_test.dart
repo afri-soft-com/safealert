@@ -67,7 +67,7 @@ void main() {
       expect(provider.canEnterApp, false);
     });
 
-    test('existing session with PIN stays gated until unlock', () async {
+    test('existing session with PIN stays open after app relaunch', () async {
       final pins = LocalPinService(store: pinStore);
       await pins.setPin('123456', phone: '+243811234567');
       await fakeApi.setToken('valid-token');
@@ -77,8 +77,22 @@ void main() {
 
       expect(provider.isAuthenticated, true);
       expect(provider.hasLocalPin, true);
+      expect(provider.needsPinUnlock, false);
+      expect(provider.canEnterApp, true);
+    });
+
+    test('explicit lock requires PIN on next open', () async {
+      final pins = LocalPinService(store: pinStore);
+      await pins.setPin('123456', phone: '+243811234567');
+      await fakeApi.setToken('valid-token');
+      fakeApi.onGet('/auth/profile', () => {'id': 'u1', 'phone': '+243811234567'});
+
+      await provider.checkAuth();
+      await provider.lockSession();
+
       expect(provider.needsPinUnlock, true);
       expect(provider.canEnterApp, false);
+      expect(fakeApi.hasToken, true);
     });
   });
 
