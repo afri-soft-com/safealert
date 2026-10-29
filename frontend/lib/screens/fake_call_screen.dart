@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:vibration/vibration.dart';
 import '../theme.dart';
 
 /// Faux appel entrant pour sortie discrète (aucune API).
@@ -20,31 +21,82 @@ class FakeCallScreen extends StatefulWidget {
 class _FakeCallScreenState extends State<FakeCallScreen> {
   bool _answered = false;
   int _seconds = 0;
-  Timer? _ring;
   Timer? _tick;
+  bool _vibrating = false;
 
   @override
   void initState() {
     super.initState();
-    _ring = Timer.periodic(const Duration(seconds: 2), (_) {
-      HapticFeedback.heavyImpact();
-    });
+    unawaited(_startRingVibration());
   }
 
   @override
   void dispose() {
-    _ring?.cancel();
+    unawaited(_stopVibration());
     _tick?.cancel();
     super.dispose();
   }
 
-  void _answer() {
-    _ring?.cancel();
+  Future<void> _startRingVibration() async {
+    if (_vibrating) return;
+    _vibrating = true;
+    try {
+      final has = await Vibration.hasVibrator();
+      if (!has) {
+        // Fallback soft haptic (may be weak / off on some Androids).
+        HapticFeedback.vibrate();
+        return;
+      }
+      final custom = await Vibration.hasCustomVibrationsSupport();
+      if (custom) {
+        // Ring pattern: buzz — pause — buzz… (repeat from index 0).
+        await Vibration.vibrate(
+          pattern: [0, 700, 350, 700, 350],
+          repeat: 0,
+          intensities: [0, 255, 0, 200, 0],
+        );
+      } else {
+        // Devices without pattern support: pulse every 1.5s.
+        await Vibration.vibrate(duration: 600);
+        _tick ??= Timer.periodic(const Duration(milliseconds: 1500), (_) async {
+          if (_answered || !mounted) return;
+          try {
+            await Vibration.vibrate(duration: 600);
+          } catch (_) {
+            await HapticFeedback.vibrate();
+          }
+        });
+      }
+    } catch (_) {
+      try {
+        await HapticFeedback.vibrate();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _stopVibration() async {
+    _vibrating = false;
+    try {
+      await Vibration.cancel();
+    } catch (_) {}
+  }
+
+  Future<void> _answer() async {
+    await _stopVibration();
+    _tick?.cancel();
+    _tick = null;
+    if (!mounted) return;
     setState(() => _answered = true);
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _seconds += 1);
     });
+  }
+
+  Future<void> _hangUp() async {
+    await _stopVibration();
+    _tick?.cancel();
+    widget.onEnd();
   }
 
   String get _duration {
@@ -93,18 +145,27 @@ class _FakeCallScreenState extends State<FakeCallScreen> {
               if (_answered) ...[
                 const SizedBox(height: 8),
                 Text(_duration, style: const TextStyle(color: Colors.white70, fontSize: 16)),
+              ] else ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Le téléphone vibre comme un vrai appel',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.45),
+                    fontSize: 12,
+                  ),
+                ),
               ],
               const Spacer(),
               if (!_answered)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _roundBtn(Icons.call_end, Colors.red, widget.onEnd),
-                    _roundBtn(Icons.call, Colors.green, _answer),
+                    _roundBtn(Icons.call_end, Colors.red, () => unawaited(_hangUp())),
+                    _roundBtn(Icons.call, Colors.green, () => unawaited(_answer())),
                   ],
                 )
               else
-                _roundBtn(Icons.call_end, Colors.red, widget.onEnd),
+                _roundBtn(Icons.call_end, Colors.red, () => unawaited(_hangUp())),
               const SizedBox(height: 32),
             ],
           ),

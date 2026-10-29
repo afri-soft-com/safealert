@@ -1,7 +1,7 @@
 name: safealert
 description: "SafeAlert - Application de Sécurité Citoyenne"
 publish_to: 'none'
-version: 1.0.52+79
+version: 1.0.52+80
 
 environment:
   sdk: ^3.8.1
@@ -53,6 +53,7 @@ dependencies:
   sign_in_with_apple: ^6.1.4
   smart_auth: ^3.2.0
   connectivity_plus: ^6.1.0
+  vibration: ^3.1.8
 
 # google_sign_in_ios ≥5.8 pulls GoogleSignIn 8 → GoogleUtilities 8 (breaks Firebase 10)
 dependency_overrides:
