@@ -312,9 +312,31 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted) {
+    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+
+    // App left foreground (home / kill) → require PIN again, keep session.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      if (auth.hasLocalPin && auth.pinUnlocked) {
+        auth.lockSession();
+      }
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed) {
       _appUpdates.check(context, force: true);
-      if (context.read<AuthProvider>().isAuthenticated) {
+      if (auth.needsPinUnlock ||
+          (auth.hasLocalPin && !auth.pinUnlocked && auth.isAuthenticated)) {
+        setState(() {
+          _navStack
+            ..clear()
+            ..add('login');
+        });
+        return;
+      }
+      if (auth.isAuthenticated && auth.canEnterApp) {
         final trips = context.read<TripProvider>();
         trips.flushPendingPings();
         trips.flushPendingTripActions();

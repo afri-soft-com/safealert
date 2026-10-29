@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/phone.dart';
 import '../utils/network_error.dart';
 import '../services/api_service.dart';
@@ -10,6 +13,8 @@ import '../services/socket_service.dart';
 import '../services/trip_tracking_service.dart';
 import '../services/google_sign_in_service.dart';
 import '../services/apple_auth_service.dart';
+
+const _kCachedUserKey = 'safealert_cached_user_v1';
 
 /// Routes nécessitant une authentification (US-14 mode invité).
 const kAuthRequiredScreens = {
@@ -118,6 +123,50 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _cacheUser(Map<String, dynamic>? user) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (user == null) {
+        await prefs.remove(_kCachedUserKey);
+      } else {
+        await prefs.setString(_kCachedUserKey, jsonEncode(user));
+      }
+    } catch (_) {}
+  }
+
+  Future<Map<String, dynamic>?> _loadCachedUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kCachedUserKey);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return null;
+  }
+
+  void _applyPinGateAfterAuth() {
+    if (_hasLocalPin) {
+      // Cold start / restore: always require PIN again.
+      _pinUnlocked = false;
+      _needsPinSetup = false;
+      final profilePhone = _user?['phone'] as String?;
+      final identity = (profilePhone != null && profilePhone.isNotEmpty)
+          ? profilePhone
+          : _user?['id']?.toString();
+      if (identity != null &&
+          _pinPhone != null &&
+          identity.isNotEmpty &&
+          identity != _pinPhone) {
+        // Phone mismatch handled by caller (clear pin).
+      }
+    } else {
+      _needsPinSetup = true;
+      _pinUnlocked = false;
+    }
+  }
+
   Future<void> checkAuth() async {
     await _api.init();
     await _refreshPinState();
@@ -127,12 +176,14 @@ class AuthProvider extends ChangeNotifier {
         _user = res;
         _isAuthenticated = true;
         _isGuest = false;
+        await _cacheUser(res);
         final profilePhone = res['phone'] as String?;
         final identity = (profilePhone != null && profilePhone.isNotEmpty)
             ? profilePhone
             : res['id']?.toString();
         if (_hasLocalPin) {
           _pinUnlocked = false;
+          _needsPinSetup = false;
           if (identity != null && _pinPhone != null && identity != _pinPhone) {
             await _pin.clear();
             await _refreshPinState();
@@ -140,13 +191,53 @@ class AuthProvider extends ChangeNotifier {
           }
         } else {
           _needsPinSetup = true;
+          _pinUnlocked = false;
         }
         _applyPrivacySettings();
-        _startRealtimeServices();
+        // Realtime starts after PIN unlock (or immediately if no PIN yet — setup first).
+        if (!_hasLocalPin || _pinUnlocked) {
+          _startRealtimeServices();
+        }
+      } on ApiException catch (e) {
+        if (e.statusCode == 401) {
+          // Session revoked / expired — full sign-out.
+          await _api.clearToken();
+          await _cacheUser(null);
+          _user = null;
+          _isAuthenticated = false;
+        } else {
+          // Keep token on API errors (5xx, 429…) — restore from cache if possible.
+          await _restoreCachedSessionKeepingToken();
+        }
       } catch (_) {
-        await _api.clearToken();
+        // Network / timeout: never wipe the token on app open.
+        await _restoreCachedSessionKeepingToken();
       }
     }
+    notifyListeners();
+  }
+
+  Future<void> _restoreCachedSessionKeepingToken() async {
+    final cached = await _loadCachedUser();
+    if (cached == null) {
+      // Token present but no profile yet — still treat as logged-in for PIN gate.
+      _isAuthenticated = _api.hasToken;
+      _applyPinGateAfterAuth();
+      return;
+    }
+    _user = cached;
+    _isAuthenticated = true;
+    _isGuest = false;
+    _applyPinGateAfterAuth();
+    _applyPrivacySettings();
+  }
+
+  /// Lock behind PIN without clearing the server session (app background / Verrouiller).
+  void lockSession() {
+    if (!_hasLocalPin) return;
+    if (!_pinUnlocked && !_isAuthenticated) return;
+    _pinUnlocked = false;
+    _stopRealtimeServices();
     notifyListeners();
   }
 
@@ -207,6 +298,7 @@ class AuthProvider extends ChangeNotifier {
       _user = res['user'] as Map<String, dynamic>;
       _isAuthenticated = true;
       _isGuest = false;
+      await _cacheUser(_user);
       await _refreshPinState();
       final storedPhone = _pinPhone;
       if (storedPhone != null && storedPhone != _phone) {
@@ -220,7 +312,6 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       FCMService().uploadToken();
       _applyPrivacySettings();
-      _startRealtimeServices();
       return true;
     } catch (e) {
       _error = userFacingError(e);
@@ -273,6 +364,7 @@ class AuthProvider extends ChangeNotifier {
       _phone = _user?['phone'] as String?;
       _isAuthenticated = true;
       _isGuest = false;
+      await _cacheUser(_user);
       await _refreshPinState();
       final identity = _pinIdentity;
       final stored = _pinPhone;
@@ -286,7 +378,6 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       FCMService().uploadToken();
       _applyPrivacySettings();
-      _startRealtimeServices();
       return true;
     } catch (e) {
       final mapped = mapGoogleSignInError(e);
@@ -332,6 +423,7 @@ class AuthProvider extends ChangeNotifier {
       _phone = _user?['phone'] as String?;
       _isAuthenticated = true;
       _isGuest = false;
+      await _cacheUser(_user);
       await _refreshPinState();
       final identity = _pinIdentity;
       final stored = _pinPhone;
@@ -345,7 +437,6 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       FCMService().uploadToken();
       _applyPrivacySettings();
-      _startRealtimeServices();
       return true;
     } catch (e) {
       _error = AppleAuthService.errorMessage(e);
@@ -459,6 +550,7 @@ class AuthProvider extends ChangeNotifier {
       await _refreshPinState();
       _needsPinSetup = false;
       _pinUnlocked = true;
+      _startRealtimeServices();
       _loading = false;
       notifyListeners();
       return true;
@@ -520,10 +612,34 @@ class AuthProvider extends ChangeNotifier {
       _user = res;
       _isAuthenticated = true;
       _isGuest = false;
+      await _cacheUser(res);
       _applyPrivacySettings();
       return true;
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) {
+        await _api.clearToken();
+        await _cacheUser(null);
+        return false;
+      }
+      // Soft failure: use cache if present.
+      final cached = await _loadCachedUser();
+      if (cached != null) {
+        _user = cached;
+        _isAuthenticated = true;
+        _isGuest = false;
+        _applyPrivacySettings();
+        return true;
+      }
+      return false;
     } catch (_) {
-      await _api.clearToken();
+      final cached = await _loadCachedUser();
+      if (cached != null) {
+        _user = cached;
+        _isAuthenticated = true;
+        _isGuest = false;
+        _applyPrivacySettings();
+        return true;
+      }
       return false;
     }
   }
@@ -550,11 +666,10 @@ class AuthProvider extends ChangeNotifier {
 
   /// Verrouille l'app derrière le PIN. Garde le jeton et le PIN (pas de SMS).
   Future<void> logout() async {
-    _stopRealtimeServices();
+    await _refreshPinState();
+    lockSession();
     _isGuest = false;
     _devCode = null;
-    _pinUnlocked = false;
-    await _refreshPinState();
     if (_hasLocalPin) {
       _needsPinSetup = false;
     } else if (_isAuthenticated) {
@@ -564,10 +679,11 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Déconnexion complète : autre numéro. Efface jeton + liaison PIN.
+  /// Déconnexion complète : efface jeton + PIN. Prochaine fois = SMS / OAuth.
   Future<void> switchPhone() async {
     _stopRealtimeServices();
     await _api.clearToken();
+    await _cacheUser(null);
     await _pin.clear();
     _user = null;
     _isAuthenticated = false;

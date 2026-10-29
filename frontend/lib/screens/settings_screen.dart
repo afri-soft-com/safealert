@@ -1016,34 +1016,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: auth.loading ? null : () async {
-                            final ok = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('Se déconnecter ?',
-                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                                content: const Text(
-                                  'L’application se verrouille. Votre PIN et votre session restent sur cet appareil — pas de SMS à la reconnexion.',
-                                  style: TextStyle(fontSize: 12),
-                                ),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-                                  ElevatedButton(
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('Déconnexion'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (ok != true || !mounted) return;
-                            await auth.logout();
-                            widget.onLogout();
-                          },
-                          icon: const Icon(Icons.logout, size: 16),
-                          label: const Text('Déconnexion', style: TextStyle(fontSize: 13)),
+                          onPressed: auth.loading || !auth.hasLocalPin
+                              ? null
+                              : () async {
+                                  await auth.logout();
+                                  widget.onLogout();
+                                },
+                          icon: const Icon(Icons.lock_outline, size: 16),
+                          label: const Text('Verrouiller (PIN)', style: TextStyle(fontSize: 13)),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.gris,
-                            side: const BorderSide(color: Color(0xFFDDDDDD)),
+                            foregroundColor: AppColors.bleuFonce,
+                            side: const BorderSide(color: AppColors.bleuFonce),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
@@ -1057,17 +1040,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             final ok = await showDialog<bool>(
                               context: context,
                               builder: (ctx) => AlertDialog(
-                                title: const Text('Changer de numéro ?',
+                                title: const Text('Se déconnecter ?',
                                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                                 content: const Text(
-                                  'Déconnexion complète : le PIN local et la session seront effacés. Un SMS sera demandé pour le nouveau numéro.',
+                                  'Déconnexion complète : session et PIN effacés sur cet appareil. '
+                                  'Un SMS (ou Google/Apple) sera demandé à la prochaine connexion.',
                                   style: TextStyle(fontSize: 12),
                                 ),
                                 actions: [
                                   TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
                                   ElevatedButton(
                                     onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('Changer de numéro'),
+                                    child: const Text('Déconnexion'),
                                   ),
                                 ],
                               ),
@@ -1076,8 +1060,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             await auth.switchPhone();
                             widget.onLogout();
                           },
-                          icon: const Icon(Icons.phonelink_setup, size: 16),
-                          label: const Text('Changer de numéro', style: TextStyle(fontSize: 13)),
+                          icon: const Icon(Icons.logout, size: 16),
+                          label: const Text('Déconnexion', style: TextStyle(fontSize: 13)),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.gris,
                             side: const BorderSide(color: Color(0xFFDDDDDD)),

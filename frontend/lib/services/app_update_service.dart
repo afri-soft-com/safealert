@@ -22,6 +22,7 @@ const _kPlayStoreUrl =
 const _kAppStoreUrl = 'https://apps.apple.com/app/id6824983610';
 
 const _kDismissPrefsKey = 'safealert_soft_update_dismissed_version';
+const _kDismissBuildPrefsKey = 'safealert_soft_update_dismissed_build';
 
 /// In-app updates: backend version (soft banner) + Google Play (Android release).
 class AppUpdateService {
@@ -90,6 +91,9 @@ class AppUpdateService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kDismissPrefsKey, latest);
+      if (_latestBuild != null) {
+        await prefs.setInt(_kDismissBuildPrefsKey, _latestBuild!);
+      }
     } catch (_) {}
     _onStateChanged?.call();
   }
@@ -131,15 +135,8 @@ class AppUpdateService {
         return;
       }
 
-      // Surface soft banner even when Play handles the download (backend
-      // version env can lag behind the store listing).
-      if (!_updateAvailable) {
-        _updateAvailable = true;
-        _latestVersion ??= 'nouvelle';
-        _dismissedForCurrentLatest = false;
-        _onStateChanged?.call();
-      }
-
+      // Soft banner is driven only by /app/version. Play used to force a sticky
+      // "nouvelle" banner that stayed after the user had already updated.
       // Prefer flexible UX; fall back to immediate if only that is allowed.
       if (info.flexibleUpdateAllowed && !_flexibleDownloadStarted) {
         _flexibleDownloadStarted = true;
@@ -150,7 +147,7 @@ class AppUpdateService {
         return;
       }
 
-      if (info.immediateUpdateAllowed) {
+      if (info.immediateUpdateAllowed && _forceUpdate) {
         await InAppUpdate.performImmediateUpdate();
       }
     } catch (e) {
@@ -191,10 +188,29 @@ class AppUpdateService {
   Future<void> _loadDismissState(String latest) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _dismissedForCurrentLatest = prefs.getString(_kDismissPrefsKey) == latest;
+      final sameVersion = prefs.getString(_kDismissPrefsKey) == latest;
+      final dismissedBuild = prefs.getInt(_kDismissBuildPrefsKey);
+      final sameBuild = _latestBuild == null ||
+          dismissedBuild == null ||
+          dismissedBuild == _latestBuild;
+      _dismissedForCurrentLatest = sameVersion && sameBuild;
     } catch (_) {
       _dismissedForCurrentLatest = false;
     }
+  }
+
+  Future<void> _clearUpdateBannerState() async {
+    _updateAvailable = false;
+    _forceUpdate = false;
+    _latestVersion = null;
+    _dismissedForCurrentLatest = false;
+    _flexibleDownloadStarted = false;
+    _restartPromptShown = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kDismissPrefsKey);
+      await prefs.remove(_kDismissBuildPrefsKey);
+    } catch (_) {}
   }
 
   Future<void> _checkBackendVersion(BuildContext context) async {
@@ -239,22 +255,13 @@ class AppUpdateService {
         latestBuild != null && latestBuild > 0 && build > 0 && build < latestBuild;
     final belowLatest = belowLatestVersion || belowLatestBuild;
 
-    // Installed >= API latest: only clear if Play also did not flag an update.
+    // Installed >= API latest → banner must disappear (after store update).
     if (!belowMin && !belowLatest) {
-      if (!_flexibleDownloadStarted &&
-          (_updateAvailable || _latestVersion != null || _forceUpdate)) {
-        // Keep banner if Play already reported an available store update.
-        if (_latestVersion == 'nouvelle') {
-          _onStateChanged?.call();
-          return;
-        }
-        _updateAvailable = false;
-        _forceUpdate = false;
-        _latestVersion = null;
-        _latestBuild = null;
-        _dismissedForCurrentLatest = false;
-        _onStateChanged?.call();
-      }
+      final hadBanner =
+          _updateAvailable || _latestVersion != null || _forceUpdate;
+      await _clearUpdateBannerState();
+      _latestBuild = latestBuild;
+      if (hadBanner) _onStateChanged?.call();
       return;
     }
 

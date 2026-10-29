@@ -33,8 +33,21 @@ void main() {
       expect(provider.user!['id'], 'u1');
     });
 
-    test('clears token when profile fetch fails', () async {
+    test('keeps token when profile fetch fails with network error', () async {
+      await fakeApi.setToken('still-valid-token');
+      fakeApi.onGet('/auth/profile', () => throw const SocketException('down'));
+
+      await provider.checkAuth();
+
+      expect(fakeApi.hasToken, true);
+    });
+
+    test('clears token when profile returns 401', () async {
       await fakeApi.setToken('expired-token');
+      fakeApi.onGet(
+        '/auth/profile',
+        () => throw ApiException('Session expirée', 401),
+      );
 
       await provider.checkAuth();
 
