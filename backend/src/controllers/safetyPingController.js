@@ -45,6 +45,31 @@ const missPushData = (ping, profile, groupId = null) => {
   return data;
 };
 
+/** Who would be notified if this ping is missed. */
+const deliveryPreview = async (userId, notifyGroups) => {
+  const contacts = await pool.query(
+    `SELECT COUNT(*)::int AS c FROM trust_contacts WHERE user_id = $1`,
+    [userId]
+  );
+  const trustContacts = contacts.rows[0]?.c || 0;
+  let groups = 0;
+  let groupPeers = 0;
+  if (notifyGroups) {
+    const g = await pool.query(
+      `SELECT gm.group_id,
+              COUNT(gm2.user_id) FILTER (WHERE gm2.user_id <> $1)::int AS peers
+       FROM group_members gm
+       LEFT JOIN group_members gm2 ON gm2.group_id = gm.group_id
+       WHERE gm.user_id = $1
+       GROUP BY gm.group_id`,
+      [userId]
+    );
+    groups = g.rows.length;
+    groupPeers = g.rows.reduce((sum, row) => sum + (row.peers || 0), 0);
+  }
+  return { trustContacts, groups, groupPeers };
+};
+
 /** Schedule a "Tu es OK ?" ping — silence after window → notify circle */
 const schedulePing = async (req, res) => {
   if (!assertEnabled(res)) return;
@@ -54,6 +79,16 @@ const schedulePing = async (req, res) => {
   const notifyGroups = req.body?.notify_groups === true;
 
   try {
+    const delivery = await deliveryPreview(req.userId, notifyGroups);
+    if (delivery.trustContacts === 0 && delivery.groupPeers === 0) {
+      return res.status(400).json({
+        error: notifyGroups
+          ? "Personne à prévenir : ajoutez un contact de confiance, ou un autre membre dans votre groupe."
+          : "Personne à prévenir : ajoutez un contact de confiance, ou activez « Prévenir aussi mes groupes » avec un groupe partagé.",
+        delivery,
+      });
+    }
+
     await pool.query(
       `UPDATE safety_pings SET status = 'cancelled'
        WHERE user_id = $1 AND status = 'pending'`,
@@ -67,7 +102,7 @@ const schedulePing = async (req, res) => {
       [req.userId, inMinutes, windowMinutes, notifyGroups, req.body?.message || null]
     );
 
-    return res.status(201).json({ ping: result.rows[0] });
+    return res.status(201).json({ ping: result.rows[0], delivery });
   } catch (err) {
     console.error("schedulePing error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
@@ -151,42 +186,49 @@ const getActivePing = async (req, res) => {
   }
 };
 
-/**
- * Reminder when due_at reached (ask user) + escalate after window.
- * @param {import('socket.io').Server | null} io
- */
-const processSafetyPings = async (io = null) => {
-  if (!safetyPing()) return { reminded: 0, missed: 0 };
-
-  // Ask once: due reached and not yet reminded (no 2-minute race with cron)
-  const due = await pool.query(
-    `SELECT sp.id, sp.user_id FROM safety_pings sp
-     WHERE sp.status = 'pending'
-       AND sp.due_at <= NOW()
-       AND sp.reminded_at IS NULL
-       AND sp.responded_at IS NULL`
-  );
-  let reminded = 0;
-  for (const ping of due.rows) {
-    const marked = await pool.query(
-      `UPDATE safety_pings SET reminded_at = NOW()
-       WHERE id = $1 AND status = 'pending' AND reminded_at IS NULL
-       RETURNING id`,
-      [ping.id]
+const remindDuePings = async () => {
+  let due;
+  try {
+    due = await pool.query(
+      `SELECT sp.id, sp.user_id FROM safety_pings sp
+       WHERE sp.status = 'pending'
+         AND sp.due_at <= NOW()
+         AND sp.reminded_at IS NULL
+         AND sp.responded_at IS NULL`
     );
-    if (marked.rows.length === 0) continue;
-
-    const n = await sendPushToUser(ping.user_id, {
-      notification: {
-        title: "SafeAlert — Tu es OK ?",
-        body: "Confirmez rapidement que tout va bien.",
-      },
-      data: { type: "safety_ping_ask", pingId: String(ping.id) },
-    });
-    if (n > 0) reminded += 1;
+  } catch (err) {
+    // Column missing on a stale deploy — still escalate misses below.
+    console.error("safety ping remind query:", err.message);
+    return 0;
   }
 
-  // Missed: due_at + window_minutes passed → trust circle (+ groups if opted in)
+  let reminded = 0;
+  for (const ping of due.rows) {
+    try {
+      const marked = await pool.query(
+        `UPDATE safety_pings SET reminded_at = NOW()
+         WHERE id = $1 AND status = 'pending' AND reminded_at IS NULL
+         RETURNING id`,
+        [ping.id]
+      );
+      if (marked.rows.length === 0) continue;
+
+      const n = await sendPushToUser(ping.user_id, {
+        notification: {
+          title: "SafeAlert — Tu es OK ?",
+          body: "Confirmez rapidement que tout va bien.",
+        },
+        data: { type: "safety_ping_ask", pingId: String(ping.id) },
+      });
+      if (n > 0) reminded += 1;
+    } catch (err) {
+      console.error("safety ping remind send:", err.message);
+    }
+  }
+  return reminded;
+};
+
+const escalateMissedPings = async (io = null) => {
   const missed = await pool.query(
     `SELECT * FROM safety_pings
      WHERE status = 'pending'
@@ -208,16 +250,26 @@ const processSafetyPings = async (io = null) => {
       lat: profile.lat != null ? profile.lat : undefined,
       lng: profile.lng != null ? profile.lng : undefined,
     };
+    const callHint = profile.phone ? ` Appelez ${profile.phone}.` : "";
 
-    await notifyTrustCircle(
-      ping.user_id,
-      "⚠️ SafeAlert — Pas de réponse",
-      "{pseudo} n'a pas confirmé être OK à temps. Contactez-le/la.",
-      "safety_ping_missed",
-      "⚠️ SafeAlert — {pseudo} n'a pas répondu au contrôle sécurité.",
-      missExtra
-    );
+    let circle;
+    try {
+      circle = await notifyTrustCircle(
+        ping.user_id,
+        "⚠️ SafeAlert — Pas de réponse",
+        "{pseudo} n'a pas confirmé être OK à temps. Contactez-le/la.",
+        "safety_ping_missed",
+        `⚠️ SafeAlert — {pseudo} n'a pas répondu au contrôle sécurité.${callHint}`,
+        missExtra
+      );
+    } catch (err) {
+      console.error("safety ping trust notify:", err.message);
+      circle = { error: err.message };
+    }
 
+    let groupPush = 0;
+    let groupSms = 0;
+    let alertsCreated = 0;
     if (ping.notify_groups) {
       const groups = await pool.query(
         `SELECT group_id FROM group_members WHERE user_id = $1`,
@@ -233,31 +285,68 @@ const processSafetyPings = async (io = null) => {
               g.group_id,
               ping.user_id,
               `Contrôle sécurité — ${pseudo}`,
-              `${pseudo} n'a pas confirmé être OK à temps. Contactez-le/la.`,
+              `${pseudo} n'a pas confirmé être OK à temps. Contactez-le/la.${callHint}`,
               profile.lat,
               profile.lng,
             ]
           );
+          alertsCreated += 1;
         } catch (err) {
           console.error("safety ping group_alerts insert:", err.message);
         }
-        await notifyGroupMembers(
-          g.group_id,
-          ping.user_id,
-          {
-            title: "⚠️ Contrôle sécurité",
-            body: `${pseudo} n'a pas confirmé être OK`,
-          },
-          missPushData(ping, profile, g.group_id),
-          io,
-          { sms: true }
-        );
+        try {
+          const result = await notifyGroupMembers(
+            g.group_id,
+            ping.user_id,
+            {
+              title: "⚠️ Contrôle sécurité",
+              body: `${pseudo} n'a pas confirmé être OK`,
+            },
+            missPushData(ping, profile, g.group_id),
+            io,
+            { sms: true }
+          );
+          groupPush += result.pushNotified || 0;
+          groupSms += result.smsNotified || 0;
+        } catch (err) {
+          console.error("safety ping group notify:", err.message);
+        }
       }
     }
+
+    console.log("safety ping missed fan-out", {
+      pingId: ping.id,
+      userId: ping.user_id,
+      notify_groups: ping.notify_groups,
+      circle,
+      groupPush,
+      groupSms,
+      alertsCreated,
+    });
     missedCount += 1;
   }
+  return missedCount;
+};
 
-  return { reminded, missed: missedCount };
+/**
+ * Reminder when due_at reached (ask user) + escalate after window.
+ * @param {import('socket.io').Server | null} io
+ */
+const processSafetyPings = async (io = null) => {
+  if (!safetyPing()) return { reminded: 0, missed: 0 };
+  let reminded = 0;
+  let missed = 0;
+  try {
+    reminded = await remindDuePings();
+  } catch (err) {
+    console.error("safety ping remind job:", err.message);
+  }
+  try {
+    missed = await escalateMissedPings(io);
+  } catch (err) {
+    console.error("safety ping miss job:", err.message);
+  }
+  return { reminded, missed };
 };
 
 module.exports = {

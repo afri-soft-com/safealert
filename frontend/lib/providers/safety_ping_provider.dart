@@ -8,19 +8,23 @@ class SafetyPingProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _history = [];
   bool _loading = false;
   String? _error;
+  Map<String, dynamic>? _lastDelivery;
 
   Map<String, dynamic>? get active => _active;
   List<Map<String, dynamic>> get history => _history;
   bool get loading => _loading;
   String? get error => _error;
+  Map<String, dynamic>? get lastDelivery => _lastDelivery;
 
   Future<void> fetchActive() async {
     try {
       final res = await _api.get('/safety-pings/active');
       _active = res['id'] == null ? null : res;
+      if (_active == null) _error = null;
       notifyListeners();
     } catch (_) {
       _active = null;
+      notifyListeners();
     }
   }
 
@@ -47,11 +51,17 @@ class SafetyPingProvider extends ChangeNotifier {
         'notify_groups': notifyGroups,
       });
       _active = res['ping'] as Map<String, dynamic>?;
+      _lastDelivery = res['delivery'] is Map
+          ? Map<String, dynamic>.from(res['delivery'] as Map)
+          : null;
       _loading = false;
       notifyListeners();
       return true;
     } catch (e) {
-      _error = userFacingError(e, fallback: 'Impossible de planifier le contrôle.');
+      _error = userFacingError(
+        e,
+        fallback: 'Impossible de planifier le contrôle.',
+      );
       _loading = false;
       notifyListeners();
       return false;
@@ -63,10 +73,13 @@ class SafetyPingProvider extends ChangeNotifier {
     try {
       await _api.post('/safety-pings/${_active!['id']}/ok', {});
       _active = null;
+      _error = null;
       notifyListeners();
       return true;
     } catch (e) {
       _error = userFacingError(e, fallback: 'Confirmation impossible.');
+      // Server may already have marked missed/cancelled — sync UI.
+      await fetchActive();
       notifyListeners();
       return false;
     }
@@ -77,9 +90,11 @@ class SafetyPingProvider extends ChangeNotifier {
     try {
       await _api.post('/safety-pings/${_active!['id']}/cancel', {});
       _active = null;
+      _error = null;
       notifyListeners();
       return true;
     } catch (_) {
+      await fetchActive();
       return false;
     }
   }

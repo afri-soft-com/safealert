@@ -19,7 +19,9 @@ class FakeAlertSoundService implements AlertSoundService {
   String get activeSosChannelId => SafeAlertSoundId.siren.androidSosChannelId;
 
   @override
-  Future<void> initialize() async {}
+  Future<void> initialize({
+    void Function(String? payload)? onNotificationTap,
+  }) async {}
 
   @override
   Future<void> setPreferredSound(SafeAlertSoundId id) async {}

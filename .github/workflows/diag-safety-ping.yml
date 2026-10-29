@@ -1,0 +1,103 @@
+name: Diag safety ping
+on:
+  workflow_dispatch:
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install deps
+        working-directory: backend
+        run: npm ci --omit=dev
+      - name: Inspect recent safety pings
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        working-directory: backend
+        run: |
+          node <<'NODE'
+          const { Pool } = require("pg");
+          const { phoneLookupVariants } = require("./src/utils/phone");
+          const pool = new Pool({
+            connectionString: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false },
+          });
+          const mask = (p) => {
+            const s = String(p || "");
+            return s.length < 6 ? "***" : s.slice(0, 4) + "****" + s.slice(-3);
+          };
+          (async () => {
+            const cols = await pool.query(
+              `SELECT column_name FROM information_schema.columns
+               WHERE table_name='safety_pings' ORDER BY 1`
+            );
+            console.log("columns:", cols.rows.map((r) => r.column_name).join(","));
+            const pings = await pool.query(
+              `SELECT id, user_id, status, due_at, window_minutes, notify_groups,
+                      reminded_at, created_at
+               FROM safety_pings ORDER BY created_at DESC LIMIT 10`
+            );
+            console.log("pings:", JSON.stringify(pings.rows, null, 2));
+            if (!pings.rows[0]) {
+              await pool.end();
+              return;
+            }
+            const uid = pings.rows[0].user_id;
+            const contacts = await pool.query(
+              `SELECT contact_name, contact_phone FROM trust_contacts WHERE user_id=$1`,
+              [uid]
+            );
+            console.log(
+              "contacts:",
+              contacts.rows.map((c) => ({
+                name: c.contact_name,
+                phone: mask(c.contact_phone),
+              }))
+            );
+            for (const c of contacts.rows) {
+              const variants = phoneLookupVariants(c.contact_phone);
+              const matched = variants.length
+                ? await pool.query(
+                    `SELECT id, phone, pseudo,
+                            (fcm_token IS NOT NULL AND length(trim(fcm_token))>0) AS has_fcm
+                     FROM users WHERE phone = ANY($1::text[])`,
+                    [variants]
+                  )
+                : { rows: [] };
+              console.log("match", mask(c.contact_phone), {
+                variants: variants.map(mask),
+                users: matched.rows.map((u) => ({
+                  pseudo: u.pseudo,
+                  phone: mask(u.phone),
+                  has_fcm: u.has_fcm,
+                })),
+              });
+            }
+            const groups = await pool.query(
+              `SELECT g.id, g.name,
+                      (SELECT COUNT(*)::int FROM group_members gm2
+                       WHERE gm2.group_id=g.id AND gm2.user_id<>$1) AS peers
+               FROM neighborhood_groups g
+               JOIN group_members gm ON gm.group_id=g.id
+               WHERE gm.user_id=$1`,
+              [uid]
+            );
+            console.log("groups:", JSON.stringify(groups.rows, null, 2));
+            if (groups.rows[0]) {
+              const alerts = await pool.query(
+                `SELECT type, title, created_at FROM group_alerts
+                 WHERE group_id=$1 ORDER BY created_at DESC LIMIT 5`,
+                [groups.rows[0].id]
+              );
+              console.log("alerts:", JSON.stringify(alerts.rows, null, 2));
+            }
+            await pool.end();
+          })().catch(async (e) => {
+            console.error(e);
+            await pool.end();
+            process.exit(1);
+          });
+          NODE

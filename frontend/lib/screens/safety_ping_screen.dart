@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
@@ -15,9 +16,10 @@ class SafetyPingScreen extends StatefulWidget {
 }
 
 class _SafetyPingScreenState extends State<SafetyPingScreen> {
-  int _inMinutes = 5;
-  int _window = 5;
-  bool _notifyGroups = false;
+  int _inMinutes = 2;
+  int _window = 2;
+  bool _notifyGroups = true;
+  Timer? _poll;
 
   @override
   void initState() {
@@ -26,6 +28,23 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
       context.read<SafetyPingProvider>().fetchActive();
       context.read<SafetyPingProvider>().fetchHistory();
     });
+    _poll = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (!mounted) return;
+      context.read<SafetyPingProvider>().fetchActive();
+    });
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  String _deliverySummary(Map<String, dynamic>? d) {
+    if (d == null) return '';
+    final contacts = (d['trustContacts'] as num?)?.toInt() ?? 0;
+    final peers = (d['groupPeers'] as num?)?.toInt() ?? 0;
+    return ' · destinataires : $contacts contact(s), $peers membre(s) de groupe';
   }
 
   @override
@@ -49,12 +68,13 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppColors.vert.withValues(alpha: 0.3)),
                   ),
-                  child: Text(
+                  child: const Text(
                     '1) À l’heure choisie → vous seul recevez « Tu es OK ? ».\n'
                     '2) Si vous ne répondez pas pendant le délai → contacts de confiance '
                     '(push + SMS), et groupes si l’option est activée '
                     '(push + SMS + onglet Alertes).\n'
-                    'Exemple : 5 min + 5 min = alerte proches après ~10 min.',
+                    'Exemple : 2 min + 2 min = alerte proches après ~4 min.\n'
+                    'Prérequis : au moins 1 contact de confiance OU un autre membre dans un groupe.',
                     style: TextStyle(fontSize: 12, color: AppColors.bleuFonce, height: 1.4),
                   ),
                 ),
@@ -84,11 +104,17 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                               child: ElevatedButton(
                                 onPressed: () async {
                                   final ok = await p.confirmOk();
-                                  if (context.mounted && ok) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Merci — tout va bien !')),
-                                    );
-                                  }
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        ok
+                                            ? 'Merci — tout va bien !'
+                                            : (p.error ??
+                                                'Contrôle déjà terminé (timeout ou annulé).'),
+                                      ),
+                                    ),
+                                  );
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.vert,
@@ -108,13 +134,13 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                     ),
                   ),
                 ] else ...[
-                  Text('Dans combien de temps ?', style: TextStyle(fontSize: 12, color: AppColors.gris)),
+                  const Text('Dans combien de temps ?',
+                      style: TextStyle(fontSize: 12, color: AppColors.gris)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 6,
                     children: [
-                      // 1–2 min = QA ; 5–15 = tests ; 30+ = usage réel
                       for (final m in [1, 2, 5, 10, 15, 30, 60, 120, 180])
                         ChoiceChip(
                           label: Text(m < 60 ? '$m min' : '${m ~/ 60} h'),
@@ -124,7 +150,8 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text('Délai pour répondre après le rappel', style: TextStyle(fontSize: 12, color: AppColors.gris)),
+                  const Text('Délai pour répondre après le rappel',
+                      style: TextStyle(fontSize: 12, color: AppColors.gris)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -141,14 +168,19 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                     padding: const EdgeInsets.only(top: 8, bottom: 4),
                     child: Text(
                       'Alerte proches / groupes dans ~${_inMinutes + _window} min si pas de réponse.',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.orange),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.orange,
+                      ),
                     ),
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Prévenir aussi mes groupes', style: TextStyle(fontSize: 13)),
+                    title: const Text('Prévenir aussi mes groupes',
+                        style: TextStyle(fontSize: 13)),
                     subtitle: const Text(
-                      'Sinon seuls les contacts de confiance sont alertés',
+                      'Requis s’il n’y a pas de contact de confiance',
                       style: TextStyle(fontSize: 11),
                     ),
                     value: _notifyGroups,
@@ -166,15 +198,18 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                                 windowMinutes: _window,
                                 notifyGroups: _notifyGroups,
                               );
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(ok
-                                        ? 'Contrôle planifié — alerte proches dans ~${_inMinutes + _window} min sans réponse'
-                                        : (p.error ?? 'Erreur')),
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    ok
+                                        ? 'Contrôle planifié — alerte dans ~${_inMinutes + _window} min'
+                                            '${_deliverySummary(p.lastDelivery)}'
+                                        : (p.error ?? 'Erreur'),
                                   ),
-                                );
-                              }
+                                  duration: const Duration(seconds: 5),
+                                ),
+                              );
                             },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.bleuFonce,
@@ -187,7 +222,8 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                 ],
                 if (p.error != null) ...[
                   const SizedBox(height: 8),
-                  Text(p.error!, style: const TextStyle(color: AppColors.rouge, fontSize: 12)),
+                  Text(p.error!,
+                      style: const TextStyle(color: AppColors.rouge, fontSize: 12)),
                 ],
               ],
             ),
