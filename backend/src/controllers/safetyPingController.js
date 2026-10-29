@@ -12,6 +12,39 @@ const assertEnabled = (res) => {
   return true;
 };
 
+/** Last known location only if the user allows presence sharing. */
+const loadEmitterProfile = async (userId) => {
+  const result = await pool.query(
+    `SELECT pseudo, phone, share_presence, last_lat, last_lng
+     FROM users WHERE id = $1`,
+    [userId]
+  );
+  const u = result.rows[0] || {};
+  const share = u.share_presence !== false;
+  const lat = share && u.last_lat != null ? Number(u.last_lat) : null;
+  const lng = share && u.last_lng != null ? Number(u.last_lng) : null;
+  return {
+    pseudo: u.pseudo || "Un contact",
+    phone: u.phone ? String(u.phone) : "",
+    lat: Number.isFinite(lat) ? lat : null,
+    lng: Number.isFinite(lng) ? lng : null,
+  };
+};
+
+const missPushData = (ping, profile, groupId = null) => {
+  const data = {
+    type: "safety_ping_missed",
+    pingId: String(ping.id),
+    userId: String(ping.user_id),
+    pseudo: profile.pseudo,
+  };
+  if (profile.phone) data.phone = profile.phone;
+  if (profile.lat != null) data.lat = String(profile.lat);
+  if (profile.lng != null) data.lng = String(profile.lng);
+  if (groupId) data.groupId = String(groupId);
+  return data;
+};
+
 /** Schedule a "Tu es OK ?" ping — silence after window → notify circle */
 const schedulePing = async (req, res) => {
   if (!assertEnabled(res)) return;
@@ -168,12 +201,21 @@ const processSafetyPings = async (io = null) => {
     );
     if (marked.rows.length === 0) continue;
 
+    const profile = await loadEmitterProfile(ping.user_id);
+    const missExtra = {
+      pseudo: profile.pseudo,
+      phone: profile.phone || undefined,
+      lat: profile.lat != null ? profile.lat : undefined,
+      lng: profile.lng != null ? profile.lng : undefined,
+    };
+
     await notifyTrustCircle(
       ping.user_id,
       "⚠️ SafeAlert — Pas de réponse",
       "{pseudo} n'a pas confirmé être OK à temps. Contactez-le/la.",
       "safety_ping_missed",
-      "⚠️ SafeAlert — {pseudo} n'a pas répondu au contrôle sécurité."
+      "⚠️ SafeAlert — {pseudo} n'a pas répondu au contrôle sécurité.",
+      missExtra
     );
 
     if (ping.notify_groups) {
@@ -181,18 +223,19 @@ const processSafetyPings = async (io = null) => {
         `SELECT group_id FROM group_members WHERE user_id = $1`,
         [ping.user_id]
       );
-      const user = await pool.query(`SELECT pseudo FROM users WHERE id = $1`, [ping.user_id]);
-      const pseudo = user.rows[0]?.pseudo || "Un membre";
+      const pseudo = profile.pseudo || "Un membre";
       for (const g of groups.rows) {
         try {
           await pool.query(
             `INSERT INTO group_alerts (group_id, author_id, type, title, body, lat, lng)
-             VALUES ($1, $2, 'danger', $3, $4, NULL, NULL)`,
+             VALUES ($1, $2, 'danger', $3, $4, $5, $6)`,
             [
               g.group_id,
               ping.user_id,
               `Contrôle sécurité — ${pseudo}`,
               `${pseudo} n'a pas confirmé être OK à temps. Contactez-le/la.`,
+              profile.lat,
+              profile.lng,
             ]
           );
         } catch (err) {
@@ -205,12 +248,7 @@ const processSafetyPings = async (io = null) => {
             title: "⚠️ Contrôle sécurité",
             body: `${pseudo} n'a pas confirmé être OK`,
           },
-          {
-            type: "safety_ping_missed",
-            pingId: String(ping.id),
-            userId: String(ping.user_id),
-            groupId: String(g.group_id),
-          },
+          missPushData(ping, profile, g.group_id),
           io,
           { sms: true }
         );

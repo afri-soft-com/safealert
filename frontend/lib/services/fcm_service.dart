@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -18,9 +19,14 @@ class FCMService extends ChangeNotifier {
   String? _token;
   String? _currentUserId;
   StreamSubscription? _messageSub;
+  StreamSubscription? _openedSub;
+
+  /// Pending navigation from notification tap (consumed by root navigator).
+  Map<String, String>? _pendingOpen;
 
   bool get available => _available;
   String? get token => _token;
+  Map<String, String>? get pendingOpen => _pendingOpen;
 
   static const _userIdPrefsKey = 'safealert_current_user_id';
 
@@ -33,6 +39,32 @@ class FCMService extends ChangeNotifier {
         prefs.setString(_userIdPrefsKey, id);
       }
     });
+  }
+
+  Map<String, String>? takePendingOpen() {
+    final p = _pendingOpen;
+    _pendingOpen = null;
+    return p;
+  }
+
+  void queueOpenFromData(Map<String, dynamic> raw) {
+    final data = _stringifyData(raw);
+    final type = data['type'];
+    if (type == null || type.isEmpty) return;
+    if (isOwnPushData(data, currentUserId: _currentUserId)) return;
+    _pendingOpen = data;
+    notifyListeners();
+  }
+
+  static Map<String, String> _stringifyData(Map<String, dynamic> raw) {
+    final out = <String, String>{};
+    raw.forEach((k, v) {
+      if (v == null) return;
+      final s = v.toString();
+      if (s.isEmpty) return;
+      out[k] = s;
+    });
+    return out;
   }
 
   bool _isOwnPush(RemoteMessage message) {
@@ -86,15 +118,18 @@ class FCMService extends ChangeNotifier {
         provisional: false,
       );
 
-      // iOS: show alerts / sound while app is in foreground.
       await messaging.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
         sound: true,
       );
 
-      // Channels + Android 13 POST_NOTIFICATIONS before any push arrives.
-      await AlertSoundService().initialize();
+      await AlertSoundService().initialize(
+        onNotificationTap: (payload) {
+          final parsed = parseNotificationPayload(payload);
+          if (parsed != null) queueOpenFromData(parsed);
+        },
+      );
 
       _token = await messaging.getToken();
       if (_token == null) {
@@ -111,6 +146,15 @@ class FCMService extends ChangeNotifier {
       });
 
       _messageSub = FirebaseMessaging.onMessage.listen(_handleMessage);
+      _openedSub = FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        queueOpenFromData(message.data);
+      });
+
+      final initial = await messaging.getInitialMessage();
+      if (initial != null) {
+        queueOpenFromData(initial.data);
+      }
+
       FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
 
       await _api.init();
@@ -119,6 +163,28 @@ class FCMService extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('FCM not configured — push notifications disabled ($e)');
+    }
+  }
+
+  /// Local notification payload: JSON map, or legacy bare type string.
+  static Map<String, dynamic>? parseNotificationPayload(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {
+      /* legacy */
+    }
+    return {'type': payload};
+  }
+
+  static String encodeNotificationPayload(Map<String, dynamic> data) {
+    try {
+      return jsonEncode(_stringifyData(data));
+    } catch (_) {
+      return data['type']?.toString() ?? 'alert';
     }
   }
 
@@ -158,12 +224,15 @@ class FCMService extends ChangeNotifier {
         body: body.isNotEmpty
             ? body
             : 'Une alerte SOS nécessite votre attention.',
-        payload: type,
+        payload: encodeNotificationPayload(message.data),
       );
+      // Foreground miss: also open the recipient screen immediately.
+      if (type == 'safety_ping_missed') {
+        queueOpenFromData(message.data);
+      }
       return;
     }
 
-    // Non-SOS: still play SafeAlert beacon so the app is recognizable.
     if (title.isNotEmpty || body.isNotEmpty) {
       await AlertSoundService().playGeneralAlert();
     }
@@ -172,11 +241,11 @@ class FCMService extends ChangeNotifier {
   @override
   void dispose() {
     _messageSub?.cancel();
+    _openedSub?.cancel();
     super.dispose();
   }
 }
 
-/// Handler top-level (isolate). Rejoue le son SafeAlert + notif locale.
 @pragma('vm:entry-point')
 Future<void> _handleBackgroundMessage(RemoteMessage message) async {
   final type = message.data['type'] as String?;
@@ -202,7 +271,7 @@ Future<void> _handleBackgroundMessage(RemoteMessage message) async {
     await sounds.showSosLocalNotification(
       title: title,
       body: body,
-      payload: type,
+      payload: FCMService.encodeNotificationPayload(message.data),
     );
   } catch (e) {
     debugPrint('FCM background SOS sound failed: $e');

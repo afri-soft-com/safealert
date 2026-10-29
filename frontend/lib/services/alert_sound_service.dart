@@ -39,6 +39,7 @@ class AlertSoundService {
   final NotificationSoundPrefs _prefs = NotificationSoundPrefs();
   bool _ready = false;
   DateTime? _lastPlayAt;
+  void Function(String? payload)? _onNotificationTap;
 
   bool get ready => _ready;
 
@@ -51,7 +52,12 @@ class AlertSoundService {
 
   static bool isCriticalPayloadType(String? type) => isSosPayloadType(type);
 
-  Future<void> initialize() async {
+  Future<void> initialize({
+    void Function(String? payload)? onNotificationTap,
+  }) async {
+    if (onNotificationTap != null) {
+      _onNotificationTap = onNotificationTap;
+    }
     if (_ready) return;
     try {
       await _prefs.load();
@@ -68,6 +74,9 @@ class AlertSoundService {
           android: androidInit,
           iOS: iosInit,
         ),
+        onDidReceiveNotificationResponse: (response) {
+          _onNotificationTap?.call(response.payload);
+        },
       );
 
       await _ensureAndroidChannels();

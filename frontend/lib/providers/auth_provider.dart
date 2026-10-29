@@ -15,7 +15,7 @@ import '../services/apple_auth_service.dart';
 const kAuthRequiredScreens = {
   'home', 'sos', 'contacts', 'dashboard', 'settings', 'leader', 'groups',
   'history', 'admin', 'trip', 'escort_map', 'trust_zones', 'neighborhood',
-  'offline_queue', 'safety_ping', 'premium',
+  'offline_queue', 'safety_ping', 'safety_ping_missed', 'premium',
 };
 
 /// Écrans réservés aux responsables / agents (secteur).

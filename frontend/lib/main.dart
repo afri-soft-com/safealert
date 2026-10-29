@@ -26,6 +26,7 @@ import 'providers/safety_ping_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/offline_queue_screen.dart';
 import 'screens/safety_ping_screen.dart';
+import 'screens/safety_ping_missed_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/sos_screen.dart';
@@ -141,11 +142,40 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final QuickActions _quickActions = const QuickActions();
   final AppLinks _appLinks = AppLinks();
   final AppUpdateService _appUpdates = AppUpdateService();
+  final FCMService _fcm = FCMService();
   AuthProvider? _auth;
+  Map<String, String> _safetyPingMissData = {};
 
   String get _currentScreen => _navStack.last;
 
   bool get _canShowBackButton => _navStack.length > 1;
+
+  void _onFcmPending() {
+    if (!mounted) return;
+    _consumeSafetyPingMissOpen();
+  }
+
+  void _consumeSafetyPingMissOpen() {
+    final pending = _fcm.pendingOpen;
+    if (pending == null) return;
+    if (pending['type'] != 'safety_ping_missed') return;
+
+    final auth = context.read<AuthProvider>();
+    if (!auth.canEnterApp) {
+      if (_navStack.last != 'login') _navigate('login');
+      return;
+    }
+
+    final data = _fcm.takePendingOpen();
+    if (data == null) return;
+    setState(() {
+      _safetyPingMissData = data;
+      if (_navStack.last == 'safety_ping_missed') {
+        _navStack.removeLast();
+      }
+      _navStack.add('safety_ping_missed');
+    });
+  }
 
   void _triggerSilentSos() {
     if (!mounted) return;
@@ -237,6 +267,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       ShakeSOSService.init(_triggerSilentSos);
       _initDeepLinks();
       _appUpdates.startPolling(context);
+      _fcm.addListener(_onFcmPending);
+      _consumeSafetyPingMissOpen();
 
       _quickActions.initialize((shortcutType) {
         if (shortcutType == 'sos') _triggerSilentSos();
@@ -259,6 +291,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         await trips.flushPendingTripActions();
         if (!mounted) return;
         await trips.fetchActive();
+        _consumeSafetyPingMissOpen();
       }
     });
   }
@@ -271,6 +304,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       trips.fetchActive();
       trips.flushPendingPings();
       trips.flushPendingTripActions();
+      _consumeSafetyPingMissOpen();
     } else {
       context.read<TripProvider>().stopTracking();
     }
@@ -293,6 +327,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     _auth?.removeListener(_onAuthChanged);
+    _fcm.removeListener(_onFcmPending);
     WidgetsBinding.instance.removeObserver(this);
     _appUpdates.dispose();
     ShakeSOSService.dispose();
@@ -527,6 +562,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         screen = OfflineQueueScreen(onBack: _goBack);
       case 'safety_ping':
         screen = SafetyPingScreen(onBack: _goBack);
+      case 'safety_ping_missed':
+        screen = SafetyPingMissedScreen(
+          data: _safetyPingMissData,
+          onBack: _goBack,
+          onNavigate: _navigate,
+        );
       case 'fake_call':
         screen = FakeCallScreen(onEnd: _goBack);
       case 'live_circles':

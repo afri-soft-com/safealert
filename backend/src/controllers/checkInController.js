@@ -5,7 +5,17 @@ const { notifyUserGroupsOnSafe } = require("../services/groupNotify");
 const { phoneLookupVariants } = require("../utils/phone");
 const { sendPushToUser } = require("../services/pushTargets");
 
-const notifyTrustCircle = async (userId, title, body, dataType, smsBody) => {
+/** FCM data payload values must be strings. */
+const asFcmData = (obj = {}) => {
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v == null || v === "") continue;
+    out[k] = String(v);
+  }
+  return out;
+};
+
+const notifyTrustCircle = async (userId, title, body, dataType, smsBody, extraData = {}) => {
   const userRes = await pool.query("SELECT pseudo FROM users WHERE id = $1", [userId]);
   const pseudo = userRes.rows[0]?.pseudo || "Un contact";
   const contacts = await pool.query(
@@ -29,7 +39,11 @@ const notifyTrustCircle = async (userId, title, body, dataType, smsBody) => {
       if (contactUserId && String(contactUserId) !== String(userId)) {
         const n = await sendPushToUser(contactUserId, {
           notification: { title, body: body.replace("{pseudo}", pseudo) },
-          data: { type: dataType, userId: String(userId) },
+          data: {
+            type: dataType,
+            userId: String(userId),
+            ...asFcmData(extraData),
+          },
         });
         if (n > 0) pushSent += 1;
       }
