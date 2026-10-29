@@ -15,8 +15,8 @@ class SafetyPingScreen extends StatefulWidget {
 }
 
 class _SafetyPingScreenState extends State<SafetyPingScreen> {
-  int _inMinutes = 60;
-  int _window = 15;
+  int _inMinutes = 5;
+  int _window = 5;
   bool _notifyGroups = false;
 
   @override
@@ -115,8 +115,10 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
+                    runSpacing: 6,
                     children: [
-                      for (final m in [30, 60, 120, 180])
+                      // 5–15 min = tests rapides ; 30+ = usage réel
+                      for (final m in [5, 10, 15, 30, 60, 120, 180])
                         ChoiceChip(
                           label: Text(m < 60 ? '$m min' : '${m ~/ 60} h'),
                           selected: _inMinutes == m,
@@ -125,12 +127,12 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text('Délai pour répondre', style: TextStyle(fontSize: 12, color: AppColors.gris)),
+                  Text('Délai pour répondre après le rappel', style: TextStyle(fontSize: 12, color: AppColors.gris)),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     children: [
-                      for (final m in [10, 15, 30])
+                      for (final m in [5, 10, 15, 30])
                         ChoiceChip(
                           label: Text('$m min'),
                           selected: _window == m,
