@@ -278,6 +278,7 @@ void main() {
       expect(provider.canEnterApp, true);
       expect(provider.needsPinSetup, false);
 
+      // Cold restart: session stays open (no PIN) until explicit lock.
       provider = AuthProvider(
         apiService: fakeApi,
         pinService: LocalPinService(store: pinStore),
@@ -290,6 +291,9 @@ void main() {
       await fakeApi.setToken('jwt-token');
       await provider.checkAuth();
 
+      expect(provider.canEnterApp, true);
+
+      await provider.lockSession();
       expect(provider.canEnterApp, false);
       expect(await provider.unlockWithPin('135790'), true);
       expect(provider.canEnterApp, true);
