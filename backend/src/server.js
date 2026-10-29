@@ -381,7 +381,7 @@ function startBackgroundJobs() {
 
   // Safety pings « Tu es OK ? » — every 60s
   setInterval(() => {
-    processSafetyPings().catch((err) => warn("safety ping job:", err.message));
+    processSafetyPings(io).catch((err) => warn("safety ping job:", err.message));
   }, 60_000);
 
   // Purge expired live status — every 2 min

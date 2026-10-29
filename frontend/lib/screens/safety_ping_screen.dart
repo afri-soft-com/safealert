@@ -49,17 +49,14 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppColors.vert.withValues(alpha: 0.3)),
                   ),
-                  child: const Text(
-                    'Timer d\'arrivée : choisissez dans combien de temps vous devez '
-                    'confirmer « Je suis OK ». Sinon vos proches sont alertés.',
+                  child: Text(
+                    '1) À l’heure choisie → vous seul recevez « Tu es OK ? ».\n'
+                    '2) Si vous ne répondez pas pendant le délai → contacts de confiance '
+                    '(push + SMS), et groupes si l’option est activée '
+                    '(push + SMS + onglet Alertes).\n'
+                    'Exemple : 5 min + 5 min = alerte proches après ~10 min.',
                     style: TextStyle(fontSize: 12, color: AppColors.bleuFonce, height: 1.4),
                   ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Planifiez un rappel. Si vous ne confirmez pas à temps, '
-                  'vos proches (et éventuellement vos groupes) seront prévenus.',
-                  style: TextStyle(fontSize: 12, color: AppColors.gris, height: 1.4),
                 ),
                 const SizedBox(height: 16),
                 if (active != null) ...[
@@ -117,8 +114,8 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                     spacing: 8,
                     runSpacing: 6,
                     children: [
-                      // 5–15 min = tests rapides ; 30+ = usage réel
-                      for (final m in [5, 10, 15, 30, 60, 120, 180])
+                      // 1–2 min = QA ; 5–15 = tests ; 30+ = usage réel
+                      for (final m in [1, 2, 5, 10, 15, 30, 60, 120, 180])
                         ChoiceChip(
                           label: Text(m < 60 ? '$m min' : '${m ~/ 60} h'),
                           selected: _inMinutes == m,
@@ -132,7 +129,7 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                   Wrap(
                     spacing: 8,
                     children: [
-                      for (final m in [5, 10, 15, 30])
+                      for (final m in [1, 2, 5, 10, 15, 30])
                         ChoiceChip(
                           label: Text('$m min'),
                           selected: _window == m,
@@ -140,9 +137,20 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                         ),
                     ],
                   ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 4),
+                    child: Text(
+                      'Alerte proches / groupes dans ~${_inMinutes + _window} min si pas de réponse.',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.orange),
+                    ),
+                  ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Prévenir aussi mes groupes', style: TextStyle(fontSize: 13)),
+                    subtitle: const Text(
+                      'Sinon seuls les contacts de confiance sont alertés',
+                      style: TextStyle(fontSize: 11),
+                    ),
                     value: _notifyGroups,
                     onChanged: (v) => setState(() => _notifyGroups = v),
                   ),
@@ -162,7 +170,7 @@ class _SafetyPingScreenState extends State<SafetyPingScreen> {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(ok
-                                        ? 'Contrôle planifié'
+                                        ? 'Contrôle planifié — alerte proches dans ~${_inMinutes + _window} min sans réponse'
                                         : (p.error ?? 'Erreur')),
                                   ),
                                 );

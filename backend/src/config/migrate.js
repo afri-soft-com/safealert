@@ -719,6 +719,9 @@ const migrate = async () => {
       );
       CREATE INDEX IF NOT EXISTS idx_safe_trip_places_trip
         ON safe_trip_places(trip_id, created_at ASC);
+
+      -- Avoid re-sending « Tu es OK ? » on every cron tick
+      ALTER TABLE safety_pings ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMP WITH TIME ZONE;
     `);
 
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;

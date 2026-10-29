@@ -1,6 +1,6 @@
 const { pool } = require("../config/database");
 const { safetyPing } = require("../config/features");
-const { sendPush } = require("../config/firebase");
+const { sendPushToUser } = require("../services/pushTargets");
 const { notifyTrustCircle } = require("./checkInController");
 const { notifyGroupMembers } = require("../services/groupNotify");
 
@@ -15,12 +15,12 @@ const assertEnabled = (res) => {
 /** Schedule a "Tu es OK ?" ping — silence after window → notify circle */
 const schedulePing = async (req, res) => {
   if (!assertEnabled(res)) return;
-  const inMinutes = Math.min(Math.max(parseInt(req.body?.in_minutes) || 60, 5), 24 * 60);
-  const windowMinutes = Math.min(Math.max(parseInt(req.body?.window_minutes) || 15, 5), 60);
+  // Min 1 min for QA; max 24h
+  const inMinutes = Math.min(Math.max(parseInt(req.body?.in_minutes, 10) || 60, 1), 24 * 60);
+  const windowMinutes = Math.min(Math.max(parseInt(req.body?.window_minutes, 10) || 15, 1), 60);
   const notifyGroups = req.body?.notify_groups === true;
 
   try {
-    // Cancel previous pending pings for this user
     await pool.query(
       `UPDATE safety_pings SET status = 'cancelled'
        WHERE user_id = $1 AND status = 'pending'`,
@@ -118,34 +118,42 @@ const getActivePing = async (req, res) => {
   }
 };
 
-/** Reminder when due_at reached (ask user) + escalate after window */
-const processSafetyPings = async () => {
+/**
+ * Reminder when due_at reached (ask user) + escalate after window.
+ * @param {import('socket.io').Server | null} io
+ */
+const processSafetyPings = async (io = null) => {
   if (!safetyPing()) return { reminded: 0, missed: 0 };
 
-  // Remind users whose due_at just passed (within last 2 min) — once via FCM
+  // Ask once: due reached and not yet reminded (no 2-minute race with cron)
   const due = await pool.query(
-    `SELECT sp.*, u.fcm_token, u.pseudo FROM safety_pings sp
-     JOIN users u ON u.id = sp.user_id
+    `SELECT sp.id, sp.user_id FROM safety_pings sp
      WHERE sp.status = 'pending'
        AND sp.due_at <= NOW()
-       AND sp.due_at > NOW() - INTERVAL '2 minutes'
+       AND sp.reminded_at IS NULL
        AND sp.responded_at IS NULL`
   );
   let reminded = 0;
   for (const ping of due.rows) {
-    if (ping.fcm_token) {
-      await sendPush(ping.fcm_token, {
-        notification: {
-          title: "SafeAlert — Tu es OK ?",
-          body: "Confirmez rapidement que tout va bien.",
-        },
-        data: { type: "safety_ping_ask", pingId: String(ping.id) },
-      });
-      reminded += 1;
-    }
+    const marked = await pool.query(
+      `UPDATE safety_pings SET reminded_at = NOW()
+       WHERE id = $1 AND status = 'pending' AND reminded_at IS NULL
+       RETURNING id`,
+      [ping.id]
+    );
+    if (marked.rows.length === 0) continue;
+
+    const n = await sendPushToUser(ping.user_id, {
+      notification: {
+        title: "SafeAlert — Tu es OK ?",
+        body: "Confirmez rapidement que tout va bien.",
+      },
+      data: { type: "safety_ping_ask", pingId: String(ping.id) },
+    });
+    if (n > 0) reminded += 1;
   }
 
-  // Missed: due_at + window_minutes passed
+  // Missed: due_at + window_minutes passed → trust circle (+ groups if opted in)
   const missed = await pool.query(
     `SELECT * FROM safety_pings
      WHERE status = 'pending'
@@ -153,10 +161,13 @@ const processSafetyPings = async () => {
   );
   let missedCount = 0;
   for (const ping of missed.rows) {
-    await pool.query(
-      `UPDATE safety_pings SET status = 'missed' WHERE id = $1`,
+    const marked = await pool.query(
+      `UPDATE safety_pings SET status = 'missed' WHERE id = $1 AND status = 'pending'
+       RETURNING id`,
       [ping.id]
     );
+    if (marked.rows.length === 0) continue;
+
     await notifyTrustCircle(
       ping.user_id,
       "⚠️ SafeAlert — Pas de réponse",
@@ -173,6 +184,20 @@ const processSafetyPings = async () => {
       const user = await pool.query(`SELECT pseudo FROM users WHERE id = $1`, [ping.user_id]);
       const pseudo = user.rows[0]?.pseudo || "Un membre";
       for (const g of groups.rows) {
+        try {
+          await pool.query(
+            `INSERT INTO group_alerts (group_id, author_id, type, title, body, lat, lng)
+             VALUES ($1, $2, 'danger', $3, $4, NULL, NULL)`,
+            [
+              g.group_id,
+              ping.user_id,
+              `Contrôle sécurité — ${pseudo}`,
+              `${pseudo} n'a pas confirmé être OK à temps. Contactez-le/la.`,
+            ]
+          );
+        } catch (err) {
+          console.error("safety ping group_alerts insert:", err.message);
+        }
         await notifyGroupMembers(
           g.group_id,
           ping.user_id,
@@ -180,7 +205,14 @@ const processSafetyPings = async () => {
             title: "⚠️ Contrôle sécurité",
             body: `${pseudo} n'a pas confirmé être OK`,
           },
-          { type: "safety_ping_missed", pingId: String(ping.id) }
+          {
+            type: "safety_ping_missed",
+            pingId: String(ping.id),
+            userId: String(ping.user_id),
+            groupId: String(g.group_id),
+          },
+          io,
+          { sms: true }
         );
       }
     }
