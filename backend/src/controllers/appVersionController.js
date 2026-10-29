@@ -2,9 +2,9 @@ const features = require("../config/features");
 const { getMaintenance } = require("../services/appSettings");
 
 /** Soft-update target (bump when a newer build is on the store / ready). */
-const DEFAULT_MOBILE_VERSION = "1.0.56";
+const DEFAULT_MOBILE_VERSION = "1.0.57";
 /** Android versionCode / iOS CFBundleVersion soft target (optional). */
-const DEFAULT_MOBILE_BUILD = 84;
+const DEFAULT_MOBILE_BUILD = 85;
 /** Soft-update target for admin-web (bump ahead of a deploy to show the banner). */
 const DEFAULT_ADMIN_WEB_VERSION = "1.0.14";
 

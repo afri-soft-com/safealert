@@ -551,7 +551,8 @@ const getGroupAlerts = async (req, res) => {
     const result = await pool.query(
       `SELECT a.id, a.group_id, a.author_id, a.type, a.title, a.body,
               a.lat, a.lng, a.created_at,
-              COALESCE(u.pseudo, 'Membre') as author_pseudo
+              COALESCE(u.pseudo, 'Membre') as author_pseudo,
+              u.phone as author_phone
        FROM group_alerts a
        LEFT JOIN users u ON u.id = a.author_id
        WHERE a.group_id = $1

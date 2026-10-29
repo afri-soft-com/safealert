@@ -95,7 +95,9 @@ const notifyGroupMembers = async (
         body: notification?.body,
       };
       const critical =
-        data?.type === "group_sos" || data?.type === "group_report";
+        data?.type === "group_sos" ||
+        data?.type === "group_report" ||
+        data?.type === "safety_ping_missed";
       for (const member of members) {
         const uid = member.id;
         // Resolutions (false alarm / safe) must not trigger the SOS siren path.
@@ -108,6 +110,8 @@ const notifyGroupMembers = async (
             zone_name: data.zone_name || null,
             incident_type: data.type,
             group_id: data.groupId,
+            phone: data.phone || "",
+            pseudo: data.pseudo || "",
           });
         }
       }

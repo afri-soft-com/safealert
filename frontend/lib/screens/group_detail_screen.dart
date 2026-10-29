@@ -485,7 +485,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     final title = a['title'] as String? ?? '';
     final body = a['body'] as String? ?? '';
     final author = a['author_pseudo'] as String? ?? 'Membre';
+    final authorPhone = (a['author_phone'] as String?)?.trim() ?? '';
     final createdAt = a['created_at'] as String? ?? '';
+    final hasCoords = a['lat'] != null && a['lng'] != null;
+    final needsActions = type == 'danger' || type == 'help_needed';
 
     final typeMeta = _alertTypeMeta(type);
 
@@ -513,32 +516,47 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
             const SizedBox(height: 6),
             Text(body, style: const TextStyle(fontSize: 11, color: AppColors.gris)),
           ],
-          if (a['lat'] != null && a['lng'] != null) ...[
+          if (hasCoords) ...[
             const SizedBox(height: 6),
             Text(
               '📍 ${LocationFormat.displayLine(lat: a['lat'] as num?, lng: a['lng'] as num?)}',
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.bleuFonce),
             ),
+          ],
+          if (needsActions || hasCoords) ...[
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 6,
               children: [
-                TextButton.icon(
-                  onPressed: () => _openMaps(a['lat'], a['lng']),
-                  icon: const Icon(Icons.map_outlined, size: 18),
-                  label: const Text('Itinéraire', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.bleuFonce,
-                    minimumSize: const Size(48, 40),
-                    tapTargetSize: MaterialTapTargetSize.padded,
+                if (authorPhone.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () => _dialPhone(authorPhone),
+                    icon: const Icon(Icons.phone, size: 18),
+                    label: Text('Appeler $author',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.vert,
+                      minimumSize: const Size(48, 40),
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                    ),
                   ),
-                ),
-                if (type == 'danger' || type == 'help_needed')
+                if (hasCoords)
+                  TextButton.icon(
+                    onPressed: () => _openMaps(a['lat'], a['lng']),
+                    icon: const Icon(Icons.map_outlined, size: 18),
+                    label: const Text('Itinéraire', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.bleuFonce,
+                      minimumSize: const Size(48, 40),
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                    ),
+                  ),
+                if (needsActions)
                   TextButton.icon(
                     onPressed: () => _openEmergencyDial(),
                     icon: const Icon(Icons.phone_in_talk_outlined, size: 18),
-                    label: const Text('Urgences', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    label: const Text('Urgences 112', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                     style: TextButton.styleFrom(
                       foregroundColor: AppColors.rouge,
                       minimumSize: const Size(48, 40),
@@ -603,8 +621,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     );
   }
 
-  Future<void> _openEmergencyDial() async {
-    final uri = Uri(scheme: 'tel', path: '112');
+  Future<void> _dialPhone(String phone) async {
+    final cleaned = phone.trim();
+    if (cleaned.isEmpty) return;
+    final uri = Uri(scheme: 'tel', path: cleaned);
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
@@ -615,10 +635,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Appel d\'urgence impossible')),
+          const SnackBar(content: Text('Appel impossible')),
         );
       }
     }
+  }
+
+  Future<void> _openEmergencyDial() async {
+    await _dialPhone('112');
   }
 
   String _formatDate(String iso) {
