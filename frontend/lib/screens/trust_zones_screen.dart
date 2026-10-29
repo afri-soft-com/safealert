@@ -16,10 +16,15 @@ class TrustZonesScreen extends StatefulWidget {
 }
 
 class _TrustZonesScreenState extends State<TrustZonesScreen> {
+  static const _radiusPresets = [50, 100, 200, 300, 500, 1000, 2000];
+  static const _radiusMin = 50;
+  static const _radiusMax = 5000;
+
   final _api = ApiService();
   List<Map<String, dynamic>> _zones = [];
   bool _loading = true;
   String _type = 'home';
+  int _radiusM = 200;
   final _labelCtrl = TextEditingController();
 
   @override
@@ -54,6 +59,12 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
     }
   }
 
+  String _radiusLabel(int m) {
+    if (m >= 1000 && m % 1000 == 0) return '${m ~/ 1000} km';
+    if (m >= 1000) return '${(m / 1000).toStringAsFixed(1)} km';
+    return '$m m';
+  }
+
   Future<void> _add() async {
     final pos = await LocationService().getCurrentPosition();
     if (pos == null) {
@@ -72,16 +83,23 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
       }
       return;
     }
+    final radius = _radiusM.clamp(_radiusMin, _radiusMax);
     try {
       await _api.post('/trust-zones', {
         'label': _labelCtrl.text.trim(),
         'zone_type': _type,
         'lat': pos.latitude,
         'lng': pos.longitude,
-        'radius_m': 200,
+        'radius_m': radius,
       });
       _labelCtrl.clear();
       await _load();
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Zone ajoutée (rayon ${_radiusLabel(radius)})',
+        );
+      }
     } catch (e) {
       if (mounted) {
         showAppSnackBar(
@@ -121,12 +139,18 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: _labelCtrl,
-                        decoration: const InputDecoration(labelText: 'Libellé', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(
+                          labelText: 'Libellé',
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         value: _type,
-                        decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Type'),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Type',
+                        ),
                         items: const [
                           DropdownMenuItem(value: 'home', child: Text('Domicile')),
                           DropdownMenuItem(value: 'work', child: Text('Travail')),
@@ -135,11 +159,57 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
                         ],
                         onChanged: (v) => setState(() => _type = v ?? 'home'),
                       ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Rayon d\'alerte : ${_radiusLabel(_radiusM)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.bleuFonce,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Tout SOS dans ce rayon autour du point GPS déclenche une alerte à vos contacts.',
+                        style: TextStyle(fontSize: 11, color: AppColors.gris),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          for (final m in _radiusPresets)
+                            ChoiceChip(
+                              label: Text(_radiusLabel(m)),
+                              selected: _radiusM == m,
+                              onSelected: (_) => setState(() => _radiusM = m),
+                            ),
+                        ],
+                      ),
+                      Slider(
+                        value: _radiusM.toDouble().clamp(
+                          _radiusMin.toDouble(),
+                          _radiusMax.toDouble(),
+                        ),
+                        min: _radiusMin.toDouble(),
+                        max: _radiusMax.toDouble(),
+                        divisions: 99,
+                        label: _radiusLabel(_radiusM),
+                        activeColor: AppColors.bleuFonce,
+                        onChanged: (v) => setState(() => _radiusM = v.round()),
+                      ),
+                      Text(
+                        'Entre $_radiusMin m et ${_radiusLabel(_radiusMax)}',
+                        style: const TextStyle(fontSize: 10, color: AppColors.gris),
+                      ),
                       const SizedBox(height: 8),
                       ElevatedButton(
                         onPressed: _add,
                         style: ElevatedButton.styleFrom(backgroundColor: AppColors.bleu),
-                        child: const Text('Ajouter ici (GPS actuel)', style: TextStyle(color: Colors.white)),
+                        child: const Text(
+                          'Ajouter ici (GPS actuel)',
+                          style: TextStyle(color: Colors.white),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       if (_zones.isEmpty)
@@ -152,30 +222,33 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
                           ),
                         )
                       else
-                        ..._zones.map((z) => ListTile(
-                              title: Text(z['label'] as String? ?? ''),
-                              subtitle: Text(
-                                '${_zoneTypeLabel(z['zone_type'] as String?)} · Rayon : ${z['radius_m']} m',
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.delete_outline, color: AppColors.rouge),
-                                onPressed: () async {
-                                  try {
-                                    await _api.delete('/trust-zones/${z['id']}');
-                                    await _load();
-                                  } catch (e) {
-                                    if (mounted) {
-                                      showAppSnackBar(
-                                        context,
-                                        e,
-                                        isError: true,
-                                        fallback: 'Impossible de supprimer la zone.',
-                                      );
-                                    }
+                        ..._zones.map(
+                          (z) => ListTile(
+                            title: Text(z['label'] as String? ?? ''),
+                            subtitle: Text(
+                              '${_zoneTypeLabel(z['zone_type'] as String?)} · '
+                              'Rayon : ${_radiusLabel((z['radius_m'] as num?)?.toInt() ?? 200)}',
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppColors.rouge),
+                              onPressed: () async {
+                                try {
+                                  await _api.delete('/trust-zones/${z['id']}');
+                                  await _load();
+                                } catch (e) {
+                                  if (mounted) {
+                                    showAppSnackBar(
+                                      context,
+                                      e,
+                                      isError: true,
+                                      fallback: 'Impossible de supprimer la zone.',
+                                    );
                                   }
-                                },
-                              ),
-                            )),
+                                }
+                              },
+                            ),
+                          ),
+                        ),
                     ],
                   ),
           ),
