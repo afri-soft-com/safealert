@@ -193,11 +193,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _consumeSafetyPingMissOpen() => _consumePendingNotificationOpen();
 
-  void openNeighborhoodDigest(String quartier) {
+  void openNeighborhoodDigest(String quartier, {String? subscriptionId, String? city}) {
     setState(() {
       _neighborhoodDigestData = {
         'type': 'neighborhood_digest',
         'quartier': quartier,
+        if (city != null && city.isNotEmpty) 'city': city,
+        if (subscriptionId != null && subscriptionId.isNotEmpty)
+          'subscription_id': subscriptionId,
       };
       if (_navStack.last == 'neighborhood_digest') {
         _navStack.removeLast();
@@ -660,6 +663,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         screen = HomeScreen(onNavigate: _navigate);
     }
 
+    final showSosBanner = !cfg.sosEnabled && !cfg.maintenance;
     final showSoftBanner = _appUpdates.updateAvailable &&
         !_appUpdates.forceUpdate &&
         !_appUpdates.dismissedForCurrentLatest &&
@@ -669,7 +673,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     // Top system banners already consume the notch inset — zero it for screens
     // below so StatusBar / SafeArea do not double-pad under the update banner.
-    final topBannerShown = showSoftBanner || (!cfg.sosEnabled && !cfg.maintenance);
+    final topBannerShown = showSoftBanner || showSosBanner;
     final mq = MediaQuery.of(context);
     final body = AnimatedSwitcher(
       duration: const Duration(milliseconds: 260),
@@ -685,7 +689,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       },
       child: Column(
         children: [
-          if (!cfg.sosEnabled && !cfg.maintenance)
+          if (showSosBanner)
             Material(
               color: const Color(0xFF7A4F00),
               child: SafeArea(
@@ -705,6 +709,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             AppUpdateBanner(
               latestVersion: _appUpdates.latestVersion,
               currentVersion: _appUpdates.currentVersion,
+              // Avoid double notch padding when the SOS banner is already on top.
+              includeTopSafeArea: !showSosBanner,
               onUpdate: () => _appUpdates.openStoreOrUpdate(context),
               onDismiss: () async {
                 await _appUpdates.dismissSoftBanner();

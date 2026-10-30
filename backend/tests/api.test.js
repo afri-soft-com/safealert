@@ -1333,58 +1333,78 @@ describe("Neighborhood veille", () => {
     expect(minuteSlot(37)).toBe(30);
   });
 
-  it("POST /api/neighborhood/subscribe stores chosen digest_hour including 0", async () => {
-    mockQuery.mockResolvedValueOnce({
-      rows: [{ id: "sub-1", quartier: "Gombe", digest_hour: 0, digest_minute: 0 }],
-    });
+  it("POST /api/neighborhood/subscribe requires GPS to disambiguate cities", async () => {
     const res = await request(app)
       .post("/api/neighborhood/subscribe")
       .set("Authorization", `Bearer ${validToken}`)
-      .send({ quartier: "Gombe", digest_hour: 0 });
-    expect(res.status).toBe(201);
-    expect(res.body.digest_hour).toBe(0);
-    expect(mockQuery.mock.calls[0][1][2]).toBe(0);
-    expect(mockQuery.mock.calls[0][1][3]).toBe(0);
+      .send({ quartier: "Gombe", digest_hour: 15 });
+    expect(res.status).toBe(400);
   });
 
-  it("POST /api/neighborhood/subscribe stores digest_minute 30", async () => {
+  it("POST /api/neighborhood/subscribe stores GPS + digest_minute 30", async () => {
     mockQuery.mockResolvedValueOnce({
-      rows: [{ id: "sub-1", quartier: "Gombe", digest_hour: 15, digest_minute: 30 }],
+      rows: [
+        {
+          id: "sub-1",
+          quartier: "Gombe",
+          city: "Kinshasa",
+          digest_hour: 15,
+          digest_minute: 30,
+          lat: -4.3,
+          lng: 15.3,
+          radius_m: 5000,
+        },
+      ],
     });
     const res = await request(app)
       .post("/api/neighborhood/subscribe")
       .set("Authorization", `Bearer ${validToken}`)
-      .send({ quartier: "Gombe", digest_hour: 15, digest_minute: 30 });
+      .send({
+        quartier: "Gombe",
+        city: "Kinshasa",
+        digest_hour: 15,
+        digest_minute: 30,
+        lat: -4.3,
+        lng: 15.3,
+        radius_m: 5000,
+      });
     expect(res.status).toBe(201);
-    expect(mockQuery.mock.calls[0][1][2]).toBe(15);
-    expect(mockQuery.mock.calls[0][1][3]).toBe(30);
+    expect(res.body.digest_minute).toBe(30);
+    expect(mockQuery.mock.calls[0][1][6]).toBe(15);
+    expect(mockQuery.mock.calls[0][1][7]).toBe(30);
   });
 
   it("POST /api/neighborhood/subscribe rejects digest_minute 20", async () => {
     const res = await request(app)
       .post("/api/neighborhood/subscribe")
       .set("Authorization", `Bearer ${validToken}`)
-      .send({ quartier: "Gombe", digest_hour: 15, digest_minute: 20 });
+      .send({
+        quartier: "Gombe",
+        digest_hour: 15,
+        digest_minute: 20,
+        lat: -4.3,
+        lng: 15.3,
+      });
     expect(res.status).toBe(400);
   });
 
-  it("POST /api/neighborhood/subscribe defaults to 18 when hour omitted", async () => {
+  it("POST /api/neighborhood/subscribe defaults to hour 18 when omitted", async () => {
     mockQuery.mockResolvedValueOnce({
       rows: [{ id: "sub-2", quartier: "Limete", digest_hour: 18, digest_minute: 0 }],
     });
     const res = await request(app)
       .post("/api/neighborhood/subscribe")
       .set("Authorization", `Bearer ${validToken}`)
-      .send({ quartier: "Limete" });
+      .send({ quartier: "Limete", lat: -4.38, lng: 15.34 });
     expect(res.status).toBe(201);
-    expect(mockQuery.mock.calls[0][1][2]).toBe(18);
+    expect(mockQuery.mock.calls[0][1][6]).toBe(18);
   });
 
   it("POST /api/neighborhood/subscribe rejects hour 24", async () => {
     const res = await request(app)
       .post("/api/neighborhood/subscribe")
       .set("Authorization", `Bearer ${validToken}`)
-      .send({ quartier: "Gombe", digest_hour: 24 });
+      .send({ quartier: "Gombe", digest_hour: 24, lat: -4.3, lng: 15.3 });
     expect(res.status).toBe(400);
   });
 

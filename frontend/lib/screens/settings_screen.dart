@@ -291,7 +291,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               setLocal(() {
                 busy = false;
                 codeSent = ok;
-                err = ok ? null : auth.error;
+                // Keep OTP hint even when request "succeeds" but SMS failed.
+                err = auth.otpHint ?? auth.error;
+                final code = auth.devCode;
+                if (ok && code != null && code.isNotEmpty && codeCtrl.text.isEmpty) {
+                  codeCtrl.text = code;
+                }
               });
             }
 
@@ -317,36 +322,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
             return AlertDialog(
               title: const Text('Associer un numéro',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Un +243 permet les SMS SOS et « Code PIN oublié ». Sans numéro, l’app reste utilisable.',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: phoneCtrl,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(hintText: '+243 …'),
-                  ),
-                  if (codeSent) ...[
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: codeCtrl,
-                      keyboardType: TextInputType.number,
-                      maxLength: 6,
-                      decoration: const InputDecoration(hintText: 'Code SMS'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Un +243 permet les SMS SOS et « Code PIN oublié ». Sans numéro, l’app reste utilisable.',
+                      style: TextStyle(fontSize: 12),
                     ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Téléphone',
+                        hintText: '+243 …',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    if (codeSent) ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: codeCtrl,
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                        autofillHints: const [AutofillHints.oneTimeCode],
+                        decoration: const InputDecoration(
+                          labelText: 'Code SMS',
+                          hintText: '6 chiffres',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                    if (err != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        err!,
+                        style: TextStyle(
+                          color: (auth.lastSmsSent == true) ? AppColors.vert : AppColors.rouge,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ],
-                  if (err != null) ...[
-                    const SizedBox(height: 8),
-                    Text(err!, style: const TextStyle(color: AppColors.rouge, fontSize: 12)),
-                  ],
-                ],
+                ),
               ),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+                if (codeSent)
+                  TextButton(
+                    onPressed: busy ? null : send,
+                    child: const Text('Renvoyer le code'),
+                  ),
                 ElevatedButton(
                   onPressed: busy ? null : (codeSent ? confirm : send),
                   child: Text(busy ? '…' : (codeSent ? 'Associer' : 'Envoyer le code')),

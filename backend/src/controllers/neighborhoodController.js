@@ -2,8 +2,12 @@ const { pool } = require("../config/database");
 const { sendPush } = require("../config/firebase");
 const { neighborhoodWatch } = require("../config/features");
 const { sendSMS, isSMSConfigured } = require("../services/sms");
+const { resolvePlace } = require("../utils/incidentZone");
 
 const DIGEST_MINUTE_SLOTS = [0, 15, 30, 45];
+const DEFAULT_RADIUS_M = 5000;
+const MIN_RADIUS_M = 500;
+const MAX_RADIUS_M = 30000;
 
 /** Parse digest hour 0–23. `0` is valid (midnight). Invalid → null. */
 function parseDigestHour(value) {
@@ -20,6 +24,20 @@ function parseDigestMinute(value, { required = false } = {}) {
   }
   const n = Number.parseInt(value, 10);
   if (!Number.isFinite(n) || !DIGEST_MINUTE_SLOTS.includes(n)) return null;
+  return n;
+}
+
+function parseRadiusM(value) {
+  if (value === undefined || value === null || value === "") return DEFAULT_RADIUS_M;
+  const n = Number.parseInt(value, 10);
+  if (!Number.isFinite(n)) return DEFAULT_RADIUS_M;
+  return Math.min(Math.max(n, MIN_RADIUS_M), MAX_RADIUS_M);
+}
+
+function parseCoord(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number.parseFloat(value);
+  if (!Number.isFinite(n)) return null;
   return n;
 }
 
@@ -41,29 +59,125 @@ function kinshasaParts(date = new Date()) {
   };
 }
 
-/** Current hour in Africa/Kinshasa (UTC+1, no DST). */
 function kinshasaHour(date = new Date()) {
   return kinshasaParts(date).hour;
 }
 
-/** 15-minute slot for a clock minute (0, 15, 30, 45). */
 function minuteSlot(minute) {
   const m = Number.isFinite(minute) ? minute : 0;
   return Math.floor(m / 15) * 15;
 }
 
-/** Normalize free-text quartier for ILIKE matching. */
 function normalizeQuartier(q) {
   return String(q || "")
     .trim()
     .replace(/\s+/g, " ");
 }
 
-async function loadDigestPayload(quartier, { hours = 24, limit = 50 } = {}) {
-  const q = normalizeQuartier(quartier);
+function normalizeCity(c) {
+  const s = normalizeQuartier(c);
+  return s.length >= 2 ? s : null;
+}
+
+/**
+ * Scope filter:
+ * - With GPS: incidents within radius (disambiguates same names in other cities).
+ * - Without GPS: quartier name + city when available.
+ */
+function buildIncidentScope(scope) {
+  const raw =
+    scope && typeof scope === "object" && !Array.isArray(scope)
+      ? scope
+      : { quartier: scope };
+  const q = normalizeQuartier(raw.quartier);
+  const city = normalizeCity(raw.city);
+  const lat = parseCoord(raw.lat);
+  const lng = parseCoord(raw.lng);
+  const radius = parseRadiusM(raw.radius_m);
+  const qPattern = `%${q}%`;
+  const cityPattern = city ? `%${city}%` : null;
+
+  if (lat != null && lng != null) {
+    return {
+      q,
+      city,
+      lat,
+      lng,
+      radius_m: radius,
+      mode: "radius",
+      sql: `(
+        i.lat IS NOT NULL AND i.lng IS NOT NULL
+        AND (
+          6371000 * acos(LEAST(1.0, GREATEST(-1.0,
+            cos(radians($lat)) * cos(radians(i.lat))
+            * cos(radians(i.lng) - radians($lng))
+            + sin(radians($lat)) * sin(radians(i.lat))
+          )))
+        ) <= $radius
+      )`,
+      params: { lat, lng, radius },
+    };
+  }
+
+  // Name + city disambiguation (legacy / no GPS)
+  let sql = `i.zone_name ILIKE $qPattern`;
+  const params = { qPattern };
+  if (cityPattern) {
+    sql = `(
+      i.zone_name ILIKE $qPattern
+      AND (
+        i.zone_city ILIKE $cityPattern
+        OR i.zone_name ILIKE $cityPattern
+      )
+    )`;
+    params.cityPattern = cityPattern;
+  }
+  return {
+    q,
+    city,
+    lat: null,
+    lng: null,
+    radius_m: null,
+    mode: city ? "name_city" : "name",
+    sql,
+    params,
+  };
+}
+
+function bindScopeSql(sql, params, startIdx = 1) {
+  const values = [];
+  let idx = startIdx;
+  let out = sql;
+  const order = ["lat", "lng", "radius", "qPattern", "cityPattern"];
+  for (const key of order) {
+    if (!(key in params) || params[key] === undefined) continue;
+    const token = `$${key}`;
+    if (!out.includes(token)) continue;
+    out = out.split(token).join(`$${idx}`);
+    values.push(params[key]);
+    idx += 1;
+  }
+  return { sql: out, values, nextIdx: idx };
+}
+
+async function loadDigestPayload(scopeInput, { hours = 24, limit = 50 } = {}) {
+  const scope =
+    typeof scopeInput === "string"
+      ? buildIncidentScope({ quartier: scopeInput })
+      : buildIncidentScope(scopeInput || {});
+
+  if (!scope.q || scope.q.length < 2) {
+    throw Object.assign(new Error("Nom de quartier requis"), { status: 400 });
+  }
+
   const h = Math.min(Math.max(Number.parseInt(hours, 10) || 24, 1), 168);
   const lim = Math.min(Math.max(Number.parseInt(limit, 10) || 50, 1), 100);
-  const pattern = `%${q}%`;
+
+  const bound = bindScopeSql(scope.sql, scope.params, 1);
+  const hoursIdx = bound.nextIdx;
+  const limitIdx = hoursIdx + 1;
+  const where = `${bound.sql} AND i.created_at > NOW() - ($${hoursIdx}::int * INTERVAL '1 hour')`;
+  const statsParams = [...bound.values, h];
 
   const [stats, byType, bySeverity, incidents] = await Promise.all([
     pool.query(
@@ -73,43 +187,45 @@ async function loadDigestPayload(quartier, { hours = 24, limit = 50 } = {}) {
               )::int AS sos,
               COUNT(*) FILTER (WHERE severity = 'warning')::int AS warnings,
               COUNT(*) FILTER (WHERE severity = 'info' OR severity IS NULL)::int AS info
-       FROM incidents
-       WHERE zone_name ILIKE $1
-         AND created_at > NOW() - ($2::int * INTERVAL '1 hour')`,
-      [pattern, h]
+       FROM incidents i
+       WHERE ${where}`,
+      statsParams
     ),
     pool.query(
       `SELECT incident_type AS type, COUNT(*)::int AS count
-       FROM incidents
-       WHERE zone_name ILIKE $1
-         AND created_at > NOW() - ($2::int * INTERVAL '1 hour')
+       FROM incidents i
+       WHERE ${where}
        GROUP BY incident_type
        ORDER BY count DESC`,
-      [pattern, h]
+      statsParams
     ),
     pool.query(
       `SELECT COALESCE(severity, 'info') AS severity, COUNT(*)::int AS count
-       FROM incidents
-       WHERE zone_name ILIKE $1
-         AND created_at > NOW() - ($2::int * INTERVAL '1 hour')
+       FROM incidents i
+       WHERE ${where}
        GROUP BY COALESCE(severity, 'info')
        ORDER BY count DESC`,
-      [pattern, h]
+      statsParams
     ),
     pool.query(
-      `SELECT id, incident_type, description, severity, zone_name, lat, lng, created_at
-       FROM incidents
-       WHERE zone_name ILIKE $1
-         AND created_at > NOW() - ($2::int * INTERVAL '1 hour')
-       ORDER BY created_at DESC
-       LIMIT $3`,
-      [pattern, h, lim]
+      `SELECT i.id, i.incident_type, i.description, i.severity, i.zone_name, i.zone_city,
+              i.lat, i.lng, i.created_at
+       FROM incidents i
+       WHERE ${where}
+       ORDER BY i.created_at DESC
+       LIMIT $${limitIdx}`,
+      [...statsParams, lim]
     ),
   ]);
 
   const { total, sos, warnings, info } = stats.rows[0];
   return {
-    quartier: q,
+    quartier: scope.q,
+    city: scope.city,
+    lat: scope.lat,
+    lng: scope.lng,
+    radius_m: scope.radius_m,
+    match_mode: scope.mode,
     window_hours: h,
     generated_at: new Date().toISOString(),
     summary: {
@@ -125,10 +241,11 @@ async function loadDigestPayload(quartier, { hours = 24, limit = 50 } = {}) {
 }
 
 async function deliverDigest(sub) {
-  const payload = await loadDigestPayload(sub.quartier);
+  const payload = await loadDigestPayload(sub);
   const q = payload.quartier;
+  const city = payload.city;
   const { total, sos } = payload.summary;
-  const title = `Digest — ${q}`;
+  const title = city ? `Digest — ${q} (${city})` : `Digest — ${q}`;
   const body = `${total} incident(s) dont ${sos} SOS sur 24h.`;
   let delivered = false;
 
@@ -139,6 +256,8 @@ async function deliverDigest(sub) {
         data: {
           type: "neighborhood_digest",
           quartier: q,
+          city: city || "",
+          subscription_id: sub.id ? String(sub.id) : "",
           total: String(total),
           sos: String(sos),
           window_hours: "24",
@@ -168,22 +287,40 @@ async function deliverDigest(sub) {
   return { delivered, title, body, total, sos, payload };
 }
 
-/** Detailed digest for a quartier (notification tap / in-app). */
 const getDigest = async (req, res) => {
   if (!neighborhoodWatch()) {
     return res.status(503).json({ error: "Veille de quartier désactivée" });
   }
-  const q = normalizeQuartier(req.query.quartier || req.params.quartier);
-  if (!q || q.length < 2) {
-    return res.status(400).json({ error: "Nom de quartier requis" });
-  }
   try {
-    const digest = await loadDigestPayload(q, {
+    let scope = {
+      quartier: req.query.quartier,
+      city: req.query.city,
+      lat: req.query.lat,
+      lng: req.query.lng,
+      radius_m: req.query.radius_m,
+    };
+
+    const subId = (req.query.subscription_id || "").toString().trim();
+    if (subId) {
+      const sub = await pool.query(
+        `SELECT * FROM neighborhood_subscriptions WHERE id = $1 AND user_id = $2`,
+        [subId, req.userId]
+      );
+      if (sub.rows.length === 0) {
+        return res.status(404).json({ error: "Abonnement introuvable" });
+      }
+      scope = sub.rows[0];
+    }
+
+    const digest = await loadDigestPayload(scope, {
       hours: req.query.hours,
       limit: req.query.limit,
     });
     return res.json(digest);
   } catch (err) {
+    if (err.status === 400) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error("neighborhood getDigest error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
@@ -193,31 +330,59 @@ const subscribe = async (req, res) => {
   if (!neighborhoodWatch()) {
     return res.status(503).json({ error: "Veille de quartier désactivée" });
   }
-  const { quartier, digest_hour, digest_minute } = req.body;
-  const q = normalizeQuartier(quartier);
-  if (!q || q.length < 2) {
-    return res.status(400).json({ error: "Nom de quartier requis" });
-  }
+  let q = normalizeQuartier(req.body.quartier);
+  let city = normalizeCity(req.body.city);
+  let lat = parseCoord(req.body.lat);
+  let lng = parseCoord(req.body.lng);
+  const radius = parseRadiusM(req.body.radius_m);
+
   const hour =
-    digest_hour === undefined || digest_hour === null || digest_hour === ""
+    req.body.digest_hour === undefined ||
+    req.body.digest_hour === null ||
+    req.body.digest_hour === ""
       ? 18
-      : parseDigestHour(digest_hour);
+      : parseDigestHour(req.body.digest_hour);
   if (hour === null) {
     return res.status(400).json({ error: "Heure du résumé invalide (0–23)" });
   }
-  const minute = parseDigestMinute(digest_minute);
+  const minute = parseDigestMinute(req.body.digest_minute);
   if (minute === null) {
     return res.status(400).json({ error: "Minutes invalides (0, 15, 30 ou 45)" });
   }
+
+  // GPS → resolve city / suggest quartier to disambiguate homonyms.
+  if (lat != null && lng != null) {
+    const place = await resolvePlace(lat, lng);
+    if (!city && place.city) city = normalizeCity(place.city);
+    if ((!q || q.length < 2) && place.zoneName) q = normalizeQuartier(place.zoneName);
+  }
+
+  if (!q || q.length < 2) {
+    return res.status(400).json({
+      error: "Nom de quartier requis (ou activez le GPS pour le détecter).",
+    });
+  }
+  if (lat == null || lng == null) {
+    return res.status(400).json({
+      error:
+        "Position GPS requise pour éviter les homonymes (ex. même quartier dans une autre ville).",
+    });
+  }
+
   try {
     const result = await pool.query(
-      `INSERT INTO neighborhood_subscriptions (user_id, quartier, digest_hour, digest_minute)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO neighborhood_subscriptions
+         (user_id, quartier, city, lat, lng, radius_m, digest_hour, digest_minute)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (user_id, quartier) DO UPDATE
          SET digest_hour = EXCLUDED.digest_hour,
-             digest_minute = EXCLUDED.digest_minute
+             digest_minute = EXCLUDED.digest_minute,
+             city = EXCLUDED.city,
+             lat = EXCLUDED.lat,
+             lng = EXCLUDED.lng,
+             radius_m = EXCLUDED.radius_m
        RETURNING *`,
-      [req.userId, q, hour, minute]
+      [req.userId, q, city, lat, lng, radius, hour, minute]
     );
     return res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -241,12 +406,34 @@ const updateSubscription = async (req, res) => {
   if (minute === null) {
     return res.status(400).json({ error: "Minutes invalides (0, 15, 30 ou 45)" });
   }
+
+  const city =
+    req.body.city !== undefined ? normalizeCity(req.body.city) : undefined;
+  const lat = req.body.lat !== undefined ? parseCoord(req.body.lat) : undefined;
+  const lng = req.body.lng !== undefined ? parseCoord(req.body.lng) : undefined;
+  const radius =
+    req.body.radius_m !== undefined ? parseRadiusM(req.body.radius_m) : undefined;
+
   try {
     const result = await pool.query(
       `UPDATE neighborhood_subscriptions
-       SET digest_hour = $1, digest_minute = $2
-       WHERE id = $3 AND user_id = $4 RETURNING *`,
-      [hour, minute, req.params.id, req.userId]
+       SET digest_hour = $1,
+           digest_minute = $2,
+           city = COALESCE($3, city),
+           lat = COALESCE($4, lat),
+           lng = COALESCE($5, lng),
+           radius_m = COALESCE($6, radius_m)
+       WHERE id = $7 AND user_id = $8 RETURNING *`,
+      [
+        hour,
+        minute,
+        city === undefined ? null : city,
+        lat === undefined ? null : lat,
+        lng === undefined ? null : lng,
+        radius === undefined ? null : radius,
+        req.params.id,
+        req.userId,
+      ]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Abonnement introuvable" });
@@ -287,7 +474,6 @@ const listSubscriptions = async (req, res) => {
   }
 };
 
-/** Immediate digest for QA — bypasses schedule, still requires FCM/SMS. */
 const sendNow = async (req, res) => {
   if (!neighborhoodWatch()) {
     return res.status(503).json({ error: "Veille de quartier désactivée" });
@@ -322,7 +508,6 @@ const sendNow = async (req, res) => {
   }
 };
 
-/** Send daily digests for subscriptions matching Kinshasa hour + 15-min slot. */
 const sendDigests = async (date = new Date()) => {
   if (!neighborhoodWatch()) return { sent: 0 };
   const { hour, minute } = kinshasaParts(date);
@@ -353,11 +538,14 @@ module.exports = {
   getDigest,
   sendDigests,
   loadDigestPayload,
+  buildIncidentScope,
   parseDigestHour,
   parseDigestMinute,
+  parseRadiusM,
   kinshasaHour,
   kinshasaParts,
   minuteSlot,
   normalizeQuartier,
   DIGEST_MINUTE_SLOTS,
+  DEFAULT_RADIUS_M,
 };

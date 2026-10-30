@@ -5,7 +5,7 @@ const {
   notifyUserGroupsOnFalseAlarm,
 } = require("../services/groupNotify");
 const { invalidateActiveAlerts } = require("../config/redis");
-const { resolveZoneName } = require("../utils/incidentZone");
+const { resolveZoneName, resolvePlace } = require("../utils/incidentZone");
 const { deliverEvent } = require("../services/partnerWebhooks");
 const { notifyLeadersForSOS } = require("../services/sectorNotify");
 const { findMatchingZones } = require("./trustZoneController");
@@ -80,14 +80,18 @@ const triggerSOS = async (req, res) => {
 
   try {
     let zoneName = null;
+    let zoneCity = null;
     try {
-      zoneName = await resolveZoneName(lat, lng);
+      const place = await resolvePlace(lat, lng);
+      zoneName = place.zoneName;
+      zoneCity = place.city;
     } catch (zErr) {
-      console.warn("resolveZoneName error:", zErr.message);
-    }
-    // DB column is VARCHAR(100) — long Nominatim labels must not fail the SOS.
-    if (typeof zoneName === "string" && zoneName.length > 100) {
-      zoneName = zoneName.slice(0, 97) + "…";
+      console.warn("resolvePlace error:", zErr.message);
+      try {
+        zoneName = await resolveZoneName(lat, lng);
+      } catch (_) {
+        /* ignore */
+      }
     }
 
     let priorityBoost = false;
@@ -107,15 +111,15 @@ const triggerSOS = async (req, res) => {
     const insertFull = async () =>
       pool.query(
         `INSERT INTO incidents (
-           user_id, incident_type, lat, lng, location, description, severity, zone_name,
+           user_id, incident_type, lat, lng, location, description, severity, zone_name, zone_city,
            priority_boost, mediation_requested, mediation_status, share_token, share_expires_at
          )
          VALUES (
            $1, $2, $3, $4,
            ST_SetSRID(ST_MakePoint($5, $6), 4326),
-           $7, 'alert', $8,
-           $9, $10, $11, $12,
-           CASE WHEN $12::text IS NOT NULL THEN NOW() + INTERVAL '6 hours' ELSE NULL END
+           $7, 'alert', $8, $9,
+           $10, $11, $12, $13,
+           CASE WHEN $13::text IS NOT NULL THEN NOW() + INTERVAL '6 hours' ELSE NULL END
          )
          RETURNING *`,
         [
@@ -127,6 +131,7 @@ const triggerSOS = async (req, res) => {
           lat,
           description,
           zoneName,
+          zoneCity,
           priorityBoost,
           wantMediation,
           wantMediation ? "requested" : null,
@@ -136,14 +141,14 @@ const triggerSOS = async (req, res) => {
 
     const insertMinimal = async () =>
       pool.query(
-        `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name)
+        `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name, zone_city)
          VALUES (
            $1, $2, $3, $4,
            ST_SetSRID(ST_MakePoint($5, $6), 4326),
-           $7, 'alert', $8
+           $7, 'alert', $8, $9
          )
          RETURNING *`,
-        [req.userId, incident_type || "sos", lat, lng, lng, lat, description, zoneName]
+        [req.userId, incident_type || "sos", lat, lng, lng, lat, description, zoneName, zoneCity]
       );
 
     let incident;
@@ -307,16 +312,29 @@ const triggerSOS = async (req, res) => {
     console.error("triggerSOS error:", err.code || "", err.message, err.stack);
     // Last-chance minimal insert (any failure above).
     try {
-      const zoneName = await resolveZoneName(lat, lng).catch(() => null);
+      const place = await resolvePlace(lat, lng).catch(() => ({
+        zoneName: null,
+        city: null,
+      }));
       const result = await pool.query(
-        `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name)
+        `INSERT INTO incidents (user_id, incident_type, lat, lng, location, description, severity, zone_name, zone_city)
          VALUES (
            $1, $2, $3, $4,
            ST_SetSRID(ST_MakePoint($5, $6), 4326),
-           $7, 'alert', $8
+           $7, 'alert', $8, $9
          )
          RETURNING *`,
-        [req.userId, incident_type || "sos", lat, lng, lng, lat, description, zoneName]
+        [
+          req.userId,
+          incident_type || "sos",
+          lat,
+          lng,
+          lng,
+          lat,
+          description,
+          place.zoneName,
+          place.city,
+        ]
       );
       return res.status(201).json({
         incident: result.rows[0],

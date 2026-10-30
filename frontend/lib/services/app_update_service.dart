@@ -382,6 +382,8 @@ class AppUpdateBanner extends StatelessWidget {
   final String? currentVersion;
   final VoidCallback onUpdate;
   final VoidCallback onDismiss;
+  /// When another top banner already applied the notch inset, set false.
+  final bool includeTopSafeArea;
 
   const AppUpdateBanner({
     super.key,
@@ -389,11 +391,12 @@ class AppUpdateBanner extends StatelessWidget {
     this.currentVersion,
     required this.onUpdate,
     required this.onDismiss,
+    this.includeTopSafeArea = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    final topInset = MediaQuery.paddingOf(context).top;
+    final topInset = includeTopSafeArea ? MediaQuery.paddingOf(context).top : 0.0;
     final fromTo = (currentVersion != null &&
             currentVersion!.isNotEmpty &&
             latestVersion != null &&

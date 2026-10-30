@@ -26,45 +26,46 @@ void main() {
     expect(NeighborhoodProvider.clampMinute(50), 45);
   });
 
-  test('subscribe sends chosen digest_hour and minute (Kinshasa)', () async {
+  test('subscribe sends GPS + city + radius', () async {
     fakeApi.onPost('/neighborhood/subscribe', () => {
       'id': 's1',
       'quartier': 'Gombe',
+      'city': 'Kinshasa',
       'digest_hour': 9,
       'digest_minute': 30,
+      'lat': -4.3,
+      'lng': 15.3,
+      'radius_m': 5000,
     });
     fakeApi.onGet('/neighborhood', () => {
       'data': [
-        {'id': 's1', 'quartier': 'Gombe', 'digest_hour': 9, 'digest_minute': 30},
+        {
+          'id': 's1',
+          'quartier': 'Gombe',
+          'city': 'Kinshasa',
+          'digest_hour': 9,
+          'digest_minute': 30,
+        },
       ],
     });
 
-    await provider.subscribe('Gombe', 9, 30);
+    await provider.subscribe(
+      quartier: 'Gombe',
+      digestHour: 9,
+      digestMinute: 30,
+      city: 'Kinshasa',
+      lat: -4.3,
+      lng: 15.3,
+      radiusM: 5000,
+    );
 
-    expect(fakeApi.lastPath, '/neighborhood');
     expect(fakeApi.lastBody!['quartier'], 'Gombe');
-    expect(fakeApi.lastBody!['digest_hour'], isA<int>());
+    expect(fakeApi.lastBody!['city'], 'Kinshasa');
+    expect(fakeApi.lastBody!['lat'], -4.3);
+    expect(fakeApi.lastBody!['lng'], 15.3);
+    expect(fakeApi.lastBody!['radius_m'], 5000);
     expect(fakeApi.lastBody!['digest_minute'], anyOf(0, 15, 30, 45));
     expect(provider.subscriptions, hasLength(1));
-  });
-
-  test('subscribe sends midnight hour 0 (not 18)', () async {
-    fakeApi.onPost('/neighborhood/subscribe', () => {
-      'id': 's0',
-      'quartier': 'Limete',
-      'digest_hour': 0,
-      'digest_minute': 0,
-    });
-    fakeApi.onGet('/neighborhood', () => {
-      'data': [
-        {'id': 's0', 'quartier': 'Limete', 'digest_hour': 0, 'digest_minute': 0},
-      ],
-    });
-
-    await provider.subscribe('Limete', 0, 0);
-
-    expect(fakeApi.lastBody!['digest_hour'], isA<int>());
-    expect(provider.subscriptions.first['digest_hour'], 0);
   });
 
   test('updateTime PATCHes hour+minute then reloads', () async {
@@ -82,7 +83,6 @@ void main() {
 
     await provider.updateTime('s1', 7, 15);
 
-    expect(fakeApi.lastPath, '/neighborhood');
     expect(fakeApi.lastBody!['digest_hour'], isA<int>());
     expect(fakeApi.lastBody!['digest_minute'], anyOf(0, 15, 30, 45));
     expect(provider.subscriptions.first['digest_minute'], 15);

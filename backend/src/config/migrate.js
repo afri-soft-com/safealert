@@ -485,6 +485,19 @@ const migrate = async () => {
         ADD CONSTRAINT neighborhood_subscriptions_digest_minute_check
         CHECK (digest_minute IS NULL OR digest_minute IN (0, 15, 30, 45));
 
+      ALTER TABLE neighborhood_subscriptions
+        ADD COLUMN IF NOT EXISTS city VARCHAR(120);
+      ALTER TABLE neighborhood_subscriptions
+        ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+      ALTER TABLE neighborhood_subscriptions
+        ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+      ALTER TABLE neighborhood_subscriptions
+        ADD COLUMN IF NOT EXISTS radius_m INTEGER DEFAULT 5000;
+
+      ALTER TABLE incidents
+        ADD COLUMN IF NOT EXISTS zone_city VARCHAR(120);
+      CREATE INDEX IF NOT EXISTS idx_incidents_zone_city ON incidents(zone_city);
+
       CREATE TABLE IF NOT EXISTS incident_types (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         slug VARCHAR(50) UNIQUE NOT NULL,

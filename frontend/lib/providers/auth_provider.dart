@@ -68,6 +68,8 @@ class AuthProvider extends ChangeNotifier {
   String? _error;
   String? _phone;
   String? _devCode;
+  String? _otpHint;
+  bool? _lastSmsSent;
   bool _hasLocalPin = false;
   bool _pinUnlocked = false;
   bool _needsPinSetup = false;
@@ -81,6 +83,9 @@ class AuthProvider extends ChangeNotifier {
   String? get phone => _phone;
   /// OTP de test renvoyé par l'API en dev quand SMS n'est pas configuré.
   String? get devCode => _devCode;
+  /// Hint after OTP request (SMS sent / code shown when SMS failed).
+  String? get otpHint => _otpHint;
+  bool? get lastSmsSent => _lastSmsSent;
 
   /// Surface a gate message (e.g. CGU not accepted) without starting a network call.
   void setLoginGateError(String message) {
@@ -268,14 +273,26 @@ class AuthProvider extends ChangeNotifier {
       _phone = normalized;
       final exposed = res['devCode'] ?? res['codeOtp'];
       _devCode = exposed?.toString();
-      if (res['smsEnvoye'] == false && _devCode != null && _devCode!.isNotEmpty) {
-        _error = 'SMS indisponible — votre code : $_devCode';
+      final smsOk = res['smsEnvoye'] == true;
+      _lastSmsSent = smsOk;
+      if (smsOk) {
+        _otpHint = 'Code envoyé par SMS. Vérifiez vos messages (et le spam).';
+        _error = null;
+      } else if (_devCode != null && _devCode!.isNotEmpty) {
+        _otpHint = 'SMS non délivré — saisissez ce code : $_devCode';
+        _error = _otpHint;
+      } else {
+        _otpHint =
+            'SMS non reçu. Réessayez dans une minute ou vérifiez le numéro +243.';
+        _error = _otpHint;
       }
       _loading = false;
       notifyListeners();
       return true;
     } catch (e) {
       _error = userFacingError(e);
+      _otpHint = null;
+      _lastSmsSent = null;
       _loading = false;
       notifyListeners();
       return false;
@@ -684,6 +701,8 @@ class AuthProvider extends ChangeNotifier {
     await lockSession();
     _isGuest = false;
     _devCode = null;
+    _otpHint = null;
+    _lastSmsSent = null;
     if (_hasLocalPin) {
       _needsPinSetup = false;
     } else if (_isAuthenticated) {
@@ -705,6 +724,8 @@ class AuthProvider extends ChangeNotifier {
     _isGuest = false;
     _phone = null;
     _devCode = null;
+    _otpHint = null;
+    _lastSmsSent = null;
     _pinUnlocked = false;
     _needsPinSetup = false;
     await _refreshPinState();

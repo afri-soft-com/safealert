@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/neighborhood_provider.dart';
+import '../services/location_service.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
@@ -9,7 +10,7 @@ import '../widgets/top_bar.dart';
 class NeighborhoodScreen extends StatefulWidget {
   final VoidCallback onBack;
   final NeighborhoodProvider? provider;
-  final void Function(String quartier)? onOpenDigest;
+  final void Function(String quartier, {String? subscriptionId, String? city})? onOpenDigest;
   const NeighborhoodScreen({
     super.key,
     required this.onBack,
@@ -24,9 +25,12 @@ class NeighborhoodScreen extends StatefulWidget {
 class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
   late final NeighborhoodProvider _nb;
   late final bool _ownsProvider;
-  final _ctrl = TextEditingController();
+  final _quartierCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
   late int _digestHour;
   late int _digestMinute;
+  int _radiusM = 5000;
+  bool _subscribing = false;
 
   @override
   void initState() {
@@ -109,24 +113,55 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
   }
 
   Future<void> _subscribe() async {
-    final q = _ctrl.text.trim();
+    final q = _quartierCtrl.text.trim();
     if (q.length < 2) {
       showAppSnackBar(context, 'Indiquez un nom de quartier (min. 2 caractères).', isError: true);
       return;
     }
+    setState(() => _subscribing = true);
     try {
-      await _nb.subscribe(q, _digestHour, _digestMinute);
-      _ctrl.clear();
+      final pos = await LocationService().getCurrentPosition();
+      if (pos == null) {
+        if (mounted) {
+          showAppSnackBar(
+            context,
+            'GPS requis pour éviter les homonymes (même quartier dans une autre ville). Activez la localisation.',
+            isError: true,
+          );
+        }
+        return;
+      }
+      final created = await _nb.subscribe(
+        quartier: q,
+        digestHour: _digestHour,
+        digestMinute: _digestMinute,
+        city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+        lat: pos.latitude,
+        lng: pos.longitude,
+        radiusM: _radiusM,
+      );
+      final city = (created['city'] as String?)?.trim();
+      if (city != null && city.isNotEmpty && _cityCtrl.text.trim().isEmpty) {
+        _cityCtrl.text = city;
+      }
+      _quartierCtrl.clear();
       if (mounted) {
+        final place = [
+          q,
+          if (city != null && city.isNotEmpty) city,
+          NeighborhoodProvider.formatRadius(_radiusM),
+        ].join(' · ');
         showAppSnackBar(
           context,
-          'Abonné à « $q » — résumé quotidien à $_timeLabel (heure du téléphone).',
+          'Abonné à $place — résumé à $_timeLabel',
         );
       }
     } catch (e) {
       if (mounted) {
         showAppSnackBar(context, e, isError: true, fallback: 'Impossible d\'enregistrer l\'abonnement.');
       }
+    } finally {
+      if (mounted) setState(() => _subscribing = false);
     }
   }
 
@@ -170,11 +205,22 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
     }
   }
 
+  void _openDigest(Map<String, dynamic> sub) {
+    final quartier = sub['quartier'] as String? ?? '';
+    if (quartier.isEmpty || widget.onOpenDigest == null) return;
+    widget.onOpenDigest!(
+      quartier,
+      subscriptionId: sub['id']?.toString(),
+      city: sub['city'] as String?,
+    );
+  }
+
   @override
   void dispose() {
     _nb.removeListener(_onNb);
     if (_ownsProvider) _nb.dispose();
-    _ctrl.dispose();
+    _quartierCtrl.dispose();
+    _cityCtrl.dispose();
     super.dispose();
   }
 
@@ -193,17 +239,43 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       const Text(
-                        'Recevez chaque jour un résumé des alertes de votre quartier. '
-                        'Choisissez l’heure sur votre téléphone (créneaux :00 / :15 / :30 / :45).',
+                        'Résumé quotidien des alertes autour de votre position GPS '
+                        '(évite les homonymes entre villes). Créneaux :00 / :15 / :30 / :45.',
                         style: TextStyle(fontSize: 12, color: AppColors.gris),
                       ),
                       const SizedBox(height: 12),
                       TextField(
-                        controller: _ctrl,
+                        controller: _quartierCtrl,
                         decoration: const InputDecoration(
-                          labelText: 'Quartier (ex. Gombe, Limete)',
+                          labelText: 'Quartier (ex. Gombe)',
                           border: OutlineInputBorder(),
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _cityCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Ville / commune (optionnel)',
+                          hintText: 'Détectée via GPS si vide',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Rayon de veille',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final m in NeighborhoodProvider.radiusPresetsM)
+                            ChoiceChip(
+                              label: Text(NeighborhoodProvider.formatRadius(m)),
+                              selected: _radiusM == m,
+                              onSelected: (_) => setState(() => _radiusM = m),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -248,21 +320,24 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Résumé prévu à $_timeLabel (heure du téléphone)',
+                        'Résumé prévu à $_timeLabel · rayon ${NeighborhoodProvider.formatRadius(_radiusM)}',
                         style: const TextStyle(fontSize: 11, color: AppColors.gris),
                       ),
                       const SizedBox(height: 8),
                       ElevatedButton(
-                        onPressed: _subscribe,
+                        onPressed: _subscribing ? null : _subscribe,
                         style: ElevatedButton.styleFrom(backgroundColor: AppColors.vert),
-                        child: const Text("S'abonner", style: TextStyle(color: Colors.white)),
+                        child: Text(
+                          _subscribing ? 'Localisation…' : "S'abonner (GPS)",
+                          style: const TextStyle(color: Colors.white),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       if (_nb.subscriptions.isEmpty)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 24),
                           child: Text(
-                            'Aucun quartier suivi. Ajoutez votre quartier pour recevoir le résumé quotidien.',
+                            'Aucun quartier suivi. Ajoutez votre quartier près de vous.',
                             style: TextStyle(fontSize: 12, color: AppColors.gris),
                             textAlign: TextAlign.center,
                           ),
@@ -272,26 +347,30 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
                           final kHour = (s['digest_hour'] as num?)?.toInt() ?? 18;
                           final kMin = (s['digest_minute'] as num?)?.toInt() ?? 0;
                           final local = NeighborhoodProvider.kinshasaToLocal(kHour, kMin);
-                          final label = NeighborhoodProvider.formatHm(
+                          final when = NeighborhoodProvider.formatHm(
                             local.hour,
                             NeighborhoodProvider.clampMinute(local.minute),
                           );
                           final quartier = s['quartier'] as String? ?? '';
+                          final city = (s['city'] as String?)?.trim();
+                          final radius = (s['radius_m'] as num?)?.toInt() ?? 5000;
+                          final title = [
+                            quartier,
+                            if (city != null && city.isNotEmpty) city,
+                          ].join(' · ');
                           return ListTile(
-                            title: Text(quartier),
-                            subtitle: Text('Résumé quotidien à $label'),
-                            onTap: widget.onOpenDigest != null && quartier.isNotEmpty
-                                ? () => widget.onOpenDigest!(quartier)
-                                : null,
+                            title: Text(title),
+                            subtitle: Text(
+                              'Résumé à $when · ${NeighborhoodProvider.formatRadius(radius)}',
+                            ),
+                            onTap: () => _openDigest(s),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
                                   tooltip: 'Voir le résumé',
                                   icon: const Icon(Icons.summarize_outlined),
-                                  onPressed: widget.onOpenDigest != null && quartier.isNotEmpty
-                                      ? () => widget.onOpenDigest!(quartier)
-                                      : null,
+                                  onPressed: () => _openDigest(s),
                                 ),
                                 IconButton(
                                   tooltip: 'Recevoir maintenant',

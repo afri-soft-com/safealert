@@ -44,8 +44,10 @@ class _NeighborhoodDigestScreenState extends State<NeighborhoodDigestScreen> {
   }
 
   Future<void> _load() async {
+    final subId = (widget.notificationData?['subscription_id'] ?? '').trim();
     final q = _quartier;
-    if (q.length < 2) {
+    final city = (widget.notificationData?['city'] ?? '').trim();
+    if (subId.isEmpty && q.length < 2) {
       setState(() {
         _loading = false;
         _error = 'Quartier manquant dans la notification.';
@@ -57,9 +59,17 @@ class _NeighborhoodDigestScreenState extends State<NeighborhoodDigestScreen> {
       _error = null;
     });
     try {
-      final res = await _api.get(
-        '/neighborhood/digest?quartier=${Uri.encodeQueryComponent(q)}&hours=24',
-      );
+      final params = <String, String>{'hours': '24'};
+      if (subId.isNotEmpty) {
+        params['subscription_id'] = subId;
+      } else {
+        params['quartier'] = q;
+        if (city.isNotEmpty) params['city'] = city;
+      }
+      final qs = params.entries
+          .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}')
+          .join('&');
+      final res = await _api.get('/neighborhood/digest?$qs');
       if (!mounted) return;
       setState(() {
         _digest = res;
@@ -167,7 +177,14 @@ class _NeighborhoodDigestScreenState extends State<NeighborhoodDigestScreen> {
                       padding: const EdgeInsets.all(16),
                       children: [
                         Text(
-                          _quartier.isEmpty ? 'Quartier' : _quartier,
+                          () {
+                            final q = (_digest?['quartier'] as String?)?.trim().isNotEmpty == true
+                                ? (_digest!['quartier'] as String).trim()
+                                : (_quartier.isEmpty ? 'Quartier' : _quartier);
+                            final city = (_digest?['city'] as String?)?.trim();
+                            if (city != null && city.isNotEmpty) return '$q · $city';
+                            return q;
+                          }(),
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
@@ -176,7 +193,18 @@ class _NeighborhoodDigestScreenState extends State<NeighborhoodDigestScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Activité des dernières $hours heures',
+                          () {
+                            final radius = (_digest?['radius_m'] as num?)?.toInt();
+                            final mode = _digest?['match_mode']?.toString();
+                            final base = 'Activité des dernières $hours heures';
+                            if (radius != null && mode == 'radius') {
+                              final km = radius >= 1000
+                                  ? '${(radius / 1000).toStringAsFixed(radius % 1000 == 0 ? 0 : 1)} km'
+                                  : '$radius m';
+                              return '$base · rayon $km';
+                            }
+                            return base;
+                          }(),
                           style: const TextStyle(fontSize: 12, color: AppColors.gris),
                         ),
                         if (_error != null) ...[

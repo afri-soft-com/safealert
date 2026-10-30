@@ -1,6 +1,6 @@
 const { pool } = require("../config/database");
 const { cacheGet, cacheSet, invalidateActiveAlerts } = require("../config/redis");
-const { resolveZoneName } = require("../utils/incidentZone");
+const { resolvePlace } = require("../utils/incidentZone");
 const { deliverEvent } = require("../services/partnerWebhooks");
 const { witnessEvidence, reliabilityScore } = require("../config/features");
 const { withReliabilityBadge } = require("../utils/reliability");
@@ -178,12 +178,24 @@ const reportIncident = async (req, res) => {
       });
     }
 
-    const zoneName = await resolveZoneName(lat, lng);
+    const place = await resolvePlace(lat, lng);
     const result = await pool.query(
-      `INSERT INTO incidents (user_id, incident_type, description, lat, lng, location, severity, is_anonymous, zone_name, reliability_score)
-       VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326), 'vigilance', $8, $9, $10)
+      `INSERT INTO incidents (user_id, incident_type, description, lat, lng, location, severity, is_anonymous, zone_name, zone_city, reliability_score)
+       VALUES ($1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6, $7), 4326), 'vigilance', $8, $9, $10, $11)
        RETURNING *`,
-      [req.userId, incident_type, description, lat, lng, lng, lat, is_anonymous || false, zoneName, baseScore]
+      [
+        req.userId,
+        incident_type,
+        description,
+        lat,
+        lng,
+        lng,
+        lat,
+        is_anonymous || false,
+        place.zoneName,
+        place.city,
+        baseScore,
+      ]
     );
     const incident = result.rows[0];
 

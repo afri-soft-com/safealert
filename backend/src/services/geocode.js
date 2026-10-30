@@ -32,11 +32,20 @@ const pickZoneName = (address) => {
   );
 };
 
-const reverseGeocode = async (lat, lng) => {
-  const latNum = parseFloat(lat);
-  const lngNum = parseFloat(lng);
-  if (Number.isNaN(latNum) || Number.isNaN(lngNum)) return null;
+/** City / commune — used to disambiguate same quartier names across cities. */
+const pickCity = (address) => {
+  if (!address || typeof address !== "object") return null;
+  return (
+    address.city ||
+    address.town ||
+    address.municipality ||
+    address.county ||
+    address.state ||
+    null
+  );
+};
 
+const fetchNominatim = async (latNum, lngNum) => {
   const key = cacheKey(latNum, lngNum);
   if (cache.has(key)) return cache.get(key);
 
@@ -57,14 +66,36 @@ const reverseGeocode = async (lat, lng) => {
   }
 
   const data = await res.json();
-  const zoneName = pickZoneName(data.address);
-  if (zoneName) {
-    cache.set(key, zoneName);
-  }
-  return zoneName;
+  const place = {
+    zoneName: pickZoneName(data.address),
+    city: pickCity(data.address),
+    country: data.address?.country || null,
+  };
+  cache.set(key, place);
+  return place;
+};
+
+/** Full place (quartier + city). */
+const reverseGeocodePlace = async (lat, lng) => {
+  const latNum = parseFloat(lat);
+  const lngNum = parseFloat(lng);
+  if (Number.isNaN(latNum) || Number.isNaN(lngNum)) return null;
+  return fetchNominatim(latNum, lngNum);
+};
+
+/** Backward-compatible: returns zone name string only. */
+const reverseGeocode = async (lat, lng) => {
+  const place = await reverseGeocodePlace(lat, lng);
+  return place?.zoneName || null;
 };
 
 /** Clear in-memory cache (tests). */
 const clearGeocodeCache = () => cache.clear();
 
-module.exports = { reverseGeocode, pickZoneName, clearGeocodeCache };
+module.exports = {
+  reverseGeocode,
+  reverseGeocodePlace,
+  pickZoneName,
+  pickCity,
+  clearGeocodeCache,
+};

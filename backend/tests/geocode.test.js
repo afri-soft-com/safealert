@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { pickZoneName, reverseGeocode, clearGeocodeCache } from "../src/services/geocode.js";
+import {
+  pickZoneName,
+  pickCity,
+  reverseGeocode,
+  clearGeocodeCache,
+} from "../src/services/geocode.js";
 
 describe("geocode service", () => {
   beforeEach(() => {
@@ -16,6 +21,14 @@ describe("geocode service", () => {
     expect(pickZoneName({ suburb: "Gombe", city: "Kinshasa" })).toBe("Gombe");
     expect(pickZoneName({ city: "Kinshasa" })).toBe("Kinshasa");
     expect(pickZoneName({})).toBeNull();
+  });
+
+  it("pickCity prefers city over state", () => {
+    expect(pickCity({ suburb: "Gombe", city: "Kinshasa", state: "Kinshasa" })).toBe(
+      "Kinshasa"
+    );
+    expect(pickCity({ town: "Matadi" })).toBe("Matadi");
+    expect(pickCity({})).toBeNull();
   });
 
   it("reverseGeocode caches results", async () => {
