@@ -122,7 +122,7 @@ export default function SettingsPage() {
       const next = await api.setHomeTiles(payload);
       setHomeTiles(next.tiles || []);
       setSuccess(
-        "Visibilité des services enregistrée. Les citoyens verront les changements sous 2 minutes (ou au redémarrage de l'app)."
+        "Visibilité des services enregistrée. L'accueil mobile se met à jour en quelques secondes (sans redémarrer l'app)."
       );
     } catch (err) {
       setError(userFacingError(err, "Impossible d'enregistrer les services."));

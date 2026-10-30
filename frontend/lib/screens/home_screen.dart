@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
@@ -17,17 +18,49 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _alertSent = false;
+  Timer? _configPoll;
+  final _cfg = AppConfigService();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _cfg.addListener(_onConfigChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await AppConfigService().refresh();
-      if (mounted) setState(() {});
+      await _refreshConfig();
+      if (!mounted) return;
       context.read<IncidentProvider>().fetchIncidents(hours: 24);
     });
+    // Apply admin tile toggles while the home stays open (no app restart).
+    _configPoll = Timer.periodic(const Duration(seconds: 12), (_) {
+      _refreshConfig();
+    });
+  }
+
+  void _onConfigChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _refreshConfig() async {
+    await _cfg.refresh(force: true);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshConfig();
+    }
+  }
+
+  @override
+  void dispose() {
+    _configPoll?.cancel();
+    _cfg.removeListener(_onConfigChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   String _timeAgo(String? iso) {

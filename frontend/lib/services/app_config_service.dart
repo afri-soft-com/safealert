@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'api_service.dart';
 
 /// Remote kill switch / feature flags from GET /api/app/config.
-class AppConfigService {
+class AppConfigService extends ChangeNotifier {
   AppConfigService._();
   static final AppConfigService instance = AppConfigService._();
   factory AppConfigService() => instance;
@@ -16,14 +16,22 @@ class AppConfigService {
   Map<String, bool> homeTiles = {};
   DateTime? _lastFetch;
 
-  Future<void> refresh({bool force = false}) async {
+  /// Soft cache for non-forced callers (SOS, etc.). Home uses [force: true].
+  static const Duration softCacheTtl = Duration(seconds: 20);
+
+  Future<bool> refresh({bool force = false}) async {
     if (!force &&
         _lastFetch != null &&
-        DateTime.now().difference(_lastFetch!) < const Duration(minutes: 2)) {
-      return;
+        DateTime.now().difference(_lastFetch!) < softCacheTtl) {
+      return false;
     }
     try {
       final data = await _api.get('/app/config');
+      final prevTiles = Map<String, bool>.from(homeTiles);
+      final prevFeatures = Map<String, dynamic>.from(features);
+      final prevMaint = maintenance;
+      final prevSos = sosEnabled;
+
       maintenance = data['maintenance'] == true;
       sosEnabled = data['sosEnabled'] != false;
       maintenanceBanner = (data['maintenanceBanner'] as String?)?.trim() ?? '';
@@ -38,8 +46,18 @@ class AppConfigService {
         }
       }
       _lastFetch = DateTime.now();
+
+      final changed = prevMaint != maintenance ||
+          prevSos != sosEnabled ||
+          !mapEquals(prevTiles, homeTiles) ||
+          !mapEquals(prevFeatures, features);
+      if (changed) {
+        notifyListeners();
+      }
+      return changed;
     } catch (e) {
       debugPrint('AppConfigService: $e');
+      return false;
     }
   }
 

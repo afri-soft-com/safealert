@@ -317,6 +317,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // PIN is required only after explicit « Verrouiller » (persisted flag).
     if (state == AppLifecycleState.resumed) {
       _appUpdates.check(context, force: true);
+      AppConfigService().refresh(force: true).then((_) {
+        if (mounted) setState(() {});
+      });
       final auth = context.read<AuthProvider>();
       if (auth.needsPinUnlock) {
         setState(() {
