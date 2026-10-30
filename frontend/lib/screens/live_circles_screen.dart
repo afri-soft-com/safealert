@@ -362,7 +362,9 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                     ),
                   ),
                   Text(
-                    '${_members.length} membre(s) visibles',
+                    _members.isEmpty
+                        ? 'Aucun membre visible pour l’instant. Partagez votre GPS ou invitez un proche avec le code.'
+                        : '${_members.length} membre(s) visibles (rafraîchi toutes les 20 s)',
                     style: const TextStyle(fontSize: 11, color: AppColors.gris),
                   ),
                 ],
