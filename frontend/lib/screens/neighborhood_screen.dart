@@ -9,7 +9,13 @@ import '../widgets/top_bar.dart';
 class NeighborhoodScreen extends StatefulWidget {
   final VoidCallback onBack;
   final NeighborhoodProvider? provider;
-  const NeighborhoodScreen({super.key, required this.onBack, this.provider});
+  final void Function(String quartier)? onOpenDigest;
+  const NeighborhoodScreen({
+    super.key,
+    required this.onBack,
+    this.provider,
+    this.onOpenDigest,
+  });
 
   @override
   State<NeighborhoodScreen> createState() => _NeighborhoodScreenState();
@@ -270,12 +276,23 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
                             local.hour,
                             NeighborhoodProvider.clampMinute(local.minute),
                           );
+                          final quartier = s['quartier'] as String? ?? '';
                           return ListTile(
-                            title: Text(s['quartier'] as String? ?? ''),
+                            title: Text(quartier),
                             subtitle: Text('Résumé quotidien à $label'),
+                            onTap: widget.onOpenDigest != null && quartier.isNotEmpty
+                                ? () => widget.onOpenDigest!(quartier)
+                                : null,
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                IconButton(
+                                  tooltip: 'Voir le résumé',
+                                  icon: const Icon(Icons.summarize_outlined),
+                                  onPressed: widget.onOpenDigest != null && quartier.isNotEmpty
+                                      ? () => widget.onOpenDigest!(quartier)
+                                      : null,
+                                ),
                                 IconButton(
                                   tooltip: 'Recevoir maintenant',
                                   icon: const Icon(Icons.send_outlined),

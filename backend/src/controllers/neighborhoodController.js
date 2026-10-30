@@ -59,17 +59,75 @@ function normalizeQuartier(q) {
     .replace(/\s+/g, " ");
 }
 
+async function loadDigestPayload(quartier, { hours = 24, limit = 50 } = {}) {
+  const q = normalizeQuartier(quartier);
+  const h = Math.min(Math.max(Number.parseInt(hours, 10) || 24, 1), 168);
+  const lim = Math.min(Math.max(Number.parseInt(limit, 10) || 50, 1), 100);
+  const pattern = `%${q}%`;
+
+  const [stats, byType, bySeverity, incidents] = await Promise.all([
+    pool.query(
+      `SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (
+                WHERE severity = 'alert' OR incident_type IN ('sos', 'sos_discret')
+              )::int AS sos,
+              COUNT(*) FILTER (WHERE severity = 'warning')::int AS warnings,
+              COUNT(*) FILTER (WHERE severity = 'info' OR severity IS NULL)::int AS info
+       FROM incidents
+       WHERE zone_name ILIKE $1
+         AND created_at > NOW() - ($2::int * INTERVAL '1 hour')`,
+      [pattern, h]
+    ),
+    pool.query(
+      `SELECT incident_type AS type, COUNT(*)::int AS count
+       FROM incidents
+       WHERE zone_name ILIKE $1
+         AND created_at > NOW() - ($2::int * INTERVAL '1 hour')
+       GROUP BY incident_type
+       ORDER BY count DESC`,
+      [pattern, h]
+    ),
+    pool.query(
+      `SELECT COALESCE(severity, 'info') AS severity, COUNT(*)::int AS count
+       FROM incidents
+       WHERE zone_name ILIKE $1
+         AND created_at > NOW() - ($2::int * INTERVAL '1 hour')
+       GROUP BY COALESCE(severity, 'info')
+       ORDER BY count DESC`,
+      [pattern, h]
+    ),
+    pool.query(
+      `SELECT id, incident_type, description, severity, zone_name, lat, lng, created_at
+       FROM incidents
+       WHERE zone_name ILIKE $1
+         AND created_at > NOW() - ($2::int * INTERVAL '1 hour')
+       ORDER BY created_at DESC
+       LIMIT $3`,
+      [pattern, h, lim]
+    ),
+  ]);
+
+  const { total, sos, warnings, info } = stats.rows[0];
+  return {
+    quartier: q,
+    window_hours: h,
+    generated_at: new Date().toISOString(),
+    summary: {
+      total,
+      sos,
+      warnings,
+      info,
+      by_type: byType.rows,
+      by_severity: bySeverity.rows,
+    },
+    incidents: incidents.rows,
+  };
+}
+
 async function deliverDigest(sub) {
-  const q = normalizeQuartier(sub.quartier);
-  const stats = await pool.query(
-    `SELECT COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE severity = 'alert')::int AS sos
-     FROM incidents
-     WHERE zone_name ILIKE $1
-       AND created_at > NOW() - INTERVAL '24 hours'`,
-    [`%${q}%`]
-  );
-  const { total, sos } = stats.rows[0];
+  const payload = await loadDigestPayload(sub.quartier);
+  const q = payload.quartier;
+  const { total, sos } = payload.summary;
   const title = `Digest — ${q}`;
   const body = `${total} incident(s) dont ${sos} SOS sur 24h.`;
   let delivered = false;
@@ -78,7 +136,13 @@ async function deliverDigest(sub) {
     try {
       await sendPush(sub.fcm_token, {
         notification: { title: `🏘️ ${title}`, body },
-        data: { type: "neighborhood_digest", quartier: q },
+        data: {
+          type: "neighborhood_digest",
+          quartier: q,
+          total: String(total),
+          sos: String(sos),
+          window_hours: "24",
+        },
       });
       delivered = true;
     } catch (err) {
@@ -101,8 +165,29 @@ async function deliverDigest(sub) {
       [sub.id]
     );
   }
-  return { delivered, title, body, total, sos };
+  return { delivered, title, body, total, sos, payload };
 }
+
+/** Detailed digest for a quartier (notification tap / in-app). */
+const getDigest = async (req, res) => {
+  if (!neighborhoodWatch()) {
+    return res.status(503).json({ error: "Veille de quartier désactivée" });
+  }
+  const q = normalizeQuartier(req.query.quartier || req.params.quartier);
+  if (!q || q.length < 2) {
+    return res.status(400).json({ error: "Nom de quartier requis" });
+  }
+  try {
+    const digest = await loadDigestPayload(q, {
+      hours: req.query.hours,
+      limit: req.query.limit,
+    });
+    return res.json(digest);
+  } catch (err) {
+    console.error("neighborhood getDigest error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
 
 const subscribe = async (req, res) => {
   if (!neighborhoodWatch()) {
@@ -265,7 +350,9 @@ module.exports = {
   unsubscribe,
   listSubscriptions,
   sendNow,
+  getDigest,
   sendDigests,
+  loadDigestPayload,
   parseDigestHour,
   parseDigestMinute,
   kinshasaHour,

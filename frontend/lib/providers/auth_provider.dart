@@ -22,6 +22,7 @@ const _kSessionUnlockedKey = 'safealert_session_unlocked_v1';
 const kAuthRequiredScreens = {
   'home', 'sos', 'contacts', 'dashboard', 'settings', 'leader', 'groups',
   'history', 'admin', 'trip', 'escort_map', 'trust_zones', 'neighborhood',
+  'neighborhood_digest',
   'offline_queue', 'safety_ping', 'safety_ping_missed', 'premium',
 };
 

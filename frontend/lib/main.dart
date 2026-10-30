@@ -51,6 +51,7 @@ import 'screens/trip_screen.dart';
 import 'screens/escort_map_screen.dart';
 import 'screens/trust_zones_screen.dart';
 import 'screens/neighborhood_screen.dart';
+import 'screens/neighborhood_digest_screen.dart';
 import 'screens/fake_call_screen.dart';
 import 'screens/live_circles_screen.dart';
 import 'services/volume_sos_service.dart';
@@ -145,6 +146,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   final FCMService _fcm = FCMService();
   AuthProvider? _auth;
   Map<String, String> _safetyPingMissData = {};
+  Map<String, String> _neighborhoodDigestData = {};
 
   String get _currentScreen => _navStack.last;
 
@@ -152,13 +154,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _onFcmPending() {
     if (!mounted) return;
-    _consumeSafetyPingMissOpen();
+    _consumePendingNotificationOpen();
   }
 
-  void _consumeSafetyPingMissOpen() {
+  void _consumePendingNotificationOpen() {
     final pending = _fcm.pendingOpen;
     if (pending == null) return;
-    if (pending['type'] != 'safety_ping_missed') return;
+    final type = pending['type'];
+    if (type != 'safety_ping_missed' && type != 'neighborhood_digest') return;
 
     final auth = context.read<AuthProvider>();
     if (!auth.canEnterApp) {
@@ -168,12 +171,38 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     final data = _fcm.takePendingOpen();
     if (data == null) return;
+    if (type == 'neighborhood_digest') {
+      setState(() {
+        _neighborhoodDigestData = data;
+        if (_navStack.last == 'neighborhood_digest') {
+          _navStack.removeLast();
+        }
+        _navStack.add('neighborhood_digest');
+      });
+      return;
+    }
+
     setState(() {
       _safetyPingMissData = data;
       if (_navStack.last == 'safety_ping_missed') {
         _navStack.removeLast();
       }
       _navStack.add('safety_ping_missed');
+    });
+  }
+
+  void _consumeSafetyPingMissOpen() => _consumePendingNotificationOpen();
+
+  void openNeighborhoodDigest(String quartier) {
+    setState(() {
+      _neighborhoodDigestData = {
+        'type': 'neighborhood_digest',
+        'quartier': quartier,
+      };
+      if (_navStack.last == 'neighborhood_digest') {
+        _navStack.removeLast();
+      }
+      _navStack.add('neighborhood_digest');
     });
   }
 
@@ -572,7 +601,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       case 'trust_zones':
         screen = TrustZonesScreen(onBack: _goBack);
       case 'neighborhood':
-        screen = NeighborhoodScreen(onBack: _goBack);
+        screen = NeighborhoodScreen(
+          onBack: _goBack,
+          onOpenDigest: openNeighborhoodDigest,
+        );
+      case 'neighborhood_digest':
+        screen = NeighborhoodDigestScreen(
+          quartier: _neighborhoodDigestData['quartier'] ?? '',
+          notificationData: _neighborhoodDigestData,
+          onBack: _goBack,
+          onNavigate: _navigate,
+        );
       case 'offline_queue':
         screen = OfflineQueueScreen(onBack: _goBack);
       case 'safety_ping':

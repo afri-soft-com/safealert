@@ -1432,12 +1432,55 @@ describe("Neighborhood veille", () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ total: 2, sos: 1 }] });
+      .mockResolvedValueOnce({
+        rows: [{ total: 2, sos: 1, warnings: 0, info: 1 }],
+      })
+      .mockResolvedValueOnce({ rows: [{ type: "sos", count: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ severity: "alert", count: 1 }] })
+      .mockResolvedValueOnce({ rows: [] });
     const res = await request(app)
       .post("/api/neighborhood/sub-1/send-now")
       .set("Authorization", `Bearer ${validToken}`);
     // No FCM/SMS → 502
     expect(res.status).toBe(502);
+  });
+
+  it("GET /api/neighborhood/digest returns summary and incidents", async () => {
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [{ total: 3, sos: 1, warnings: 1, info: 1 }],
+      })
+      .mockResolvedValueOnce({ rows: [{ type: "sos", count: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ severity: "alert", count: 1 }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "i1",
+            incident_type: "sos",
+            description: "Test",
+            severity: "alert",
+            zone_name: "Gombe",
+            lat: -4.3,
+            lng: 15.3,
+            created_at: new Date().toISOString(),
+          },
+        ],
+      });
+    const res = await request(app)
+      .get("/api/neighborhood/digest?quartier=Gombe")
+      .set("Authorization", `Bearer ${validToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.quartier).toBe("Gombe");
+    expect(res.body.summary.total).toBe(3);
+    expect(res.body.summary.sos).toBe(1);
+    expect(res.body.incidents).toHaveLength(1);
+  });
+
+  it("GET /api/neighborhood/digest requires quartier", async () => {
+    const res = await request(app)
+      .get("/api/neighborhood/digest")
+      .set("Authorization", `Bearer ${validToken}`);
+    expect(res.status).toBe(400);
   });
 });
 
