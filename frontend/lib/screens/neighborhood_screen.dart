@@ -119,15 +119,35 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
       return;
     }
     setState(() => _subscribing = true);
+    final loc = LocationService();
     try {
-      final pos = await LocationService().getCurrentPosition();
+      // Same cascade as SOS: GPS → dernière position connue → cache local.
+      final resolved = await loc.getPositionWithSource();
+      final pos = resolved.position;
       if (pos == null) {
-        if (mounted) {
-          showAppSnackBar(
-            context,
-            'GPS requis pour éviter les homonymes (même quartier dans une autre ville). Activez la localisation.',
-            isError: true,
-          );
+        final why = await loc.diagnoseLocationBlocker();
+        if (!mounted) return;
+        final openSettings = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Position indisponible', style: TextStyle(fontSize: 16)),
+            content: Text(why, style: const TextStyle(fontSize: 13)),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('OK')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Réglages'),
+              ),
+            ],
+          ),
+        );
+        if (openSettings == true) {
+          final foreverBlocked = why.contains('bloquée');
+          if (foreverBlocked) {
+            await loc.openAppLocationSettings();
+          } else {
+            await loc.openSystemLocationSettings();
+          }
         }
         return;
       }
@@ -151,9 +171,12 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
           if (city != null && city.isNotEmpty) city,
           NeighborhoodProvider.formatRadius(_radiusM),
         ].join(' · ');
+        final srcHint = resolved.source == 'gps'
+            ? ''
+            : ' (position récente)';
         showAppSnackBar(
           context,
-          'Abonné à $place — résumé à $_timeLabel',
+          'Abonné à $place — résumé à $_timeLabel$srcHint',
         );
       }
     } catch (e) {

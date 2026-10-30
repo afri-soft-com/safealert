@@ -73,6 +73,32 @@ class LocationService {
     return (position: null, source: 'none');
   }
 
+  /// Why [getCurrentPosition] / cascade may fail (for UI copy).
+  Future<String> diagnoseLocationBlocker() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        return 'Le GPS / la localisation du téléphone est désactivé. Activez-le dans les réglages système.';
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        return 'Permission de localisation refusée. Autorisez SafeAlert à accéder à la position.';
+      }
+      if (permission == LocationPermission.deniedForever) {
+        return 'Permission de localisation bloquée. Ouvrez les réglages de l’app → Autorisations → Localisation.';
+      }
+      return 'Position introuvable pour le moment (signal GPS faible). Sortez à découvert ou réessayez dans quelques secondes.';
+    } catch (_) {
+      return 'Impossible d’accéder à la localisation. Vérifiez GPS et permissions SafeAlert.';
+    }
+  }
+
+  Future<bool> openAppLocationSettings() => Geolocator.openAppSettings();
+
+  Future<bool> openSystemLocationSettings() => Geolocator.openLocationSettings();
+
   Future<Position?> getCurrentPosition() async {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return null;
@@ -86,10 +112,26 @@ class LocationService {
         return null;
       }
 
+      // Prefer a fresh fix; medium accuracy is more reliable indoors / under canopy.
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 15),
+          ),
+        );
+        if (!_isNullIsland(pos.latitude, pos.longitude)) {
+          await _cacheGoodPosition(pos.latitude, pos.longitude);
+          return pos;
+        }
+      } catch (_) {
+        // Fall through to high-accuracy short attempt.
+      }
+
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
+          timeLimit: Duration(seconds: 8),
         ),
       );
       if (!_isNullIsland(pos.latitude, pos.longitude)) {
