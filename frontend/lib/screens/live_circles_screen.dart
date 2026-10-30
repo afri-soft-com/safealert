@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 import '../theme.dart';
+import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
 import '../widgets/status_bar.dart';
@@ -154,8 +156,33 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
         }
         return;
       }
-      await LocationService().updatePosition(pos.latitude, pos.longitude);
+
+      // Circle share needs server-side share_presence + last_lat/lng, otherwise
+      // membersLive filters the user out even after share_until is set.
+      final auth = context.read<AuthProvider>();
+      if (!auth.sharePresence) {
+        final ok = await auth.updateProfile(sharePresence: true);
+        if (!ok) {
+          if (mounted) {
+            showAppSnackBar(
+              context,
+              'Activez « Partager ma présence » dans Réglages pour apparaître sur la carte.',
+              isError: true,
+            );
+          }
+          return;
+        }
+      }
+      LocationService().sharePresence = true;
+      await LocationService().updatePosition(
+        pos.latitude,
+        pos.longitude,
+        force: true,
+      );
       await _api.patch('/live-circles/$id/share', {'hours': _shareHours});
+      LocationService().startPeriodicUpdates(
+        interval: const Duration(minutes: 1),
+      );
       await _loadMembers(id);
       if (mounted) {
         showAppSnackBar(
@@ -235,14 +262,27 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                 OutlinedButton(onPressed: _join, child: const Text('Rejoindre')),
                 const SizedBox(height: 16),
                 if (_loading) const Center(child: CircularProgressIndicator()),
+                if (!_loading && _circles.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      'Aucun cercle. Créez-en un ou rejoignez avec un code.',
+                      style: TextStyle(fontSize: 12, color: AppColors.gris),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 ..._circles.map((c) {
                   final id = c['id']?.toString() ?? '';
                   final selected = id == _selectedId;
+                  final role = c['my_role']?.toString();
                   return ListTile(
                     selected: selected,
                     selectedTileColor: AppColors.bleu.withValues(alpha: 0.08),
                     title: Text(c['name']?.toString() ?? 'Cercle'),
-                    subtitle: Text('Code : ${c['invite_code'] ?? '—'}'),
+                    subtitle: Text(
+                      'Code : ${c['invite_code'] ?? '—'}'
+                      '${role != null ? ' · $role' : ''}',
+                    ),
                     trailing: IconButton(
                       tooltip: 'Copier le code',
                       icon: const Icon(Icons.copy, size: 18),

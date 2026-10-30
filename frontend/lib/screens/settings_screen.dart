@@ -781,6 +781,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _navTile('Contrôle « Tu es OK ? »', 'safety_ping', Icons.timer_outlined),
                       _navTile('Envois en attente', 'offline_queue', Icons.cloud_upload_outlined),
                       _navTile(AppLocalizations.of(context).trustZones, 'trust_zones', Icons.home_work_outlined),
+                      _navTile('Cercles famille', 'live_circles', Icons.family_restroom_outlined),
                       _navTile(AppLocalizations.of(context).neighborhood, 'neighborhood', Icons.apartment),
                       const SizedBox(height: 8),
                       OutlinedButton.icon(

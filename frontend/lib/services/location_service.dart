@@ -143,8 +143,11 @@ class LocationService {
     }
   }
 
-  Future<void> updatePosition(double lat, double lng) async {
-    if (!_api.hasToken || !sharePresence) return;
+  /// [force] bypasses the local `sharePresence` gate (caller must ensure the
+  /// server allows the write — e.g. after enabling share_presence for a circle).
+  Future<void> updatePosition(double lat, double lng, {bool force = false}) async {
+    if (!_api.hasToken) return;
+    if (!force && !sharePresence) return;
     if (_isNullIsland(lat, lng)) return;
     try {
       await _api.put('/auth/position', {'lat': lat, 'lng': lng});

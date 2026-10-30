@@ -33,13 +33,32 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
     _load();
   }
 
+  List<Map<String, dynamic>> _asMapList(dynamic raw) {
+    final list = raw is List
+        ? raw
+        : (raw is Map && raw['data'] is List ? raw['data'] as List : null);
+    if (list == null) return [];
+    return list
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
       final res = await _api.get('/trust-zones');
-      _zones = (res['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    } catch (_) {
+      _zones = _asMapList(res['data'] ?? res);
+    } catch (e) {
       _zones = [];
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          e,
+          isError: true,
+          fallback: 'Impossible de charger les zones.',
+        );
+      }
     }
     if (mounted) setState(() => _loading = false);
   }
