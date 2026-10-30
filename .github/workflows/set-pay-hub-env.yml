@@ -33,7 +33,8 @@ jobs:
           put_key AFRISOFT_PAY_HUB_APP_ID "safealert"
           put_key FEATURE_PREMIUM "true"
           put_key USD_TO_CDF_RATE "2850"
-          put_key APP_LATEST_VERSION "1.0.24"
+          # Do NOT touch APP_LATEST_* here — soft-update banners are owned by
+          # restore-render-env.yml / appVersionController defaults.
           put_key AFRISOFT_PAY_HUB_API_KEY "$AFRISOFT_PAY_HUB_API_KEY"
           put_key AFRISOFT_PAY_HUB_WEBHOOK_SECRET "${AFRISOFT_PAY_HUB_WEBHOOK_SECRET:-$AFRISOFT_PAY_HUB_API_KEY}"
       - name: Redeploy API

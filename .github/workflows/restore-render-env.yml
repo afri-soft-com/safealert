@@ -11,11 +11,11 @@ on:
       app_latest_version:
         description: APP_LATEST_VERSION
         required: true
-        default: "1.0.65"
+        default: "1.0.66"
       admin_web_version:
         description: ADMIN_WEB_VERSION
         required: true
-        default: "1.0.15"
+        default: "1.0.16"
       apple_client_ids:
         description: APPLE_CLIENT_IDS (bundle IDs, comma-separated)
         required: true
@@ -44,7 +44,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           RESTORE_JWT: ${{ inputs.restore_jwt }}
           APP_LATEST_VERSION: ${{ inputs.app_latest_version }}
-          APP_LATEST_BUILD: "93"
+          APP_LATEST_BUILD: "94"
           ADMIN_WEB_VERSION: ${{ inputs.admin_web_version }}
           APPLE_CLIENT_IDS: ${{ inputs.apple_client_ids }}
           GOOGLE_CLIENT_ID: ${{ inputs.google_client_id }}

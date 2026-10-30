@@ -190,9 +190,11 @@ class AppUpdateService {
       final prefs = await SharedPreferences.getInstance();
       final sameVersion = prefs.getString(_kDismissPrefsKey) == latest;
       final dismissedBuild = prefs.getInt(_kDismissBuildPrefsKey);
-      final sameBuild = _latestBuild == null ||
-          dismissedBuild == null ||
-          dismissedBuild == _latestBuild;
+      // If we track a build number, require an exact dismissed build match.
+      // (A null dismissed build must NOT hide newer build-only soft updates.)
+      final sameBuild = _latestBuild == null
+          ? true
+          : dismissedBuild != null && dismissedBuild == _latestBuild;
       _dismissedForCurrentLatest = sameVersion && sameBuild;
     } catch (_) {
       _dismissedForCurrentLatest = false;
