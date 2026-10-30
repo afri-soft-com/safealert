@@ -477,6 +477,14 @@ const migrate = async () => {
         ADD CONSTRAINT neighborhood_subscriptions_digest_hour_check
         CHECK (digest_hour >= 0 AND digest_hour <= 23);
 
+      ALTER TABLE neighborhood_subscriptions
+        ADD COLUMN IF NOT EXISTS digest_minute SMALLINT DEFAULT 0;
+      ALTER TABLE neighborhood_subscriptions
+        DROP CONSTRAINT IF EXISTS neighborhood_subscriptions_digest_minute_check;
+      ALTER TABLE neighborhood_subscriptions
+        ADD CONSTRAINT neighborhood_subscriptions_digest_minute_check
+        CHECK (digest_minute IS NULL OR digest_minute IN (0, 15, 30, 45));
+
       CREATE TABLE IF NOT EXISTS incident_types (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         slug VARCHAR(50) UNIQUE NOT NULL,

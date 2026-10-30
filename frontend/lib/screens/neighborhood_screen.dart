@@ -19,13 +19,17 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
   late final NeighborhoodProvider _nb;
   late final bool _ownsProvider;
   final _ctrl = TextEditingController();
-  int _digestHour = 18;
+  late int _digestHour;
+  late int _digestMinute;
 
   @override
   void initState() {
     super.initState();
     _ownsProvider = widget.provider == null;
     _nb = widget.provider ?? NeighborhoodProvider();
+    final next = NeighborhoodProvider.nextLocalSlot(minAhead: 5);
+    _digestHour = next.hour;
+    _digestMinute = next.minute;
     _nb.addListener(_onNb);
     _nb.load();
   }
@@ -34,35 +38,65 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<int?> _pickHour(int current) async {
-    return showDialog<int>(
+  String get _timeLabel =>
+      NeighborhoodProvider.formatHm(_digestHour, _digestMinute);
+
+  Future<({int hour, int minute})?> _pickTime(int hour, int minute) async {
+    return showDialog<({int hour, int minute})>(
       context: context,
       builder: (ctx) {
-        int draft = current;
-        return AlertDialog(
-          title: const Text('Heure du résumé', style: TextStyle(fontSize: 16)),
-          content: DropdownButtonFormField<int>(
-            value: draft,
-            decoration: const InputDecoration(
-              labelText: 'Heure (0–23)',
-              border: OutlineInputBorder(),
-            ),
-            items: List.generate(
-              24,
-              (h) => DropdownMenuItem(
-                value: h,
-                child: Text('${h.toString().padLeft(2, '0')}h'),
+        var draftH = hour;
+        var draftM = minute;
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return AlertDialog(
+              title: const Text('Heure du résumé', style: TextStyle(fontSize: 16)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<int>(
+                    value: draftH,
+                    decoration: const InputDecoration(
+                      labelText: 'Heure (téléphone)',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: List.generate(
+                      24,
+                      (h) => DropdownMenuItem(
+                        value: h,
+                        child: Text('${h.toString().padLeft(2, '0')} h'),
+                      ),
+                    ),
+                    onChanged: (v) => setLocal(() => draftH = v ?? draftH),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<int>(
+                    value: draftM,
+                    decoration: const InputDecoration(
+                      labelText: 'Minutes',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: NeighborhoodProvider.digestMinuteSlots
+                        .map(
+                          (m) => DropdownMenuItem(
+                            value: m,
+                            child: Text(':${m.toString().padLeft(2, '0')}'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setLocal(() => draftM = v ?? draftM),
+                  ),
+                ],
               ),
-            ),
-            onChanged: (v) => draft = v ?? draft,
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, draft),
-              child: const Text('Valider'),
-            ),
-          ],
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, (hour: draftH, minute: draftM)),
+                  child: const Text('Valider'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -75,12 +109,12 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
       return;
     }
     try {
-      await _nb.subscribe(q, _digestHour);
+      await _nb.subscribe(q, _digestHour, _digestMinute);
       _ctrl.clear();
       if (mounted) {
         showAppSnackBar(
           context,
-          'Abonné à « $q » — résumé quotidien à ${_digestHour.toString().padLeft(2, '0')}h (Kinshasa).',
+          'Abonné à « $q » — résumé quotidien à $_timeLabel (heure du téléphone).',
         );
       }
     } catch (e) {
@@ -90,15 +124,42 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
     }
   }
 
-  Future<void> _changeHour(Map<String, dynamic> sub) async {
-    final current = (sub['digest_hour'] as num?)?.toInt() ?? 18;
-    final picked = await _pickHour(current);
-    if (picked == null || picked == current) return;
+  Future<void> _changeTime(Map<String, dynamic> sub) async {
+    final kHour = (sub['digest_hour'] as num?)?.toInt() ?? 18;
+    final kMin = (sub['digest_minute'] as num?)?.toInt() ?? 0;
+    final local = NeighborhoodProvider.kinshasaToLocal(kHour, kMin);
+    final picked = await _pickTime(local.hour, NeighborhoodProvider.clampMinute(local.minute));
+    if (picked == null) return;
+    if (picked.hour == local.hour && picked.minute == local.minute) return;
     try {
-      await _nb.updateHour(sub['id'].toString(), picked);
+      await _nb.updateTime(sub['id'].toString(), picked.hour, picked.minute);
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Heure mise à jour : ${NeighborhoodProvider.formatHm(picked.hour, picked.minute)}',
+        );
+      }
     } catch (e) {
       if (mounted) {
         showAppSnackBar(context, e, isError: true, fallback: 'Impossible de modifier l\'heure.');
+      }
+    }
+  }
+
+  Future<void> _sendNow(Map<String, dynamic> sub) async {
+    try {
+      await _nb.sendNow(sub['id'].toString());
+      if (mounted) {
+        showAppSnackBar(context, 'Résumé envoyé — vérifiez vos notifications.');
+      }
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          e,
+          isError: true,
+          fallback: 'Envoi impossible. Activez les notifications push.',
+        );
       }
     }
   }
@@ -126,7 +187,8 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       const Text(
-                        'Recevez chaque jour un résumé des alertes de votre quartier (heure Kinshasa).',
+                        'Recevez chaque jour un résumé des alertes de votre quartier. '
+                        'Choisissez l’heure sur votre téléphone (créneaux :00 / :15 / :30 / :45).',
                         style: TextStyle(fontSize: 12, color: AppColors.gris),
                       ),
                       const SizedBox(height: 12),
@@ -138,20 +200,50 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      DropdownButtonFormField<int>(
-                        value: _digestHour,
-                        decoration: const InputDecoration(
-                          labelText: 'Heure du résumé quotidien',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: List.generate(
-                          24,
-                          (h) => DropdownMenuItem(
-                            value: h,
-                            child: Text('${h.toString().padLeft(2, '0')}h'),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<int>(
+                              value: _digestHour,
+                              decoration: const InputDecoration(
+                                labelText: 'Heure',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: List.generate(
+                                24,
+                                (h) => DropdownMenuItem(
+                                  value: h,
+                                  child: Text('${h.toString().padLeft(2, '0')} h'),
+                                ),
+                              ),
+                              onChanged: (v) => setState(() => _digestHour = v ?? 18),
+                            ),
                           ),
-                        ),
-                        onChanged: (v) => setState(() => _digestHour = v ?? 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButtonFormField<int>(
+                              value: _digestMinute,
+                              decoration: const InputDecoration(
+                                labelText: 'Minutes',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: NeighborhoodProvider.digestMinuteSlots
+                                  .map(
+                                    (m) => DropdownMenuItem(
+                                      value: m,
+                                      child: Text(':${m.toString().padLeft(2, '0')}'),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) => setState(() => _digestMinute = v ?? 0),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Résumé prévu à $_timeLabel (heure du téléphone)',
+                        style: const TextStyle(fontSize: 11, color: AppColors.gris),
                       ),
                       const SizedBox(height: 8),
                       ElevatedButton(
@@ -171,17 +263,28 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
                         )
                       else
                         ..._nb.subscriptions.map((s) {
-                          final hour = (s['digest_hour'] as num?)?.toInt() ?? 18;
+                          final kHour = (s['digest_hour'] as num?)?.toInt() ?? 18;
+                          final kMin = (s['digest_minute'] as num?)?.toInt() ?? 0;
+                          final local = NeighborhoodProvider.kinshasaToLocal(kHour, kMin);
+                          final label = NeighborhoodProvider.formatHm(
+                            local.hour,
+                            NeighborhoodProvider.clampMinute(local.minute),
+                          );
                           return ListTile(
                             title: Text(s['quartier'] as String? ?? ''),
-                            subtitle: Text('Résumé quotidien à ${hour}h'),
+                            subtitle: Text('Résumé quotidien à $label'),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
+                                  tooltip: 'Recevoir maintenant',
+                                  icon: const Icon(Icons.send_outlined),
+                                  onPressed: () => _sendNow(s),
+                                ),
+                                IconButton(
                                   tooltip: 'Modifier l\'heure',
                                   icon: const Icon(Icons.schedule),
-                                  onPressed: () => _changeHour(s),
+                                  onPressed: () => _changeTime(s),
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.close),

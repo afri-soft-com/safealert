@@ -1320,17 +1320,22 @@ describe("Heatmap slots", () => {
 
 describe("Neighborhood veille", () => {
   it("kinshasaHour returns 0–23", () => {
-    const { kinshasaHour } = require("../src/controllers/neighborhoodController");
+    const { kinshasaHour, kinshasaParts, minuteSlot } = require("../src/controllers/neighborhoodController");
     const h = kinshasaHour(new Date("2026-06-15T12:00:00.000Z"));
     expect(h).toBeGreaterThanOrEqual(0);
     expect(h).toBeLessThanOrEqual(23);
     // Kinshasa = UTC+1 → 13:00
     expect(h).toBe(13);
+    const parts = kinshasaParts(new Date("2026-06-15T13:30:00.000Z"));
+    expect(parts.hour).toBe(14);
+    expect(parts.minute).toBe(30);
+    expect(minuteSlot(30)).toBe(30);
+    expect(minuteSlot(37)).toBe(30);
   });
 
   it("POST /api/neighborhood/subscribe stores chosen digest_hour including 0", async () => {
     mockQuery.mockResolvedValueOnce({
-      rows: [{ id: "sub-1", quartier: "Gombe", digest_hour: 0 }],
+      rows: [{ id: "sub-1", quartier: "Gombe", digest_hour: 0, digest_minute: 0 }],
     });
     const res = await request(app)
       .post("/api/neighborhood/subscribe")
@@ -1339,11 +1344,33 @@ describe("Neighborhood veille", () => {
     expect(res.status).toBe(201);
     expect(res.body.digest_hour).toBe(0);
     expect(mockQuery.mock.calls[0][1][2]).toBe(0);
+    expect(mockQuery.mock.calls[0][1][3]).toBe(0);
+  });
+
+  it("POST /api/neighborhood/subscribe stores digest_minute 30", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [{ id: "sub-1", quartier: "Gombe", digest_hour: 15, digest_minute: 30 }],
+    });
+    const res = await request(app)
+      .post("/api/neighborhood/subscribe")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ quartier: "Gombe", digest_hour: 15, digest_minute: 30 });
+    expect(res.status).toBe(201);
+    expect(mockQuery.mock.calls[0][1][2]).toBe(15);
+    expect(mockQuery.mock.calls[0][1][3]).toBe(30);
+  });
+
+  it("POST /api/neighborhood/subscribe rejects digest_minute 20", async () => {
+    const res = await request(app)
+      .post("/api/neighborhood/subscribe")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ quartier: "Gombe", digest_hour: 15, digest_minute: 20 });
+    expect(res.status).toBe(400);
   });
 
   it("POST /api/neighborhood/subscribe defaults to 18 when hour omitted", async () => {
     mockQuery.mockResolvedValueOnce({
-      rows: [{ id: "sub-2", quartier: "Limete", digest_hour: 18 }],
+      rows: [{ id: "sub-2", quartier: "Limete", digest_hour: 18, digest_minute: 0 }],
     });
     const res = await request(app)
       .post("/api/neighborhood/subscribe")
@@ -1361,17 +1388,18 @@ describe("Neighborhood veille", () => {
     expect(res.status).toBe(400);
   });
 
-  it("PATCH /api/neighborhood/:id updates digest_hour", async () => {
+  it("PATCH /api/neighborhood/:id updates digest_hour and minute", async () => {
     mockQuery.mockResolvedValueOnce({
-      rows: [{ id: "sub-1", quartier: "Gombe", digest_hour: 9 }],
+      rows: [{ id: "sub-1", quartier: "Gombe", digest_hour: 9, digest_minute: 15 }],
     });
     const res = await request(app)
       .patch("/api/neighborhood/sub-1")
       .set("Authorization", `Bearer ${validToken}`)
-      .send({ digest_hour: 9 });
+      .send({ digest_hour: 9, digest_minute: 15 });
     expect(res.status).toBe(200);
     expect(res.body.digest_hour).toBe(9);
     expect(mockQuery.mock.calls[0][1][0]).toBe(9);
+    expect(mockQuery.mock.calls[0][1][1]).toBe(15);
   });
 
   it("PATCH /api/neighborhood/:id requires digest_hour", async () => {
@@ -1389,6 +1417,27 @@ describe("Neighborhood veille", () => {
       .set("Authorization", `Bearer ${user2Token}`)
       .send({ digest_hour: 7 });
     expect(res.status).toBe(404);
+  });
+
+  it("POST /api/neighborhood/:id/send-now delivers digest", async () => {
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "sub-1",
+            quartier: "Gombe",
+            user_id: "user-1",
+            fcm_token: null,
+            phone: null,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [{ total: 2, sos: 1 }] });
+    const res = await request(app)
+      .post("/api/neighborhood/sub-1/send-now")
+      .set("Authorization", `Bearer ${validToken}`);
+    // No FCM/SMS → 502
+    expect(res.status).toBe(502);
   });
 });
 

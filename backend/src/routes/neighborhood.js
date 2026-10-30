@@ -6,6 +6,7 @@ const router = Router();
 
 router.get("/", authenticate, ctrl.listSubscriptions);
 router.post("/subscribe", authenticate, ctrl.subscribe);
+router.post("/:id/send-now", authenticate, ctrl.sendNow);
 router.patch("/:id", authenticate, ctrl.updateSubscription);
 router.delete("/:id", authenticate, ctrl.unsubscribe);
 

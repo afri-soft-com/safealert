@@ -389,10 +389,10 @@ function startBackgroundJobs() {
     purgeExpired().catch((err) => warn("live status purge:", err.message));
   }, 120_000);
 
-  // Neighborhood digests — every 15 min
+  // Neighborhood digests — every minute (matches HH:00/15/30/45 Kinshasa slots)
   setInterval(() => {
     sendDigests().catch((err) => warn("neighborhood digest:", err.message));
-  }, 15 * 60_000);
+  }, 60_000);
 
   // Purge evidence past retention — daily
   setInterval(async () => {
