@@ -2,11 +2,10 @@ const features = require("../config/features");
 const { getMaintenance } = require("../services/appSettings");
 const { getHomeTilesVisibility } = require("../services/homeTiles");
 
-/** Soft-update target (bump when a newer build is on the store / ready). */
-/** Soft-update target — keep ahead of commonly installed builds so the banner shows. */
-const DEFAULT_MOBILE_VERSION = "1.0.66";
+/** Soft-update target — must match (or trail) the build actually on the stores. */
+const DEFAULT_MOBILE_VERSION = "1.0.65";
 /** Android versionCode / iOS CFBundleVersion soft target (optional). */
-const DEFAULT_MOBILE_BUILD = 94;
+const DEFAULT_MOBILE_BUILD = 93;
 /** Soft-update target for admin-web (bump ahead of a deploy to show the banner). */
 const DEFAULT_ADMIN_WEB_VERSION = "1.0.16";
 

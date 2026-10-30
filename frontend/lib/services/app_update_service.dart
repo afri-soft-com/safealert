@@ -251,10 +251,17 @@ class AppUpdateService {
     _latestBuild = latestBuild;
 
     final belowMin = min.isNotEmpty && compareVersions(current, min) < 0;
-    final belowLatestVersion =
-        latest.isNotEmpty && compareVersions(current, latest) < 0;
-    final belowLatestBuild =
-        latestBuild != null && latestBuild > 0 && build > 0 && build < latestBuild;
+    final versionCmp =
+        latest.isNotEmpty ? compareVersions(current, latest) : 0;
+    final belowLatestVersion = latest.isNotEmpty && versionCmp < 0;
+    // Build only matters when the marketing version is already equal (or the
+    // API omitted latestVersion). A higher installed version must clear the
+    // banner even if build numbers are not comparable across tracks.
+    final belowLatestBuild = latestBuild != null &&
+        latestBuild > 0 &&
+        build > 0 &&
+        build < latestBuild &&
+        (latest.isEmpty || versionCmp == 0);
     final belowLatest = belowLatestVersion || belowLatestBuild;
 
     // Installed >= API latest → banner must disappear (after store update).
@@ -329,6 +336,13 @@ class AppUpdateService {
   }
 
   Future<void> openStoreOrUpdate(BuildContext context) async {
+    // Soft banner: hide once the user acts. Play/App Store can lag behind the
+    // soft target, which previously left the banner stuck after "updating".
+    final softAttempt = !_forceUpdate;
+    if (softAttempt) {
+      await dismissSoftBanner();
+    }
+
     // Try Play flexible/immediate first on Android.
     if (_isAndroid) {
       try {
