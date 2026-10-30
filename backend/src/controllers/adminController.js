@@ -19,6 +19,10 @@ const {
   getPublishedPrivacy,
   savePrivacy,
 } = require("../services/privacySettings");
+const {
+  getHomeTilesAdmin,
+  setHomeTilesVisibility,
+} = require("../services/homeTiles");
 
 const VALID_ROLES = ["citizen", "leader", "agent", "admin", "platform_admin"];
 const STAFF_ASSIGNABLE = ["citizen", "leader", "agent", "admin"];
@@ -167,13 +171,56 @@ const updateUserSector = async (req, res) => {
 const getSettings = async (req, res) => {
   try {
     const maintenance = await getMaintenance();
+    const homeTiles = await getHomeTilesAdmin();
     return res.json({
       maintenance: maintenance.maintenance,
       maintenance_message: maintenance.message,
       is_super_admin: isSuperAdmin(req.userRole),
+      home_tiles: homeTiles.tiles,
     });
   } catch (err) {
     return fail(res, err, "Impossible de charger les réglages.");
+  }
+};
+
+const getHomeTilesSetting = async (req, res) => {
+  try {
+    const homeTiles = await getHomeTilesAdmin();
+    return res.json(homeTiles);
+  } catch (err) {
+    return fail(res, err, "Impossible de charger les services.");
+  }
+};
+
+const setHomeTilesSetting = async (req, res) => {
+  try {
+    const tiles = req.body?.tiles;
+    const partial =
+      tiles && typeof tiles === "object" && !Array.isArray(tiles)
+        ? tiles
+        : req.body && typeof req.body === "object"
+          ? Object.fromEntries(
+              Object.entries(req.body).filter(([k]) => k !== "tiles")
+            )
+          : null;
+    if (!partial || Object.keys(partial).length === 0) {
+      return res.status(400).json({ error: "Indiquez au moins un service à mettre à jour." });
+    }
+    const homeTiles = await setHomeTilesVisibility(partial);
+    await writeAudit({
+      actorId: req.userId,
+      action: "settings.home_tiles.update",
+      entityType: "app_settings",
+      entityId: "home_tiles_visibility",
+      metadata: { tiles: partial },
+      ip: clientIp(req),
+    });
+    return res.json(homeTiles);
+  } catch (err) {
+    if (err.status === 400) {
+      return res.status(400).json({ error: err.message });
+    }
+    return fail(res, err, "Impossible d'enregistrer la visibilité des services.");
   }
 };
 
@@ -670,6 +717,8 @@ module.exports = {
   updateUserSector,
   getSettings,
   setMaintenanceSetting,
+  getHomeTilesSetting,
+  setHomeTilesSetting,
   getPrivacySetting,
   setPrivacySetting,
   listPartners,

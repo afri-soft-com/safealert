@@ -1,12 +1,13 @@
 const features = require("../config/features");
 const { getMaintenance } = require("../services/appSettings");
+const { getHomeTilesVisibility } = require("../services/homeTiles");
 
 /** Soft-update target (bump when a newer build is on the store / ready). */
-const DEFAULT_MOBILE_VERSION = "1.0.59";
+const DEFAULT_MOBILE_VERSION = "1.0.60";
 /** Android versionCode / iOS CFBundleVersion soft target (optional). */
-const DEFAULT_MOBILE_BUILD = 87;
+const DEFAULT_MOBILE_BUILD = 88;
 /** Soft-update target for admin-web (bump ahead of a deploy to show the banner). */
-const DEFAULT_ADMIN_WEB_VERSION = "1.0.14";
+const DEFAULT_ADMIN_WEB_VERSION = "1.0.15";
 
 /**
  * Public app version policy for soft / force update prompts.
@@ -67,6 +68,8 @@ async function configPayload() {
     /* ignore */
   }
 
+  const homeTiles = await getHomeTilesVisibility();
+
   return {
     ...versionPayload(),
     maintenance: m.maintenance,
@@ -85,17 +88,20 @@ async function configPayload() {
       circleInvite: features.circleInvite(),
       corridors: features.corridors(),
       premium: features.premium(),
-      heatmap: features.heatmap(),
-      fakeCall: features.fakeCall(),
-      arrivalTimer: features.arrivalTimer(),
+      heatmap: features.heatmap() && homeTiles.heatmap !== false,
+      fakeCall: features.fakeCall() && homeTiles.fake_call !== false,
+      arrivalTimer: features.arrivalTimer() && homeTiles.safety_ping !== false,
       sosAudio: features.sosAudio(),
       sosPublicShare: features.sosPublicShare(),
       communeBroadcast: features.communeBroadcast(),
-      liveCircles: features.liveCircles(),
+      liveCircles: features.liveCircles() && homeTiles.live_circles !== false,
       sosMediation: features.sosMediation(),
-      neighborhoodWatch: features.neighborhoodWatch(),
+      neighborhoodWatch:
+        features.neighborhoodWatch() && homeTiles.neighborhood !== false,
       witnessEvidence: features.witnessEvidence(),
       reliabilityScore: features.reliabilityScore(),
+      trustZones: features.trustZones() && homeTiles.trust_zones !== false,
+      homeTiles,
     },
   };
 }

@@ -42,6 +42,8 @@ router.delete("/groups/:id/members/:userId", requireSuperAdmin, groups.removeMem
 router.get("/audit-logs", ctrl.listAuditLogs);
 router.get("/settings", ctrl.getSettings);
 router.put("/settings/maintenance", requireSuperAdmin, ctrl.setMaintenanceSetting);
+router.get("/settings/home-tiles", requireSuperAdmin, ctrl.getHomeTilesSetting);
+router.put("/settings/home-tiles", requireSuperAdmin, ctrl.setHomeTilesSetting);
 router.get("/settings/privacy", requireSuperAdmin, ctrl.getPrivacySetting);
 router.put("/settings/privacy", requireSuperAdmin, ctrl.setPrivacySetting);
 router.get("/incident-types", types.listStaff);

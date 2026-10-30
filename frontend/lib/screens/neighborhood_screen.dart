@@ -69,10 +69,20 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
   }
 
   Future<void> _subscribe() async {
-    if (_ctrl.text.trim().length < 2) return;
+    final q = _ctrl.text.trim();
+    if (q.length < 2) {
+      showAppSnackBar(context, 'Indiquez un nom de quartier (min. 2 caractères).', isError: true);
+      return;
+    }
     try {
-      await _nb.subscribe(_ctrl.text.trim(), _digestHour);
+      await _nb.subscribe(q, _digestHour);
       _ctrl.clear();
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Abonné à « $q » — résumé quotidien à ${_digestHour.toString().padLeft(2, '0')}h (Kinshasa).',
+        );
+      }
     } catch (e) {
       if (mounted) {
         showAppSnackBar(context, e, isError: true, fallback: 'Impossible d\'enregistrer l\'abonnement.');
@@ -116,7 +126,7 @@ class _NeighborhoodScreenState extends State<NeighborhoodScreen> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       const Text(
-                        'Recevez chaque jour un résumé des alertes de votre quartier.',
+                        'Recevez chaque jour un résumé des alertes de votre quartier (heure Kinshasa).',
                         style: TextStyle(fontSize: 12, color: AppColors.gris),
                       ),
                       const SizedBox(height: 12),

@@ -180,6 +180,12 @@ export const api = {
       maintenance: boolean;
       maintenance_message: string;
       is_super_admin: boolean;
+      home_tiles?: Array<{
+        key: string;
+        label: string;
+        visible: boolean;
+        env_enabled: boolean;
+      }>;
     }>("/admin/settings"),
 
   setMaintenance: (enabled: boolean, message?: string) =>
@@ -187,6 +193,29 @@ export const api = {
       "/admin/settings/maintenance",
       { method: "PUT", body: JSON.stringify({ enabled, message }) }
     ),
+
+  getHomeTiles: () =>
+    request<{
+      tiles: Array<{
+        key: string;
+        label: string;
+        visible: boolean;
+        env_enabled: boolean;
+      }>;
+    }>("/admin/settings/home-tiles"),
+
+  setHomeTiles: (tiles: Record<string, boolean>) =>
+    request<{
+      tiles: Array<{
+        key: string;
+        label: string;
+        visible: boolean;
+        env_enabled: boolean;
+      }>;
+    }>("/admin/settings/home-tiles", {
+      method: "PUT",
+      body: JSON.stringify({ tiles }),
+    }),
 
   getPrivacyAdmin: () =>
     request<{

@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../theme.dart';
 import '../services/api_service.dart';
+import '../services/location_service.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/app_feedback.dart';
@@ -25,6 +26,8 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
   List<Map<String, dynamic>> _members = [];
   String? _selectedId;
   bool _loading = true;
+  bool _sharing = false;
+  int _shareHours = 24;
   Timer? _poll;
 
   @override
@@ -94,9 +97,17 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
   }
 
   Future<void> _create() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      showAppSnackBar(context, 'Indiquez un nom pour le cercle.', isError: true);
+      return;
+    }
     try {
-      await _api.post('/live-circles', {'name': _nameCtrl.text.trim()});
+      await _api.post('/live-circles', {'name': name});
       await _refresh();
+      if (mounted) {
+        showAppSnackBar(context, 'Cercle créé. Partagez le code d\'invitation.');
+      }
     } catch (e) {
       if (mounted) {
         showAppSnackBar(context, e, isError: true, fallback: 'Création impossible');
@@ -105,14 +116,64 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
   }
 
   Future<void> _join() async {
+    final code = _codeCtrl.text.trim();
+    if (code.length < 4) {
+      showAppSnackBar(context, 'Code d\'invitation trop court.', isError: true);
+      return;
+    }
     try {
-      await _api.post('/live-circles/join', {'code': _codeCtrl.text.trim()});
+      await _api.post('/live-circles/join', {'code': code});
       _codeCtrl.clear();
       await _refresh();
+      if (mounted) {
+        showAppSnackBar(context, 'Vous avez rejoint le cercle.');
+      }
     } catch (e) {
       if (mounted) {
         showAppSnackBar(context, e, isError: true, fallback: 'Code invalide');
       }
+    }
+  }
+
+  Future<void> _shareMyLocation() async {
+    final id = _selectedId;
+    if (id == null) {
+      showAppSnackBar(context, 'Sélectionnez un cercle d\'abord.', isError: true);
+      return;
+    }
+    setState(() => _sharing = true);
+    try {
+      final pos = await LocationService().getCurrentPosition();
+      if (pos == null) {
+        if (mounted) {
+          showAppSnackBar(
+            context,
+            'Localisation indisponible. Activez le GPS et réessayez.',
+            isError: true,
+          );
+        }
+        return;
+      }
+      await LocationService().updatePosition(pos.latitude, pos.longitude);
+      await _api.patch('/live-circles/$id/share', {'hours': _shareHours});
+      await _loadMembers(id);
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Position partagée pendant $_shareHours h avec ce cercle.',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          e,
+          isError: true,
+          fallback: 'Impossible de partager la position.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sharing = false);
     }
   }
 
@@ -144,7 +205,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 const Text(
-                  'Partagez votre position temporairement avec proches (consentement requis).',
+                  'Partagez votre position temporairement avec vos proches (consentement requis).',
                   style: TextStyle(fontSize: 12, color: AppColors.gris),
                 ),
                 const SizedBox(height: 12),
@@ -156,7 +217,11 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                ElevatedButton(onPressed: _create, child: const Text('Créer un cercle')),
+                ElevatedButton(
+                  onPressed: _create,
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.bleuFonce),
+                  child: const Text('Créer un cercle', style: TextStyle(color: Colors.white)),
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _codeCtrl,
@@ -175,15 +240,17 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                   final selected = id == _selectedId;
                   return ListTile(
                     selected: selected,
+                    selectedTileColor: AppColors.bleu.withValues(alpha: 0.08),
                     title: Text(c['name']?.toString() ?? 'Cercle'),
                     subtitle: Text('Code : ${c['invite_code'] ?? '—'}'),
                     trailing: IconButton(
+                      tooltip: 'Copier le code',
                       icon: const Icon(Icons.copy, size: 18),
                       onPressed: () {
-                        Clipboard.setData(ClipboardData(text: c['invite_code']?.toString() ?? ''));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Code copié')),
+                        Clipboard.setData(
+                          ClipboardData(text: c['invite_code']?.toString() ?? ''),
                         );
+                        showAppSnackBar(context, 'Code copié');
                       },
                     ),
                     onTap: () => _loadMembers(id),
@@ -191,6 +258,48 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                 }),
                 if (_selectedId != null) ...[
                   const SizedBox(height: 8),
+                  const Text(
+                    'Partage de position',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.bleuFonce,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<int>(
+                    value: _shareHours,
+                    decoration: const InputDecoration(
+                      labelText: 'Durée',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 1, child: Text('1 heure')),
+                      DropdownMenuItem(value: 6, child: Text('6 heures')),
+                      DropdownMenuItem(value: 12, child: Text('12 heures')),
+                      DropdownMenuItem(value: 24, child: Text('24 heures')),
+                      DropdownMenuItem(value: 48, child: Text('48 heures')),
+                      DropdownMenuItem(value: 72, child: Text('72 heures')),
+                    ],
+                    onChanged: (v) => setState(() => _shareHours = v ?? 24),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: _sharing ? null : _shareMyLocation,
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.vert),
+                    icon: _sharing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.my_location, color: Colors.white),
+                    label: Text(
+                      _sharing ? 'Partage…' : 'Partager ma position GPS',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   SizedBox(
                     height: 220,
                     child: ClipRRect(
@@ -212,8 +321,10 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                       ),
                     ),
                   ),
-                  Text('${_members.length} membre(s) visibles',
-                      style: const TextStyle(fontSize: 11, color: AppColors.gris)),
+                  Text(
+                    '${_members.length} membre(s) visibles',
+                    style: const TextStyle(fontSize: 11, color: AppColors.gris),
+                  ),
                 ],
               ],
             ),

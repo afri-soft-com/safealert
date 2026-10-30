@@ -23,7 +23,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await AppConfigService().refresh();
+      if (mounted) setState(() {});
       context.read<IncidentProvider>().fetchIncidents(hours: 24);
     });
   }
@@ -191,24 +193,36 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisSpacing: 10,
                   childAspectRatio: 1.15,
                   children: [
-                    _buildCard('🗺', 'Carte des zones', '$activeCount alerte${activeCount > 1 ? 's' : ''} (24h)', () => widget.onNavigate('map'), AppColors.bleu),
-                    _buildCard('👥', 'Mes contacts', 'Cercle de confiance', () => widget.onNavigate('contacts'), AppColors.vert),
-                    _buildCard('📞', 'Urgences', 'Appel en 1 tap', () => widget.onNavigate('annuaire'), AppColors.orange),
-                    _buildCard('🛣️', 'Trajet sécurisé', 'ETA + alerte auto', () => widget.onNavigate('trip'), AppColors.vert),
-                    _buildCard('📊', 'Statistiques', 'Votre quartier', () => widget.onNavigate('dashboard'), AppColors.gris),
-                    _buildCard('🏘', 'Groupes voisins', 'Voisins & entraide', () => widget.onNavigate('groups'), AppColors.bleuFonce),
-                    _buildCard('🏠', 'Zones confiance', 'Domicile / travail', () => widget.onNavigate('trust_zones'), AppColors.bleuFonce),
-                    _buildCard('🏘️', 'Veille quartier', 'Résumé quotidien', () => widget.onNavigate('neighborhood'), AppColors.orange),
-                    _buildCard('⏱', 'Je rentre', 'Timer d\'arrivée', () => widget.onNavigate('safety_ping'), AppColors.vert),
-                    if (AppConfigService().liveCirclesEnabled)
+                    if (AppConfigService().tileVisible('map'))
+                      _buildCard('🗺', 'Carte des zones', '$activeCount alerte${activeCount > 1 ? 's' : ''} (24h)', () => widget.onNavigate('map'), AppColors.bleu),
+                    if (AppConfigService().tileVisible('contacts'))
+                      _buildCard('👥', 'Mes contacts', 'Cercle de confiance', () => widget.onNavigate('contacts'), AppColors.vert),
+                    if (AppConfigService().tileVisible('annuaire'))
+                      _buildCard('📞', 'Urgences', 'Appel en 1 tap', () => widget.onNavigate('annuaire'), AppColors.orange),
+                    if (AppConfigService().tileVisible('trip'))
+                      _buildCard('🛣️', 'Trajet sécurisé', 'ETA + alerte auto', () => widget.onNavigate('trip'), AppColors.vert),
+                    if (AppConfigService().tileVisible('dashboard'))
+                      _buildCard('📊', 'Statistiques', 'Votre quartier', () => widget.onNavigate('dashboard'), AppColors.gris),
+                    if (AppConfigService().tileVisible('groups'))
+                      _buildCard('🏘', 'Groupes voisins', 'Voisins & entraide', () => widget.onNavigate('groups'), AppColors.bleuFonce),
+                    if (AppConfigService().tileVisible('trust_zones'))
+                      _buildCard('🏠', 'Zones confiance', 'Domicile / travail', () => widget.onNavigate('trust_zones'), AppColors.bleuFonce),
+                    if (AppConfigService().tileVisible('neighborhood'))
+                      _buildCard('🏘️', 'Veille quartier', 'Résumé quotidien', () => widget.onNavigate('neighborhood'), AppColors.orange),
+                    if (AppConfigService().tileVisible('safety_ping'))
+                      _buildCard('⏱', 'Je rentre', 'Timer d\'arrivée', () => widget.onNavigate('safety_ping'), AppColors.vert),
+                    if (AppConfigService().tileVisible('live_circles'))
                       _buildCard('👨‍👩‍👧', 'Cercles famille', 'Position live', () => widget.onNavigate('live_circles'), AppColors.bleuFonce),
-                    if (AppConfigService().fakeCallEnabled)
+                    if (AppConfigService().tileVisible('fake_call'))
                       _buildCard('📞', 'Faux appel', 'Sortie discrète', () => widget.onNavigate('fake_call'), AppColors.gris),
-                    _buildCard('🛡', 'Conseils sécurité', 'Astuces hors-ligne', () => widget.onNavigate('safety'), AppColors.rouge),
-                    if (AppConfigService().heatmapEnabled)
+                    if (AppConfigService().tileVisible('safety'))
+                      _buildCard('🛡', 'Conseils sécurité', 'Astuces hors-ligne', () => widget.onNavigate('safety'), AppColors.rouge),
+                    if (AppConfigService().tileVisible('heatmap'))
                       _buildCard('🔥', 'Carte chaleur', 'Densité incidents', () => widget.onNavigate('heatmap'), AppColors.orange),
-                    _buildCard('📋', 'Mon historique', 'Mes alertes', () => widget.onNavigate('history'), AppColors.gris),
-                    _buildCard('📖', 'Aide / Manuel', 'Guide d\'utilisation', () => widget.onNavigate('help'), AppColors.bleu),
+                    if (AppConfigService().tileVisible('history'))
+                      _buildCard('📋', 'Mon historique', 'Mes alertes', () => widget.onNavigate('history'), AppColors.gris),
+                    if (AppConfigService().tileVisible('help'))
+                      _buildCard('📖', 'Aide / Manuel', 'Guide d\'utilisation', () => widget.onNavigate('help'), AppColors.bleu),
                   ],
                 ),
                 const SizedBox(height: 14),

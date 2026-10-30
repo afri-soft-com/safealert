@@ -1046,7 +1046,51 @@ describe("App version", () => {
     expect(res.body).toHaveProperty("features");
     expect(res.body.features).toHaveProperty("liveStatus");
     expect(res.body.features).toHaveProperty("heatmap");
+    expect(res.body.features).toHaveProperty("homeTiles");
+    expect(res.body.features).toHaveProperty("neighborhoodWatch");
+    expect(res.body.features).toHaveProperty("liveCircles");
+    expect(res.body.features.homeTiles).toHaveProperty("neighborhood");
     expect(res.body.latestVersion).toBe("1.0.2");
+  });
+});
+
+describe("Admin home tiles visibility", () => {
+  it("GET /api/admin/settings/home-tiles lists services", async () => {
+    const { clearHomeTilesCache } = require("../src/services/homeTiles");
+    clearHomeTilesCache();
+    mockQuery.mockResolvedValue({ rows: [] });
+    const res = await request(app)
+      .get("/api/admin/settings/home-tiles")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.tiles)).toBe(true);
+    expect(res.body.tiles.some((t) => t.key === "neighborhood")).toBe(true);
+    expect(res.body.tiles.some((t) => t.key === "live_circles")).toBe(true);
+  });
+
+  it("PUT /api/admin/settings/home-tiles hides a tile", async () => {
+    const { clearHomeTilesCache } = require("../src/services/homeTiles");
+    clearHomeTilesCache();
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] }) // read overrides
+      .mockResolvedValueOnce({ rows: [] }) // upsert
+      .mockResolvedValueOnce({ rows: [{ value: JSON.stringify({ neighborhood: false }) }] }) // re-read
+      .mockResolvedValueOnce({ rows: [] }); // audit
+    const res = await request(app)
+      .put("/api/admin/settings/home-tiles")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ tiles: { neighborhood: false, live_circles: true } });
+    expect(res.status).toBe(200);
+    const nb = res.body.tiles.find((t) => t.key === "neighborhood");
+    expect(nb.visible).toBe(false);
+  });
+
+  it("PUT /api/admin/settings/home-tiles forbidden for staff admin", async () => {
+    const res = await request(app)
+      .put("/api/admin/settings/home-tiles")
+      .set("Authorization", `Bearer ${staffToken}`)
+      .send({ tiles: { neighborhood: false } });
+    expect(res.status).toBe(403);
   });
 });
 

@@ -10,16 +10,25 @@ type PrivacyForm = {
   format: string;
 };
 
+type HomeTile = {
+  key: string;
+  label: string;
+  visible: boolean;
+  env_enabled: boolean;
+};
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const superAdmin = isSuperAdmin(user?.role);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingPrivacy, setSavingPrivacy] = useState(false);
+  const [savingTiles, setSavingTiles] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [enabled, setEnabled] = useState(false);
   const [message, setMessage] = useState("");
+  const [homeTiles, setHomeTiles] = useState<HomeTile[]>([]);
   const [privacy, setPrivacy] = useState<PrivacyForm>({
     title: "",
     version: "1.0",
@@ -34,6 +43,12 @@ export default function SettingsPage() {
       const res = await api.getSettings();
       setEnabled(res.maintenance);
       setMessage(res.maintenance_message || "");
+      if (Array.isArray(res.home_tiles)) {
+        setHomeTiles(res.home_tiles);
+      } else {
+        const tilesRes = await api.getHomeTiles();
+        setHomeTiles(tilesRes.tiles || []);
+      }
       const priv = await api.getPrivacyAdmin();
       setPrivacy({
         title: priv.title || "",
@@ -92,6 +107,30 @@ export default function SettingsPage() {
     }
   };
 
+  const toggleTile = (key: string, visible: boolean) => {
+    setHomeTiles((prev) =>
+      prev.map((t) => (t.key === key ? { ...t, visible } : t))
+    );
+  };
+
+  const saveHomeTiles = async () => {
+    setSavingTiles(true);
+    setError("");
+    setSuccess("");
+    try {
+      const payload = Object.fromEntries(homeTiles.map((t) => [t.key, t.visible]));
+      const next = await api.setHomeTiles(payload);
+      setHomeTiles(next.tiles || []);
+      setSuccess(
+        "Visibilité des services enregistrée. Les citoyens verront les changements sous 2 minutes (ou au redémarrage de l'app)."
+      );
+    } catch (err) {
+      setError(userFacingError(err, "Impossible d'enregistrer les services."));
+    } finally {
+      setSavingTiles(false);
+    }
+  };
+
   if (!superAdmin) {
     return (
       <>
@@ -107,11 +146,72 @@ export default function SettingsPage() {
     <>
       <header className="page-header">
         <h2>Réglages</h2>
-        <p>Maintenance et politique de confidentialité (SuperAdmin)</p>
+        <p>Services accueil, maintenance et confidentialité (SuperAdmin)</p>
       </header>
 
       {error && <div className="form-error">{error}</div>}
       {success && <div className="form-success">{success}</div>}
+
+      {!loading && (
+        <div className="card" style={{ padding: "1.25rem", marginBottom: "1.25rem" }}>
+          <h3 style={{ marginTop: 0 }}>Services SafeAlert</h3>
+          <p className="form-hint" style={{ marginTop: 0 }}>
+            Tuiles de l&apos;accueil citoyen (SuperAdmin). Décochez pour masquer un service
+            dans l&apos;application mobile sans redéploiement.
+          </p>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              marginTop: 12,
+            }}
+          >
+            {homeTiles.map((tile) => (
+              <label
+                key={tile.key}
+                className="toggle-row"
+                style={{
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "0.65rem 0.85rem",
+                  background: "rgba(255,255,255,0.04)",
+                  borderRadius: 8,
+                  border: "1px solid var(--bleu-border)",
+                }}
+              >
+                <span>
+                  <strong>{tile.label}</strong>
+                  {!tile.env_enabled && (
+                    <>
+                      <br />
+                      <small>Désactivé côté serveur (FEATURE_*)</small>
+                    </>
+                  )}
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <small style={{ color: "var(--gris)" }}>Visible</small>
+                  <input
+                    type="checkbox"
+                    checked={tile.visible}
+                    onChange={(e) => toggleTile(tile.key, e.target.checked)}
+                    style={{ marginTop: 0 }}
+                  />
+                </span>
+              </label>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ marginTop: 16 }}
+            disabled={savingTiles || homeTiles.length === 0}
+            onClick={saveHomeTiles}
+          >
+            {savingTiles ? "Enregistrement…" : "Enregistrer les services"}
+          </button>
+        </div>
+      )}
 
       <div className="card" style={{ padding: "1.25rem" }}>
         {loading ? (
@@ -129,7 +229,7 @@ export default function SettingsPage() {
                 <strong>Activer le mode maintenance</strong>
                 <br />
                 <small>
-                  Les utilisateurs voient un écran d'attente. SOS, annuaire et connexion
+                  Les utilisateurs voient un écran d&apos;attente. SOS, annuaire et connexion
                   administrateur restent disponibles.
                 </small>
               </span>
