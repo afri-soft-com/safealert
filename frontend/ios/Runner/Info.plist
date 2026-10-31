@@ -77,7 +77,7 @@
 			<string>location</string>
 		</array>
 		<key>FirebaseAppDelegateProxyEnabled</key>
-		<false/>
+		<true/>
 		<key>UIStatusBarHidden</key>
 		<false/>
 	</dict>

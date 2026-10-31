@@ -29,6 +29,7 @@ class FCMService extends ChangeNotifier {
   Map<String, String>? get pendingOpen => _pendingOpen;
 
   static const _userIdPrefsKey = 'safealert_current_user_id';
+  static const _pendingOpenPrefsKey = 'safealert_pending_notif_open';
 
   void setCurrentUserId(String? id) {
     _currentUserId = id;
@@ -44,16 +45,53 @@ class FCMService extends ChangeNotifier {
   Map<String, String>? takePendingOpen() {
     final p = _pendingOpen;
     _pendingOpen = null;
+    _clearPersistedPending();
     return p;
   }
 
   void queueOpenFromData(Map<String, dynamic> raw) {
     final data = _stringifyData(raw);
     final type = data['type'];
-    if (type == null || type.isEmpty) return;
+    if (type == null || type.isEmpty) {
+      debugPrint('FCM queueOpen skipped: missing type keys=${data.keys}');
+      return;
+    }
     if (isOwnPushData(data, currentUserId: _currentUserId)) return;
     _pendingOpen = data;
+    _persistPending(data);
     notifyListeners();
+  }
+
+  Future<void> _persistPending(Map<String, String> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_pendingOpenPrefsKey, jsonEncode(data));
+    } catch (_) {}
+  }
+
+  Future<void> _clearPersistedPending() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_pendingOpenPrefsKey);
+    } catch (_) {}
+  }
+
+  /// Restore a cold-start / pre-auth pending open (PIN, splash race).
+  Future<void> restorePersistedPending() async {
+    if (_pendingOpen != null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_pendingOpenPrefsKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final data = _stringifyData(Map<String, dynamic>.from(decoded));
+        if (data['type'] != null && data['type']!.isNotEmpty) {
+          _pendingOpen = data;
+          notifyListeners();
+        }
+      }
+    } catch (_) {}
   }
 
   static Map<String, String> _stringifyData(Map<String, dynamic> raw) {
@@ -97,6 +135,19 @@ class FCMService extends ChangeNotifier {
     }
   }
 
+  /// Merge notification title/body into data map for handlers that only see data.
+  static Map<String, dynamic> messageToOpenData(RemoteMessage message) {
+    final data = Map<String, dynamic>.from(message.data);
+    final n = message.notification;
+    if (n?.title != null && n!.title!.isNotEmpty) {
+      data.putIfAbsent('title', () => n.title);
+    }
+    if (n?.body != null && n!.body!.isNotEmpty) {
+      data.putIfAbsent('body', () => n.body);
+    }
+    return data;
+  }
+
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
@@ -131,9 +182,19 @@ class FCMService extends ChangeNotifier {
         },
       );
 
+      // Local notification cold-start (iOS often opens via this path).
+      await AlertSoundService().consumeLaunchPayload((payload) {
+        final parsed = parseNotificationPayload(payload);
+        if (parsed != null) queueOpenFromData(parsed);
+      });
+
+      await restorePersistedPending();
+
       _token = await messaging.getToken();
       if (_token == null) {
         debugPrint('FCM: no token — push disabled');
+        // Still allow local-notification open handling above.
+        notifyListeners();
         return;
       }
 
@@ -147,12 +208,23 @@ class FCMService extends ChangeNotifier {
 
       _messageSub = FirebaseMessaging.onMessage.listen(_handleMessage);
       _openedSub = FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        queueOpenFromData(message.data);
+        queueOpenFromData(messageToOpenData(message));
       });
 
-      final initial = await messaging.getInitialMessage();
-      if (initial != null) {
-        queueOpenFromData(initial.data);
+      // Cold start from system (APNs) notification.
+      await _captureInitialMessage(messaging);
+
+      // iOS race: getInitialMessage can be null if called too early — retry once.
+      if (_pendingOpen == null &&
+          !kIsWeb &&
+          defaultTargetPlatform == TargetPlatform.iOS) {
+        unawaited(Future<void>.delayed(const Duration(milliseconds: 800), () async {
+          await _captureInitialMessage(messaging);
+          await AlertSoundService().consumeLaunchPayload((payload) {
+            final parsed = parseNotificationPayload(payload);
+            if (parsed != null) queueOpenFromData(parsed);
+          });
+        }));
       }
 
       FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
@@ -164,6 +236,37 @@ class FCMService extends ChangeNotifier {
     } catch (e) {
       debugPrint('FCM not configured — push notifications disabled ($e)');
     }
+  }
+
+  Future<void> _captureInitialMessage(FirebaseMessaging messaging) async {
+    try {
+      final initial = await messaging.getInitialMessage();
+      if (initial != null) {
+        debugPrint(
+          'FCM getInitialMessage type=${initial.data['type']} '
+          'keys=${initial.data.keys.toList()}',
+        );
+        queueOpenFromData(messageToOpenData(initial));
+      }
+    } catch (e) {
+      debugPrint('FCM getInitialMessage failed: $e');
+    }
+  }
+
+  /// Re-check launch/pending opens after the UI is ready (PIN / splash).
+  Future<void> refreshPendingOpens() async {
+    await restorePersistedPending();
+    if (_pendingOpen != null) {
+      notifyListeners();
+      return;
+    }
+    try {
+      await _captureInitialMessage(FirebaseMessaging.instance);
+      await AlertSoundService().consumeLaunchPayload((payload) {
+        final parsed = parseNotificationPayload(payload);
+        if (parsed != null) queueOpenFromData(parsed);
+      });
+    } catch (_) {}
   }
 
   /// Local notification payload: JSON map, or legacy bare type string.
@@ -206,12 +309,13 @@ class FCMService extends ChangeNotifier {
   }
 
   Future<void> _handleMessage(RemoteMessage message) async {
-    final type = message.data['type'] as String?;
+    final data = messageToOpenData(message);
+    final type = data['type']?.toString();
     final title = message.notification?.title ??
-        message.data['title']?.toString() ??
+        data['title']?.toString() ??
         'SafeAlert';
     final body = message.notification?.body ??
-        message.data['body']?.toString() ??
+        data['body']?.toString() ??
         '';
     debugPrint('FCM foreground: $title type=$type');
 
@@ -224,13 +328,10 @@ class FCMService extends ChangeNotifier {
         body: body.isNotEmpty
             ? body
             : 'Une alerte SOS nécessite votre attention.',
-        payload: encodeNotificationPayload(message.data),
+        payload: encodeNotificationPayload(data),
       );
-      // Critical alerts: open the action screen as soon as the user taps the
-      // local notification (queued via AlertSoundService). Also auto-open for
-      // safety-ping miss in foreground so the recipient sees next steps.
       if (type == 'safety_ping_missed') {
-        queueOpenFromData(message.data);
+        queueOpenFromData(data);
       }
       return;
     }
@@ -261,15 +362,28 @@ Future<void> _handleBackgroundMessage(RemoteMessage message) async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
+    // On iOS, the system already plays aps.sound when a notification payload
+    // is present and the app is killed/backgrounded. Still show a local
+    // notification with payload so tap → action screen works if the OS
+    // delivers a data-only wake, and reinforce sound on Android.
     final sounds = AlertSoundService();
     await sounds.initialize();
-    await sounds.playSosAlert();
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      await sounds.playSosAlert();
+    }
     final title = message.notification?.title ??
         message.data['title']?.toString() ??
         '🚨 Alerte SafeAlert';
     final body = message.notification?.body ??
         message.data['body']?.toString() ??
         'Une alerte SOS nécessite votre attention.';
+    // Avoid duplicate banners on iOS when APNs already showed the remote notif.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      if (message.notification != null) {
+        debugPrint('FCM iOS background: system notification present — skip local duplicate');
+        return;
+      }
+    }
     await sounds.showSosLocalNotification(
       title: title,
       body: body,

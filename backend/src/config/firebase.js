@@ -90,16 +90,26 @@ const sendPush = async (token, payload) => {
       },
       apns: {
         headers: {
+          // 10 = immediate delivery (required for audible alerts when app is killed).
           "apns-priority": "10",
-          ...(isSos ? { "apns-push-type": "alert" } : {}),
+          "apns-push-type": "alert",
         },
         payload: {
           aps: {
+            // Explicit alert ensures iOS shows + plays sound even if app is terminated.
+            alert: payload.notification
+              ? {
+                  title: payload.notification.title || "",
+                  body: payload.notification.body || "",
+                }
+              : undefined,
             sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
+            badge: 1,
             ...(isSos
               ? {
                   "interruption-level": "time-sensitive",
-                  "mutable-content": 1,
+                  // Wake app briefly when possible (sound still comes from aps.sound).
+                  "content-available": 1,
                 }
               : {}),
           },

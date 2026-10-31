@@ -330,7 +330,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       _initDeepLinks();
       _appUpdates.startPolling(context);
       _fcm.addListener(_onFcmPending);
-      _consumeSafetyPingMissOpen();
+      await _fcm.refreshPendingOpens();
+      _consumePendingNotificationOpen();
 
       _quickActions.initialize((shortcutType) {
         if (shortcutType == 'sos') _triggerSilentSos();
@@ -353,7 +354,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         await trips.flushPendingTripActions();
         if (!mounted) return;
         await trips.fetchActive();
-        _consumeSafetyPingMissOpen();
+        await _fcm.refreshPendingOpens();
+        _consumePendingNotificationOpen();
       }
     });
   }
@@ -366,9 +368,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       trips.fetchActive();
       trips.flushPendingPings();
       trips.flushPendingTripActions();
-      _consumeSafetyPingMissOpen();
     } else {
       context.read<TripProvider>().stopTracking();
+    }
+    // After login / PIN unlock, open the queued SOS action screen.
+    if (auth.canEnterApp) {
+      _fcm.refreshPendingOpens().then((_) {
+        if (mounted) _consumePendingNotificationOpen();
+      });
     }
   }
 
@@ -381,6 +388,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       _appUpdates.check(context, force: true);
       AppConfigService().refresh(force: true).then((_) {
         if (mounted) setState(() {});
+      });
+      _fcm.refreshPendingOpens().then((_) {
+        if (mounted) _consumePendingNotificationOpen();
       });
       final auth = context.read<AuthProvider>();
       if (auth.needsPinUnlock) {

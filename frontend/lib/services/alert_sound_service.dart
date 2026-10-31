@@ -166,6 +166,30 @@ class AlertSoundService {
     }
   }
 
+  bool _launchPayloadConsumed = false;
+
+  /// If the app was launched by tapping a local notification, deliver payload once.
+  Future<void> consumeLaunchPayload(void Function(String? payload)? onTap) async {
+    if (_launchPayloadConsumed) return;
+    final cb = onTap ?? _onNotificationTap;
+    if (cb == null) return;
+    try {
+      // initialize() must already have run (avoid recurse).
+      if (!_ready) return;
+      final details = await _notifications.getNotificationAppLaunchDetails();
+      if (details?.didNotificationLaunchApp == true) {
+        _launchPayloadConsumed = true;
+        final payload = details!.notificationResponse?.payload;
+        if (payload != null && payload.isNotEmpty) {
+          debugPrint('AlertSoundService launch payload present');
+          cb(payload);
+        }
+      }
+    } catch (e) {
+      debugPrint('consumeLaunchPayload failed: $e');
+    }
+  }
+
   /// Soft SafeAlert beacon for non-SOS notifications (still branded).
   Future<void> playGeneralAlert() async {
     try {
