@@ -203,26 +203,14 @@ class FCMService extends ChangeNotifier {
         );
       }
 
-      _token = await messaging.getToken();
-      if (_token == null) {
-        debugPrint('FCM: no token — push disabled');
-        // Still allow local-notification open handling above.
-        notifyListeners();
-        return;
-      }
-
-      _available = true;
-      debugPrint('FCM initialized tokenPrefix=${_token!.substring(0, 12)}…');
-
-      messaging.onTokenRefresh.listen((t) {
-        _token = t;
-        uploadToken();
-      });
-
+      // Always wire listeners first — iOS can briefly return a null FCM token
+      // while APNs is still registering; exiting early used to kill foreground
+      // banners/sounds entirely even with the app open.
       _messageSub = FirebaseMessaging.onMessage.listen(_handleMessage);
       _openedSub = FirebaseMessaging.onMessageOpenedApp.listen((message) {
         queueOpenFromData(messageToOpenData(message));
       });
+      FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
 
       // Cold start from system (APNs) notification.
       await _captureInitialMessage(messaging);
@@ -240,7 +228,27 @@ class FCMService extends ChangeNotifier {
         }));
       }
 
-      FirebaseMessaging.onBackgroundMessage(_handleBackgroundMessage);
+      _token = await messaging.getToken();
+      if (_token == null) {
+        debugPrint('FCM: no token yet — listeners active, will retry on refresh');
+        messaging.onTokenRefresh.listen((t) {
+          _token = t;
+          _available = true;
+          uploadToken();
+          notifyListeners();
+        });
+        await _api.init();
+        notifyListeners();
+        return;
+      }
+
+      _available = true;
+      debugPrint('FCM initialized tokenPrefix=${_token!.substring(0, 12)}…');
+
+      messaging.onTokenRefresh.listen((t) {
+        _token = t;
+        uploadToken();
+      });
 
       await _api.init();
       if (_api.hasToken) await uploadToken();
@@ -360,37 +368,50 @@ class FCMService extends ChangeNotifier {
 
     if (_isOwnPush(message)) return;
 
+    // Banner first so the user always sees something even if audio/local
+    // notifications fail (common on iOS when UNUserNotificationCenter is
+    // owned by Firebase swizzling).
+    final presentData = <String, dynamic>{
+      ...data,
+      if (title.isNotEmpty) 'title': title,
+      if (body.isNotEmpty) 'body': body,
+      if (type != null && type.isNotEmpty) 'type': type,
+    };
+
     if (AlertSoundService.isSosPayloadType(type)) {
-      await AlertSoundService().playSosAlert();
-      await AlertSoundService().showSosLocalNotification(
-        title: title.isNotEmpty ? title : '🚨 Alerte SafeAlert',
-        body: body.isNotEmpty
-            ? body
-            : 'Une alerte SOS nécessite votre attention.',
-        payload: encodeNotificationPayload(data),
-      );
-      // App ouverte : ouvrir l'écran d'actions + bannière in-app.
+      InAppAlertService().present(presentData);
       queueOpenFromData(data);
-      InAppAlertService().present({
-        ...data,
-        if (title.isNotEmpty) 'title': title,
-        if (body.isNotEmpty) 'body': body,
-      });
+      try {
+        await AlertSoundService().playSosAlert();
+      } catch (e) {
+        debugPrint('FCM foreground SOS sound: $e');
+      }
+      try {
+        await AlertSoundService().showSosLocalNotification(
+          title: title.isNotEmpty ? title : '🚨 Alerte SafeAlert',
+          body: body.isNotEmpty
+              ? body
+              : 'Une alerte SOS nécessite votre attention.',
+          payload: encodeNotificationPayload(data),
+        );
+      } catch (e) {
+        debugPrint('FCM foreground SOS local notif: $e');
+      }
       return;
     }
 
     if (title.isNotEmpty || body.isNotEmpty) {
-      await AlertSoundService().playGeneralAlert();
-      await AlertSoundService().showSosLocalNotification(
-        title: title.isNotEmpty ? title : 'SafeAlert',
-        body: body,
-        payload: encodeNotificationPayload(data),
-      );
-      InAppAlertService().present({
-        ...data,
-        'title': title,
-        'body': body,
-      });
+      InAppAlertService().present(presentData);
+      try {
+        await AlertSoundService().playGeneralAlert();
+      } catch (_) {}
+      try {
+        await AlertSoundService().showSosLocalNotification(
+          title: title.isNotEmpty ? title : 'SafeAlert',
+          body: body,
+          payload: encodeNotificationPayload(data),
+        );
+      } catch (_) {}
     }
   }
 

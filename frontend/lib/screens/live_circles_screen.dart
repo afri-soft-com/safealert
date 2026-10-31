@@ -304,136 +304,58 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     } catch (_) {}
   }
 
+  /// Android flutter_map markers often swallow GestureDetector taps inside a
+  /// ListView — resolve the nearest visible member from a map tap instead.
+  void _onMapTap(TapPosition tap, LatLng point) {
+    Map<String, dynamic>? best;
+    var bestMeters = 80.0;
+    const dist = Distance();
+    for (final m in _visibleMembers) {
+      final la = (m['last_lat'] as num?)?.toDouble();
+      final ln = (m['last_lng'] as num?)?.toDouble();
+      if (la == null || ln == null) continue;
+      final meters = dist.as(LengthUnit.Meter, point, LatLng(la, ln));
+      if (meters < bestMeters) {
+        bestMeters = meters;
+        best = m;
+      }
+    }
+    if (best != null) {
+      _showMemberDetails(best);
+    }
+  }
+
   Future<void> _showMemberDetails(Map<String, dynamic> member) async {
+    if (!mounted) return;
     final lat = (member['last_lat'] as num?)?.toDouble();
     final lng = (member['last_lng'] as num?)?.toDouble();
     final name = member['pseudo']?.toString() ?? 'Membre';
     final hasPos = lat != null && lng != null;
     if (hasPos) _focusMember(member);
 
-    PlaceDetails? place;
-    if (hasPos && mounted) {
-      showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(
-          child: Card(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          ),
-        ),
-      );
-      place = await GeocodeService().reverseDetails(lat, lng);
-      if (mounted) Navigator.of(context, rootNavigator: true).pop();
-    }
-
-    if (!mounted) return;
+    // Bottom sheet loads address itself (no blocking dialog). The previous
+    // showDialog + rootNavigator.pop path hung on many Android devices.
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
       builder: (ctx) {
-        final seen = member['last_seen_at']?.toString() ??
-            member['mesh_at']?.toString();
-        final role = member['role']?.toString();
-        final mesh = member['mesh'] == true;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.bleuFonce,
-                  ),
-                ),
-                if (role != null && role.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Rôle : $role',
-                    style: const TextStyle(fontSize: 12, color: AppColors.gris),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                if (!hasPos)
-                  const Text(
-                    'Pas de position partagée pour le moment.',
-                    style: TextStyle(fontSize: 13, color: AppColors.gris),
-                  )
-                else ...[
-                  _detailRow(
-                    Icons.location_city_outlined,
-                    'Commune',
-                    place?.commune ?? 'Non déterminée',
-                  ),
-                  _detailRow(
-                    Icons.holiday_village_outlined,
-                    'Quartier',
-                    place?.quartier ??
-                        ((place?.label.isNotEmpty ?? false)
-                            ? place!.label
-                            : 'Non déterminé'),
-                  ),
-                  if ((place?.road ?? '').isNotEmpty)
-                    _detailRow(Icons.signpost_outlined, 'Rue', place!.road!),
-                  _detailRow(
-                    Icons.my_location,
-                    'Coordonnées',
-                    '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
-                  ),
-                  if (seen != null && seen.isNotEmpty)
-                    _detailRow(Icons.schedule, 'Dernière MAJ', seen),
-                  if (mesh)
-                    _detailRow(
-                      Icons.wifi_tethering,
-                      'Source',
-                      'Réseau local (hors Internet)',
-                    ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      openExternalMapsOrSnack(
-                        context,
-                        lat,
-                        lng,
-                        label: name,
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.bleuFonce,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    icon: const Icon(Icons.directions, color: Colors.white),
-                    label: const Text(
-                      'Naviguer vers cette position',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _focusMember(member);
-                    },
-                    icon: const Icon(Icons.center_focus_strong),
-                    label: const Text('Centrer sur la carte'),
-                  ),
-                ],
-              ],
-            ),
-          ),
+        return _MemberPlaceSheet(
+          member: member,
+          name: name,
+          lat: lat,
+          lng: lng,
+          hasPos: hasPos,
+          detailRow: _detailRow,
+          onNavigate: () {
+            Navigator.pop(ctx);
+            openExternalMapsOrSnack(context, lat, lng, label: name);
+          },
+          onCenter: () {
+            Navigator.pop(ctx);
+            _focusMember(member);
+          },
         );
       },
     );
@@ -778,12 +700,15 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
       return Marker(
         point: LatLng(lat, lng),
         width: 120,
-        height: 64,
+        height: 72,
         alignment: Alignment.bottomCenter,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _showMemberDetails(m),
-          child: _namedPin(name),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: () => _showMemberDetails(m),
+            borderRadius: BorderRadius.circular(8),
+            child: _namedPin(name),
+          ),
         ),
       );
     }).toList();
@@ -959,38 +884,45 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                     ..._members.map((m) {
                       final onMap = m['visible_on_map'] == true ||
                           (m['last_lat'] != null && m['share_until'] != null);
-                      return ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(
-                          onMap ? Icons.location_on : Icons.person_outline,
-                          color: onMap ? AppColors.vert : AppColors.gris,
-                          size: 20,
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        elevation: 0,
+                        color: AppColors.bleu.withValues(alpha: 0.06),
+                        child: ListTile(
+                          dense: true,
+                          enabled: true,
+                          leading: Icon(
+                            onMap ? Icons.location_on : Icons.person_outline,
+                            color: onMap ? AppColors.vert : AppColors.gris,
+                            size: 20,
+                          ),
+                          title: Text(m['pseudo']?.toString() ?? 'Membre'),
+                          subtitle: Text(
+                            onMap
+                                ? 'Toucher pour détails · naviguer'
+                                : 'Pas de partage GPS actif',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          trailing: onMap
+                              ? IconButton(
+                                  tooltip: 'Naviguer',
+                                  icon: const Icon(Icons.directions, size: 20),
+                                  onPressed: () {
+                                    final la =
+                                        (m['last_lat'] as num?)?.toDouble();
+                                    final ln =
+                                        (m['last_lng'] as num?)?.toDouble();
+                                    openExternalMapsOrSnack(
+                                      context,
+                                      la,
+                                      ln,
+                                      label: m['pseudo']?.toString(),
+                                    );
+                                  },
+                                )
+                              : null,
+                          onTap: () => _showMemberDetails(m),
                         ),
-                        title: Text(m['pseudo']?.toString() ?? 'Membre'),
-                        subtitle: Text(
-                          onMap
-                              ? 'Toucher pour détails · naviguer'
-                              : 'Pas de partage GPS actif',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                        trailing: onMap
-                            ? IconButton(
-                                tooltip: 'Naviguer',
-                                icon: const Icon(Icons.directions, size: 20),
-                                onPressed: () {
-                                  final la = (m['last_lat'] as num?)?.toDouble();
-                                  final ln = (m['last_lng'] as num?)?.toDouble();
-                                  openExternalMapsOrSnack(
-                                    context,
-                                    la,
-                                    ln,
-                                    label: m['pseudo']?.toString(),
-                                  );
-                                },
-                              )
-                            : null,
-                        onTap: onMap ? () => _showMemberDetails(m) : null,
                       );
                     }),
                   const SizedBox(height: 12),
@@ -1005,10 +937,17 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                               ? markers.first.point
                               : const LatLng(-4.3217, 15.3125),
                           initialZoom: MapZoom.circleInitial,
+                          // Map-level tap hit-test — reliable on Android where
+                          // marker GestureDetectors inside ListView often fail.
+                          onTap: _onMapTap,
+                          interactionOptions: const InteractionOptions(
+                            flags: InteractiveFlag.all,
+                          ),
                         ),
                         children: [
                           TileLayer(
-                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            urlTemplate:
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                             userAgentPackageName: 'com.safealert.safealert',
                           ),
                           MarkerLayer(markers: markers),
@@ -1020,7 +959,8 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                     visible.isEmpty
                         ? 'Personne sur la carte — chaque membre doit appuyer sur « Partager ma position GPS ».'
                         : '${visible.length} position(s) · live ~3–5 s'
-                            '${_offlineMode || _mesh.running ? ' (proximité locale)' : ''}',
+                            '${_offlineMode || _mesh.running ? ' (proximité locale)' : ''}'
+                            ' · touchez un pin pour les détails',
                     style: const TextStyle(fontSize: 11, color: AppColors.gris),
                   ),
                 ],
@@ -1028,6 +968,182 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Bottom sheet that resolves commune/quartier asynchronously (Android-safe).
+class _MemberPlaceSheet extends StatefulWidget {
+  final Map<String, dynamic> member;
+  final String name;
+  final double? lat;
+  final double? lng;
+  final bool hasPos;
+  final Widget Function(IconData icon, String label, String value) detailRow;
+  final VoidCallback onNavigate;
+  final VoidCallback onCenter;
+
+  const _MemberPlaceSheet({
+    required this.member,
+    required this.name,
+    required this.lat,
+    required this.lng,
+    required this.hasPos,
+    required this.detailRow,
+    required this.onNavigate,
+    required this.onCenter,
+  });
+
+  @override
+  State<_MemberPlaceSheet> createState() => _MemberPlaceSheetState();
+}
+
+class _MemberPlaceSheetState extends State<_MemberPlaceSheet> {
+  PlaceDetails? _place;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.hasPos) {
+      _loading = true;
+      _loadPlace();
+    }
+  }
+
+  Future<void> _loadPlace() async {
+    final la = widget.lat;
+    final ln = widget.lng;
+    if (la == null || ln == null) return;
+    try {
+      final place = await GeocodeService().reverseDetails(la, ln);
+      if (!mounted) return;
+      setState(() {
+        _place = place;
+        _loading = false;
+        if (place == null) {
+          _error = 'Adresse indisponible pour le moment';
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Adresse indisponible pour le moment';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final seen = widget.member['last_seen_at']?.toString() ??
+        widget.member['mesh_at']?.toString();
+    final role = widget.member['role']?.toString();
+    final mesh = widget.member['mesh'] == true;
+    final la = widget.lat;
+    final ln = widget.lng;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.name,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppColors.bleuFonce,
+              ),
+            ),
+            if (role != null && role.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Rôle : $role',
+                style: const TextStyle(fontSize: 12, color: AppColors.gris),
+              ),
+            ],
+            const SizedBox(height: 12),
+            if (!widget.hasPos || la == null || ln == null)
+              const Text(
+                'Pas de position partagée pour le moment.',
+                style: TextStyle(fontSize: 13, color: AppColors.gris),
+              )
+            else ...[
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              else ...[
+                widget.detailRow(
+                  Icons.location_city_outlined,
+                  'Commune',
+                  _place?.commune ?? _error ?? 'Non déterminée',
+                ),
+                widget.detailRow(
+                  Icons.holiday_village_outlined,
+                  'Quartier',
+                  _place?.quartier ??
+                      (_place?.label.isNotEmpty == true
+                          ? _place!.label
+                          : (_error ?? 'Non déterminé')),
+                ),
+                if ((_place?.road ?? '').isNotEmpty)
+                  widget.detailRow(
+                    Icons.signpost_outlined,
+                    'Rue',
+                    _place!.road!,
+                  ),
+              ],
+              widget.detailRow(
+                Icons.my_location,
+                'Coordonnées',
+                '${la.toStringAsFixed(5)}, ${ln.toStringAsFixed(5)}',
+              ),
+              if (seen != null && seen.isNotEmpty)
+                widget.detailRow(Icons.schedule, 'Dernière MAJ', seen),
+              if (mesh)
+                widget.detailRow(
+                  Icons.wifi_tethering,
+                  'Source',
+                  'Réseau local (hors Internet)',
+                ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: widget.onNavigate,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.bleuFonce,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                icon: const Icon(Icons.directions, color: Colors.white),
+                label: const Text(
+                  'Naviguer vers cette position',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: widget.onCenter,
+                icon: const Icon(Icons.center_focus_strong),
+                label: const Text('Centrer sur la carte'),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

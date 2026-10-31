@@ -81,6 +81,15 @@ class AlertSoundService {
         },
       );
 
+      // Explicit iOS permission + foreground presentation (Firebase may own
+      // UNUserNotificationCenter; still request so local alerts can sound).
+      try {
+        await _notifications
+            .resolvePlatformSpecificImplementation<
+                IOSFlutterLocalNotificationsPlugin>()
+            ?.requestPermissions(alert: true, badge: true, sound: true);
+      } catch (_) {}
+
       await _ensureAndroidChannels();
       await _configureAudioSession();
 

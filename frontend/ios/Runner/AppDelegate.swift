@@ -1,6 +1,7 @@
 import AVFoundation
 import Flutter
 import UIKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -17,9 +18,13 @@ import UIKit
     } catch {
       NSLog("SafeAlert AVAudioSession: \(error.localizedDescription)")
     }
-    // FirebaseAppDelegateProxyEnabled=true: FlutterAppDelegate + Firebase swizzling
-    // own UNUserNotificationCenter and APNs token forwarding. Just ensure we request
-    // remote registration so a killed app can still receive alert pushes via APNs.
+
+    // Ensure we can present banners+sound while the app is foregrounded.
+    // Firebase swizzling may also set the delegate — calling super keeps both paths.
+    if #available(iOS 10.0, *) {
+      UNUserNotificationCenter.current().delegate = self
+    }
+
     let ok = super.application(application, didFinishLaunchingWithOptions: launchOptions)
     application.registerForRemoteNotifications()
     return ok
@@ -38,5 +43,18 @@ import UIKit
   ) {
     NSLog("SafeAlert APNs registration failed: \(error.localizedDescription)")
     super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
+  }
+
+  /// Foreground: always show banner + play sound for remote AND local alerts.
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    if #available(iOS 14.0, *) {
+      completionHandler([.banner, .list, .sound, .badge])
+    } else {
+      completionHandler([.alert, .sound, .badge])
+    }
   }
 }

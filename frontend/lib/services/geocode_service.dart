@@ -32,7 +32,7 @@ class GeocodeService {
   }
 
   String _cacheKey(double lat, double lng) =>
-      '${lat.toStringAsFixed(4)},${lng.toStringAsFixed(4)}';
+      'v2:${lat.toStringAsFixed(4)},${lng.toStringAsFixed(4)}';
 
   /// Reverse geocode → display label (or coords fallback string).
   Future<String?> reverse(double lat, double lng) async {
@@ -44,24 +44,23 @@ class GeocodeService {
   Future<PlaceDetails?> reverseDetails(double lat, double lng) async {
     final key = _cacheKey(lat, lng);
     if (_placeCache.containsKey(key)) return _placeCache[key];
-    if (_reverseCache.containsKey(key) && !_placeCache.containsKey(key)) {
-      // Label-only cache from older calls — still try full fetch below.
-    }
 
     try {
       await _throttle();
+      // zoom=18 → building/street level; coarser zoom often returns the
+      // province ("Kinshasa") as city and a wrong suburb as quartier.
       final uri = Uri.parse(_reverseUrl).replace(queryParameters: {
         'lat': lat.toString(),
         'lon': lng.toString(),
         'format': 'json',
         'addressdetails': '1',
-        'zoom': '16',
+        'zoom': '18',
       });
       final res = await http.get(uri, headers: {
         'User-Agent': _userAgent,
         'Accept': 'application/json',
         'Accept-Language': 'fr',
-      }).timeout(const Duration(seconds: 8));
+      }).timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body);
       if (data is! Map) return null;
@@ -207,42 +206,108 @@ class PlaceDetails {
 
   factory PlaceDetails.fromNominatim(Map data) {
     final address = data['address'];
-    String? quartier;
-    String? commune;
     String? road;
     String? country;
-    if (address is Map) {
-      quartier = _str(
-        address['suburb'] ??
-            address['neighbourhood'] ??
-            address['quarter'] ??
-            address['city_district'] ??
-            address['residential'],
+    String? state;
+    final parts = <String>[];
+    if (data['display_name'] is String) {
+      parts.addAll(
+        data['display_name']
+            .toString()
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty),
       );
-      commune = _str(
-        address['city'] ??
-            address['town'] ??
-            address['municipality'] ??
-            address['village'] ??
-            address['county'],
-      );
-      road = _str(address['road'] ?? address['pedestrian']);
-      country = _str(address['country']);
     }
 
-    final display = data['display_name']?.toString().trim();
-    String label;
-    if (quartier != null && commune != null && quartier != commune) {
-      label = road != null ? '$road, $quartier, $commune' : '$quartier, $commune';
-    } else if (display != null && display.isNotEmpty) {
-      final parts =
-          display.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-      label = parts.length <= 3 ? display : parts.take(4).join(', ');
-    } else if (road != null && (quartier ?? commune) != null) {
-      label = '$road, ${quartier ?? commune}';
-    } else {
-      label = quartier ?? commune ?? road ?? '';
+    String? suburb;
+    String? neighbourhood;
+    String? quarter;
+    String? cityDistrict;
+    String? residential;
+    String? city;
+    String? town;
+    String? municipality;
+    String? village;
+    String? county;
+    String? borough;
+
+    if (address is Map) {
+      suburb = _str(address['suburb']);
+      neighbourhood = _str(address['neighbourhood']);
+      quarter = _str(address['quarter']);
+      cityDistrict = _cleanDistrict(_str(address['city_district']));
+      residential = _str(address['residential']);
+      city = _str(address['city']);
+      town = _str(address['town']);
+      municipality = _str(address['municipality']);
+      village = _str(address['village']);
+      county = _str(address['county']);
+      borough = _str(address['borough']);
+      road = _str(address['road'] ?? address['pedestrian'] ?? address['path']);
+      country = _str(address['country']);
+      state = _str(address['state'] ?? address['province']);
     }
+
+    // Kinshasa / grandes villes RDC : « city » = province, la commune est
+    // souvent suburb / city_district / borough. Le quartier est plus petit.
+    final megaCity = _isMegaCity(city) || _isMegaCity(state);
+    String? commune;
+    String? quartier;
+
+    if (megaCity) {
+      commune = cityDistrict ??
+          borough ??
+          municipality ??
+          suburb ??
+          _communeFromDisplay(parts, city ?? state);
+      quartier = neighbourhood ??
+          quarter ??
+          residential ??
+          (suburb != null && suburb != commune ? suburb : null) ??
+          _quartierFromDisplay(parts, commune, city ?? state);
+      // Keep province as context only when commune missing.
+      commune ??= city ?? town ?? municipality;
+    } else {
+      commune = municipality ??
+          cityDistrict ??
+          borough ??
+          city ??
+          town ??
+          village ??
+          county;
+      quartier = neighbourhood ??
+          quarter ??
+          suburb ??
+          residential ??
+          cityDistrict;
+      if (quartier != null &&
+          commune != null &&
+          _norm(quartier) == _norm(commune)) {
+        quartier = neighbourhood ?? quarter ?? residential;
+        if (quartier != null && _norm(quartier) == _norm(commune)) {
+          quartier = null;
+        }
+      }
+    }
+
+    // Drop junk / duplicated labels.
+    if (quartier != null && commune != null && _norm(quartier) == _norm(commune)) {
+      quartier = null;
+    }
+    if (commune != null && state != null && _norm(commune) == _norm(state) && !megaCity) {
+      // Prefer a finer display part when commune collapsed to province.
+      commune = _communeFromDisplay(parts, state) ?? commune;
+    }
+
+    final labelParts = <String>[
+      if (road != null) road,
+      if (quartier != null) quartier,
+      if (commune != null) commune,
+    ];
+    final label = labelParts.isNotEmpty
+        ? labelParts.join(', ')
+        : (parts.isNotEmpty ? parts.take(3).join(', ') : '');
 
     return PlaceDetails(
       label: label,
@@ -252,6 +317,65 @@ class PlaceDetails {
       country: country,
     );
   }
+
+  static bool _isMegaCity(String? name) {
+    if (name == null) return false;
+    final n = _norm(name);
+    return n == 'kinshasa' ||
+        n == 'kinshasa city' ||
+        n.contains('ville de kinshasa') ||
+        n == 'lubumbashi' ||
+        n == 'mbuji-mayi' ||
+        n == 'mbujimayi' ||
+        n == 'goma' ||
+        n == 'bukavu' ||
+        n == 'brazzaville' ||
+        n == 'pointe-noire';
+  }
+
+  static String? _cleanDistrict(String? raw) {
+    if (raw == null) return null;
+    return raw
+        .replaceFirst(RegExp(r'^commune\s+(de\s+)?', caseSensitive: false), '')
+        .trim();
+  }
+
+  /// Heuristic: in "street, quartier, Commune, Kinshasa, …" commune is often index 2.
+  static String? _communeFromDisplay(List<String> parts, String? mega) {
+    if (parts.length < 3) return null;
+    final megaN = mega != null ? _norm(mega) : null;
+    for (var i = 1; i < parts.length && i < 5; i++) {
+      final p = parts[i];
+      final n = _norm(p);
+      if (megaN != null && n == megaN) continue;
+      if (n.contains('république') || n.contains('congo') || n == 'cd') continue;
+      if (RegExp(r'^\d').hasMatch(p)) continue;
+      // Prefer capitalized commune-looking tokens over micro-POI.
+      if (p.length >= 3) return _cleanDistrict(p) ?? p;
+    }
+    return null;
+  }
+
+  static String? _quartierFromDisplay(
+    List<String> parts,
+    String? commune,
+    String? mega,
+  ) {
+    if (parts.isEmpty) return null;
+    final skip = {_norm(commune ?? ''), _norm(mega ?? ''), 'cd', 'rdc'};
+    for (final p in parts.take(4)) {
+      final n = _norm(p);
+      if (n.isEmpty || skip.contains(n)) continue;
+      if (n.contains('république') || n.contains('congo')) continue;
+      if (RegExp(r'^\d').hasMatch(p)) continue;
+      if (commune != null && _norm(p) == _norm(commune)) continue;
+      return p;
+    }
+    return null;
+  }
+
+  static String _norm(String s) =>
+      s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 
   static String? _str(Object? v) {
     final s = v?.toString().trim();

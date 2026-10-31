@@ -16,13 +16,61 @@ const cacheKey = (lat, lng) => `${lat.toFixed(4)},${lng.toFixed(4)}`;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const MEGA_CITIES = new Set([
+  "kinshasa",
+  "lubumbashi",
+  "mbuji-mayi",
+  "mbujimayi",
+  "goma",
+  "bukavu",
+  "brazzaville",
+  "pointe-noire",
+]);
+
+const norm = (s) =>
+  String(s || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+const cleanDistrict = (raw) => {
+  if (!raw) return null;
+  return String(raw)
+    .replace(/^commune\s+(de\s+)?/i, "")
+    .trim();
+};
+
+const isMega = (name) => {
+  const n = norm(name);
+  if (!n) return false;
+  if (MEGA_CITIES.has(n)) return true;
+  return n.includes("ville de kinshasa");
+};
+
+/** Quartier / neighbourhood — prefer fine grain over province. */
 const pickZoneName = (address) => {
   if (!address || typeof address !== "object") return null;
+  const mega = isMega(address.city) || isMega(address.state);
+  if (mega) {
+    return (
+      address.neighbourhood ||
+      address.quarter ||
+      address.residential ||
+      (address.suburb &&
+      norm(address.suburb) !== norm(address.city_district || address.borough)
+        ? address.suburb
+        : null) ||
+      cleanDistrict(address.city_district) ||
+      address.suburb ||
+      null
+    );
+  }
   return (
-    address.suburb ||
     address.neighbourhood ||
-    address.city_district ||
     address.quarter ||
+    address.suburb ||
+    address.residential ||
+    cleanDistrict(address.city_district) ||
     address.city ||
     address.town ||
     address.village ||
@@ -32,13 +80,28 @@ const pickZoneName = (address) => {
   );
 };
 
-/** City / commune — used to disambiguate same quartier names across cities. */
+/** Commune / city — for Kinshasa, suburb/city_district is the commune. */
 const pickCity = (address) => {
   if (!address || typeof address !== "object") return null;
+  const mega = isMega(address.city) || isMega(address.state);
+  if (mega) {
+    return (
+      cleanDistrict(address.city_district) ||
+      address.borough ||
+      address.municipality ||
+      address.suburb ||
+      address.city ||
+      address.town ||
+      null
+    );
+  }
   return (
+    address.municipality ||
+    cleanDistrict(address.city_district) ||
+    address.borough ||
     address.city ||
     address.town ||
-    address.municipality ||
+    address.village ||
     address.county ||
     address.state ||
     null
@@ -54,7 +117,7 @@ const fetchNominatim = async (latNum, lngNum) => {
     await sleep(MIN_INTERVAL_MS - elapsed);
   }
 
-  const url = `${NOMINATIM_URL}?lat=${latNum}&lon=${lngNum}&format=json&addressdetails=1&zoom=14`;
+  const url = `${NOMINATIM_URL}?lat=${latNum}&lon=${lngNum}&format=json&addressdetails=1&zoom=18`;
   lastRequestAt = Date.now();
 
   const res = await fetch(url, {
