@@ -336,9 +336,9 @@ class IncidentProvider extends ChangeNotifier {
 
     int? battery;
     try {
-      battery = await Battery().batteryLevel
+      final level = await Battery().batteryLevel
           .timeout(const Duration(milliseconds: 400), onTimeout: () => -1);
-      if (battery! < 0) battery = null;
+      battery = level < 0 ? null : level;
     } catch (_) {
       battery = null;
     }
