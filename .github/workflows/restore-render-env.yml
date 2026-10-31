@@ -15,7 +15,7 @@ on:
       app_latest_build:
         description: APP_LATEST_BUILD (Android versionCode / iOS CFBundleVersion)
         required: true
-        default: "110"
+        default: "111"
       admin_web_version:
         description: ADMIN_WEB_VERSION
         required: true
