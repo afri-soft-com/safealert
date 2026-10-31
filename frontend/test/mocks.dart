@@ -53,6 +53,9 @@ class FakeAlertSoundService implements AlertSoundService {
   Future<void> consumeLaunchPayload(void Function(String? payload)? onTap) async {}
 
   @override
+  Future<void> releaseAudioSession() async {}
+
+  @override
   Future<void> disposePlayer() async {}
 }
 
