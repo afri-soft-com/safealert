@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'circle_mesh_service.dart';
 import 'local_database.dart';
 
 class LocationService {
@@ -150,9 +151,16 @@ class LocationService {
   /// [force] bypasses the local `sharePresence` gate (caller must ensure the
   /// server allows the write — e.g. after enabling share_presence for a circle).
   Future<void> updatePosition(double lat, double lng, {bool force = false}) async {
-    if (!_api.hasToken) return;
     if (!force && !_circleLiveForce && !sharePresence) return;
     if (_isNullIsland(lat, lng)) return;
+    // Always fan-out on local mesh (no Internet required) when circle live.
+    if (_circleLiveForce || force) {
+      CircleMeshService().publishPosition(lat, lng);
+    }
+    if (!_api.hasToken) {
+      await _cacheGoodPosition(lat, lng);
+      return;
+    }
     try {
       await _api.put('/auth/position', {'lat': lat, 'lng': lng});
       await _cacheGoodPosition(lat, lng);

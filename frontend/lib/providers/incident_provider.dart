@@ -514,6 +514,14 @@ class IncidentProvider extends ChangeNotifier {
           await _api.post('/sos/cancel', {});
         } else if (kind == 'sos_live') {
           await _api.post('/sos/live', payload);
+        } else if (kind == 'circle_share') {
+          final circleId = payload['circle_id'];
+          await _api.patch('/live-circles/$circleId/share', {
+            'hours': payload['hours'] ?? 24,
+          });
+        } else if (kind == 'circle_share_stop') {
+          final circleId = payload['circle_id'];
+          await _api.patch('/live-circles/$circleId/share', {'stop': true});
         } else {
           continue;
         }

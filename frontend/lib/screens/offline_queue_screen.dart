@@ -58,6 +58,10 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen> {
         return 'Annulation SOS / fausse alerte';
       case 'sos_live':
         return 'MàJ live SOS (batterie / GPS)';
+      case 'circle_share':
+        return 'Partage cercle famille';
+      case 'circle_share_stop':
+        return 'Arrêt partage cercle';
       default:
         return kind;
     }

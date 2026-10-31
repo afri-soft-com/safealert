@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/circle_mesh_service.dart';
+import '../services/local_database.dart';
 import '../services/location_service.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
@@ -32,21 +34,86 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
   bool _sharing = false;
   int _shareHours = 24;
   Timer? _poll;
+  bool _offlineMode = false;
+  final _mesh = CircleMeshService();
+  final _cache = LocalDatabase();
 
   @override
   void initState() {
     super.initState();
+    _mesh.addListener(_onMeshUpdate);
     _refresh();
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _mesh.removeListener(_onMeshUpdate);
+    unawaited(_mesh.stop());
     LocationService().stopCircleLiveShare();
     _nameCtrl.dispose();
     _codeCtrl.dispose();
     _mapCtrl.dispose();
     super.dispose();
+  }
+
+  void _onMeshUpdate() {
+    if (!mounted || _selectedId == null) return;
+    setState(() {
+      _members = _mergeMeshIntoMembers(_members);
+    });
+    _moveMapToVisible();
+  }
+
+  List<Map<String, dynamic>> _mergeMeshIntoMembers(
+    List<Map<String, dynamic>> base,
+  ) {
+    final byId = <String, Map<String, dynamic>>{};
+    for (final m in base) {
+      final id = m['user_id']?.toString() ?? m['id']?.toString();
+      if (id == null) continue;
+      byId[id] = Map<String, dynamic>.from(m);
+    }
+    for (final entry in _mesh.peers.entries) {
+      final peer = entry.value;
+      final existing = byId[entry.key];
+      if (existing == null) {
+        byId[entry.key] = Map<String, dynamic>.from(peer);
+      } else {
+        existing['last_lat'] = peer['last_lat'];
+        existing['last_lng'] = peer['last_lng'];
+        existing['visible_on_map'] = true;
+        existing['mesh'] = true;
+        existing['share_until'] =
+            existing['share_until'] ?? peer['share_until'];
+        if ((existing['pseudo'] == null ||
+                existing['pseudo'].toString().isEmpty) &&
+            peer['pseudo'] != null) {
+          existing['pseudo'] = peer['pseudo'];
+        }
+      }
+    }
+    return byId.values.toList();
+  }
+
+  Future<void> _ensureMesh({required bool sharing}) async {
+    final circle = _selectedCircle;
+    final id = _selectedId;
+    if (circle == null || id == null) return;
+    final code = circle['invite_code']?.toString() ?? '';
+    if (code.isEmpty) return;
+    final auth = context.read<AuthProvider>();
+    final uid = auth.user?['id']?.toString();
+    if (uid == null || uid.isEmpty) return;
+    final pseudo = auth.user?['pseudo']?.toString() ?? 'Moi';
+    await _mesh.start(
+      circleId: id,
+      inviteCode: code,
+      userId: uid,
+      pseudo: pseudo,
+      shareOwnPosition: sharing,
+    );
+    await _mesh.setSharing(sharing);
   }
 
   List<Map<String, dynamic>> _asMapList(dynamic raw) {
@@ -82,6 +149,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     try {
       final res = await _api.get('/live-circles');
       final list = _asMapList(res['data'] ?? res);
+      await _cache.put('live_circles', list);
       if (!mounted) return;
       final prefer = selectId ?? _selectedId;
       final stillThere =
@@ -89,29 +157,63 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
       setState(() {
         _circles = list;
         _loading = false;
+        _offlineMode = false;
         _selectedId = stillThere ? prefer : null;
         if (!stillThere) _members = [];
       });
       if (_selectedId != null) await _loadMembers(_selectedId!);
     } catch (e) {
+      final cached = await _cache.get('live_circles', maxAgeSeconds: 86400 * 14);
+      final list = cached is List
+          ? cached
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
       if (!mounted) return;
-      setState(() => _loading = false);
-      showAppSnackBar(context, e, isError: true, fallback: 'Impossible de charger les cercles');
+      if (list.isEmpty) {
+        setState(() => _loading = false);
+        showAppSnackBar(
+          context,
+          e,
+          isError: true,
+          fallback: 'Impossible de charger les cercles',
+        );
+        return;
+      }
+      final prefer = selectId ?? _selectedId;
+      final stillThere =
+          prefer != null && list.any((c) => c['id']?.toString() == prefer);
+      setState(() {
+        _circles = list;
+        _loading = false;
+        _offlineMode = true;
+        _selectedId = stillThere ? prefer : null;
+        if (!stillThere) _members = [];
+      });
+      if (_selectedId != null) await _loadMembers(_selectedId!);
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Hors ligne — cercle en mode proximité (Wi‑Fi local / Bluetooth).',
+        );
+      }
     }
   }
 
   Future<void> _loadMembers(String id) async {
     _poll?.cancel();
     setState(() => _selectedId = id);
+    await _ensureMesh(sharing: _amSharing);
     if (_amSharing) {
       LocationService().startCircleLiveShare(
-        heartbeat: const Duration(seconds: 15),
-        distanceFilterMeters: 12,
+        heartbeat: const Duration(seconds: 8),
+        distanceFilterMeters: 8,
       );
     }
     try {
       await _pullMembers(id);
-      _poll = Timer.periodic(const Duration(seconds: 8), (_) async {
+      _poll = Timer.periodic(const Duration(seconds: 5), (_) async {
         if (!mounted || _selectedId == null) return;
         await _pullMembers(_selectedId!);
       });
@@ -123,17 +225,36 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
   }
 
   Future<void> _pullMembers(String id) async {
-    // Push our GPS first so peers see movement on the next poll.
-    if (_amSharing) {
+    // Push our GPS first so peers see movement (API + mesh).
+    if (_amSharing || _mesh.sharing) {
       await LocationService().syncCurrentPosition(force: true);
     }
     try {
       final res = await _api.get('/live-circles/$id/members');
       final list = _asMapList(res['data'] ?? res);
+      await _cache.put('live_circle_members_$id', list);
       if (!mounted || _selectedId != id) return;
-      setState(() => _members = list);
+      setState(() {
+        _offlineMode = false;
+        _members = _mergeMeshIntoMembers(list);
+      });
       _moveMapToVisible();
-    } catch (_) {}
+    } catch (_) {
+      final cached =
+          await _cache.get('live_circle_members_$id', maxAgeSeconds: 86400);
+      final list = cached is List
+          ? cached
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
+          : <Map<String, dynamic>>[];
+      if (!mounted || _selectedId != id) return;
+      setState(() {
+        _offlineMode = true;
+        _members = _mergeMeshIntoMembers(list);
+      });
+      _moveMapToVisible();
+    }
   }
 
   void _moveMapToVisible() {
@@ -240,22 +361,46 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
         }
       }
       LocationService().sharePresence = true;
+      await _ensureMesh(sharing: true);
       await LocationService().updatePosition(
         pos.latitude,
         pos.longitude,
         force: true,
       );
-      await _api.patch('/live-circles/$id/share', {'hours': _shareHours});
       LocationService().startCircleLiveShare(
-        heartbeat: const Duration(seconds: 15),
-        distanceFilterMeters: 12,
+        heartbeat: const Duration(seconds: 8),
+        distanceFilterMeters: 8,
       );
-      await _refresh(selectId: id);
-      if (mounted) {
-        showAppSnackBar(
-          context,
-          'Position partagée pendant $_shareHours h avec ce cercle.',
-        );
+      try {
+        await _api.patch('/live-circles/$id/share', {'hours': _shareHours});
+        await _refresh(selectId: id);
+        if (mounted) {
+          showAppSnackBar(
+            context,
+            'Position partagée $_shareHours h (Internet + proximité locale).',
+          );
+        }
+      } catch (_) {
+        // Offline: keep local share + mesh so nearby family still sees you.
+        final until =
+            DateTime.now().add(Duration(hours: _shareHours)).toIso8601String();
+        setState(() {
+          _offlineMode = true;
+          final idx = _circles.indexWhere((c) => c['id']?.toString() == id);
+          if (idx >= 0) {
+            _circles[idx] = {..._circles[idx], 'share_until': until};
+          }
+        });
+        await _cache.enqueue('circle_share', {
+          'circle_id': id,
+          'hours': _shareHours,
+        });
+        if (mounted) {
+          showAppSnackBar(
+            context,
+            'Hors ligne — partage local actif (Wi‑Fi / Bluetooth). Sync serveur au retour réseau.',
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -276,7 +421,12 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     if (id == null) return;
     try {
       LocationService().stopCircleLiveShare();
-      await _api.patch('/live-circles/$id/share', {'stop': true});
+      await _mesh.setSharing(false);
+      try {
+        await _api.patch('/live-circles/$id/share', {'stop': true});
+      } catch (_) {
+        await _cache.enqueue('circle_share_stop', {'circle_id': id});
+      }
       await _refresh(selectId: id);
       if (mounted) {
         showAppSnackBar(context, 'Partage de position arrêté pour ce cercle.');
@@ -335,18 +485,24 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
   }
 
   String _shareStatusLabel() {
+    final meshBit = _mesh.running
+        ? ' · Proximité ${_mesh.peerCount} proche(s)'
+        : '';
+    final offlineBit = _offlineMode ? ' · hors ligne' : '';
     final until = _selectedCircle?['share_until']?.toString();
     if (until == null || until.isEmpty) {
-      return 'Vous ne partagez pas encore votre position.';
+      return 'Vous ne partagez pas encore votre position.$meshBit$offlineBit';
     }
     final t = DateTime.tryParse(until)?.toLocal();
-    if (t == null) return 'Vous ne partagez pas encore votre position.';
+    if (t == null) {
+      return 'Vous ne partagez pas encore votre position.$meshBit$offlineBit';
+    }
     if (t.isBefore(DateTime.now())) {
-      return 'Partage expiré — relancez si besoin.';
+      return 'Partage expiré — relancez si besoin.$meshBit';
     }
     final h = t.hour.toString().padLeft(2, '0');
     final m = t.minute.toString().padLeft(2, '0');
-    return 'Partage actif jusqu\'au ${t.day}/${t.month} $h:$m';
+    return 'Partage actif jusqu\'au ${t.day}/${t.month} $h:$m$meshBit$offlineBit';
   }
 
   Widget _namedPin(String name, {Color color = AppColors.vert}) {
@@ -409,9 +565,10 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 const Text(
-                  'Partagez votre position temporairement avec vos proches. '
-                  'Créer ou rejoindre un cercle ne partage pas encore votre GPS — '
-                  'utilisez le bouton ci-dessous.',
+                  'Partagez votre position avec vos proches en temps réel. '
+                  'Avec Internet : via le serveur. Sans Internet : Wi‑Fi local '
+                  'ou Bluetooth (appareils proches). Créer / rejoindre ne démarre '
+                  'pas le GPS — utilisez « Partager ma position ».',
                   style: TextStyle(fontSize: 12, color: AppColors.gris),
                 ),
                 const SizedBox(height: 12),
@@ -612,7 +769,8 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                   Text(
                     visible.isEmpty
                         ? 'Personne sur la carte — chaque membre doit appuyer sur « Partager ma position GPS ».'
-                        : '${visible.length} position(s) visible(s) · mise à jour ~8 s (GPS live si vous partagez)',
+                        : '${visible.length} position(s) · live ~3–5 s'
+                            '${_offlineMode || _mesh.running ? ' (proximité locale)' : ''}',
                     style: const TextStyle(fontSize: 11, color: AppColors.gris),
                   ),
                 ],

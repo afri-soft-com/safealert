@@ -70,11 +70,25 @@
 		<string>SafeAlert suit votre position pendant un trajet sécurisé, même si l’app est en arrière-plan, pour que vos proches voient où vous êtes.</string>
 		<key>NSLocationAlwaysUsageDescription</key>
 		<string>SafeAlert suit votre position pendant un trajet sécurisé, même si l’app est en arrière-plan, pour que vos proches voient où vous êtes.</string>
+		<key>NSBluetoothAlwaysUsageDescription</key>
+		<string>SafeAlert utilise le Bluetooth pour partager la position du cercle famille en temps réel à proximité, même sans Internet.</string>
+		<key>NSBluetoothPeripheralUsageDescription</key>
+		<string>SafeAlert utilise le Bluetooth pour que vos proches du cercle famille voient votre position à proximité sans Internet.</string>
+		<key>NSLocalNetworkUsageDescription</key>
+		<string>SafeAlert utilise le réseau local (Wi‑Fi) pour le cercle famille en temps réel sans connexion Internet.</string>
+		<key>NSBonjourServices</key>
+		<array>
+			<string>_sa-circle._tcp</string>
+		</array>
+		<key>UIRequiresPersistentWiFi</key>
+		<true/>
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>fetch</string>
 			<string>remote-notification</string>
 			<string>location</string>
+			<string>bluetooth-central</string>
+			<string>bluetooth-peripheral</string>
 		</array>
 		<key>FirebaseAppDelegateProxyEnabled</key>
 		<true/>
