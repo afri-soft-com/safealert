@@ -42,6 +42,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
   @override
   void dispose() {
     _poll?.cancel();
+    LocationService().stopCircleLiveShare();
     _nameCtrl.dispose();
     _codeCtrl.dispose();
     _mapCtrl.dispose();
@@ -102,28 +103,37 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
   Future<void> _loadMembers(String id) async {
     _poll?.cancel();
     setState(() => _selectedId = id);
+    if (_amSharing) {
+      LocationService().startCircleLiveShare(
+        heartbeat: const Duration(seconds: 15),
+        distanceFilterMeters: 12,
+      );
+    }
     try {
-      final res = await _api.get('/live-circles/$id/members');
-      final list = _asMapList(res['data'] ?? res);
-      if (!mounted) return;
-      setState(() => _members = list);
-      _moveMapToVisible();
-      _poll = Timer.periodic(const Duration(seconds: 20), (_) async {
+      await _pullMembers(id);
+      _poll = Timer.periodic(const Duration(seconds: 8), (_) async {
         if (!mounted || _selectedId == null) return;
-        try {
-          final r = await _api.get('/live-circles/$_selectedId/members');
-          final m = _asMapList(r['data'] ?? r);
-          if (mounted) {
-            setState(() => _members = m);
-            _moveMapToVisible();
-          }
-        } catch (_) {}
+        await _pullMembers(_selectedId!);
       });
     } catch (e) {
       if (mounted) {
         showAppSnackBar(context, e, isError: true, fallback: 'Membres indisponibles');
       }
     }
+  }
+
+  Future<void> _pullMembers(String id) async {
+    // Push our GPS first so peers see movement on the next poll.
+    if (_amSharing) {
+      await LocationService().syncCurrentPosition(force: true);
+    }
+    try {
+      final res = await _api.get('/live-circles/$id/members');
+      final list = _asMapList(res['data'] ?? res);
+      if (!mounted || _selectedId != id) return;
+      setState(() => _members = list);
+      _moveMapToVisible();
+    } catch (_) {}
   }
 
   void _moveMapToVisible() {
@@ -236,8 +246,9 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
         force: true,
       );
       await _api.patch('/live-circles/$id/share', {'hours': _shareHours});
-      LocationService().startPeriodicUpdates(
-        interval: const Duration(minutes: 1),
+      LocationService().startCircleLiveShare(
+        heartbeat: const Duration(seconds: 15),
+        distanceFilterMeters: 12,
       );
       await _refresh(selectId: id);
       if (mounted) {
@@ -264,6 +275,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     final id = _selectedId;
     if (id == null) return;
     try {
+      LocationService().stopCircleLiveShare();
       await _api.patch('/live-circles/$id/share', {'stop': true});
       await _refresh(selectId: id);
       if (mounted) {
@@ -301,6 +313,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     );
     if (ok != true) return;
     try {
+      LocationService().stopCircleLiveShare();
       await _api.delete('/live-circles/$id/leave');
       _poll?.cancel();
       setState(() {
@@ -336,20 +349,53 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     return 'Partage actif jusqu\'au ${t.day}/${t.month} $h:$m';
   }
 
+  Widget _namedPin(String name, {Color color = AppColors.vert}) {
+    final label = name.trim().isEmpty ? 'Membre' : name.trim();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          constraints: const BoxConstraints(maxWidth: 110),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(
+            color: AppColors.bleuFonce,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: const [
+              BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1)),
+            ],
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              height: 1.1,
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Icon(Icons.person_pin_circle, color: color, size: 34),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final visible = _visibleMembers;
     final markers = visible.map((m) {
       final lat = (m['last_lat'] as num).toDouble();
       final lng = (m['last_lng'] as num).toDouble();
+      final name = m['pseudo']?.toString() ?? 'Membre';
       return Marker(
         point: LatLng(lat, lng),
-        width: 40,
-        height: 40,
-        child: Tooltip(
-          message: m['pseudo']?.toString() ?? 'Membre',
-          child: const Icon(Icons.person_pin_circle, color: AppColors.vert, size: 36),
-        ),
+        width: 120,
+        height: 64,
+        alignment: Alignment.bottomCenter,
+        child: _namedPin(name),
       );
     }).toList();
 
@@ -566,7 +612,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                   Text(
                     visible.isEmpty
                         ? 'Personne sur la carte — chaque membre doit appuyer sur « Partager ma position GPS ».'
-                        : '${visible.length} position(s) visible(s) (rafraîchi toutes les 20 s)',
+                        : '${visible.length} position(s) visible(s) · mise à jour ~8 s (GPS live si vous partagez)',
                     style: const TextStyle(fontSize: 11, color: AppColors.gris),
                   ),
                 ],

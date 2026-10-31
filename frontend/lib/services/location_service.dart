@@ -10,7 +10,9 @@ class LocationService {
 
   final ApiService _api = ApiService();
   Timer? _timer;
+  StreamSubscription<Position>? _circleStream;
   bool sharePresence = true;
+  bool _circleLiveForce = false;
 
   static const _cacheLatKey = 'last_good_lat';
   static const _cacheLngKey = 'last_good_lng';
@@ -147,7 +149,7 @@ class LocationService {
   /// server allows the write — e.g. after enabling share_presence for a circle).
   Future<void> updatePosition(double lat, double lng, {bool force = false}) async {
     if (!_api.hasToken) return;
-    if (!force && !sharePresence) return;
+    if (!force && !_circleLiveForce && !sharePresence) return;
     if (_isNullIsland(lat, lng)) return;
     try {
       await _api.put('/auth/position', {'lat': lat, 'lng': lng});
@@ -155,22 +157,66 @@ class LocationService {
     } catch (_) {}
   }
 
-  Future<void> syncCurrentPosition() async {
+  Future<void> syncCurrentPosition({bool force = false}) async {
     final pos = await getCurrentPosition();
     if (pos != null) {
-      await updatePosition(pos.latitude, pos.longitude);
+      await updatePosition(pos.latitude, pos.longitude, force: force || _circleLiveForce);
     }
   }
 
   void startPeriodicUpdates({Duration interval = const Duration(minutes: 2)}) {
-    if (!sharePresence) return;
+    if (!sharePresence && !_circleLiveForce) return;
     _timer?.cancel();
-    syncCurrentPosition();
-    _timer = Timer.periodic(interval, (_) => syncCurrentPosition());
+    syncCurrentPosition(force: _circleLiveForce);
+    _timer = Timer.periodic(interval, (_) => syncCurrentPosition(force: _circleLiveForce));
+  }
+
+  /// Live circle share: GPS stream + frequent push so family map moves with you.
+  void startCircleLiveShare({
+    Duration heartbeat = const Duration(seconds: 15),
+    int distanceFilterMeters = 15,
+  }) {
+    _circleLiveForce = true;
+    sharePresence = true;
+    _timer?.cancel();
+    _circleStream?.cancel();
+    syncCurrentPosition(force: true);
+    _timer = Timer.periodic(heartbeat, (_) => syncCurrentPosition(force: true));
+    try {
+      _circleStream = Geolocator.getPositionStream(
+        locationSettings: LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: distanceFilterMeters,
+        ),
+      ).listen(
+        (pos) {
+          if (_isNullIsland(pos.latitude, pos.longitude)) return;
+          updatePosition(pos.latitude, pos.longitude, force: true);
+        },
+        onError: (_) {},
+      );
+    } catch (_) {
+      // Stream unavailable — heartbeat timer still pushes.
+    }
+  }
+
+  void stopCircleLiveShare() {
+    _circleLiveForce = false;
+    _circleStream?.cancel();
+    _circleStream = null;
+    // Keep a slower presence timer if global share is on.
+    if (sharePresence) {
+      startPeriodicUpdates();
+    } else {
+      stopPeriodicUpdates();
+    }
   }
 
   void stopPeriodicUpdates() {
     _timer?.cancel();
     _timer = null;
+    _circleStream?.cancel();
+    _circleStream = null;
+    _circleLiveForce = false;
   }
 }
