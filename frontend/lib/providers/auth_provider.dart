@@ -97,11 +97,15 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+  bool _authChecked = false;
+
   bool get hasLocalPin => _hasLocalPin;
   bool get pinUnlocked => _pinUnlocked;
   bool get needsPinSetup => _needsPinSetup;
   bool get needsPinUnlock => _hasLocalPin && !_pinUnlocked;
   String? get pinPhone => _pinPhone;
+  /// True after the first [checkAuth] completes (token restore / profile).
+  bool get authChecked => _authChecked;
   /// Session serveur valide et barrière PIN locale franchie.
   bool get canEnterApp =>
       _isAuthenticated && !_needsPinSetup && (!_hasLocalPin || _pinUnlocked);
@@ -182,56 +186,60 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> checkAuth() async {
-    await _api.init();
-    await _refreshPinState();
-    if (_api.hasToken) {
-      try {
-        final res = await _api.get('/auth/profile');
-        _user = res;
-        _isAuthenticated = true;
-        _isGuest = false;
-        await _cacheUser(res);
-        final profilePhone = res['phone'] as String?;
-        final identity = (profilePhone != null && profilePhone.isNotEmpty)
-            ? profilePhone
-            : res['id']?.toString();
-        if (_hasLocalPin) {
-          _needsPinSetup = false;
-          if (identity != null && _pinPhone != null && identity != _pinPhone) {
-            await _pin.clear();
-            await _refreshPinState();
+    try {
+      await _api.init();
+      await _refreshPinState();
+      if (_api.hasToken) {
+        try {
+          final res = await _api.get('/auth/profile');
+          _user = res;
+          _isAuthenticated = true;
+          _isGuest = false;
+          await _cacheUser(res);
+          final profilePhone = res['phone'] as String?;
+          final identity = (profilePhone != null && profilePhone.isNotEmpty)
+              ? profilePhone
+              : res['id']?.toString();
+          if (_hasLocalPin) {
+            _needsPinSetup = false;
+            if (identity != null && _pinPhone != null && identity != _pinPhone) {
+              await _pin.clear();
+              await _refreshPinState();
+              _needsPinSetup = true;
+              _pinUnlocked = false;
+              await _writeSessionUnlocked(false);
+            } else {
+              _pinUnlocked = await _readSessionUnlocked();
+            }
+          } else {
             _needsPinSetup = true;
             _pinUnlocked = false;
-            await _writeSessionUnlocked(false);
-          } else {
-            _pinUnlocked = await _readSessionUnlocked();
           }
-        } else {
-          _needsPinSetup = true;
-          _pinUnlocked = false;
-        }
-        _applyPrivacySettings();
-        if (!_hasLocalPin || _pinUnlocked) {
-          _startRealtimeServices();
-        }
-      } on ApiException catch (e) {
-        if (e.statusCode == 401) {
-          // Session revoked / expired — full sign-out.
-          await _api.clearToken();
-          await _cacheUser(null);
-          await _writeSessionUnlocked(false);
-          _user = null;
-          _isAuthenticated = false;
-        } else {
-          // Keep token on API errors (5xx, 429…) — restore from cache if possible.
+          _applyPrivacySettings();
+          if (!_hasLocalPin || _pinUnlocked) {
+            _startRealtimeServices();
+          }
+        } on ApiException catch (e) {
+          if (e.statusCode == 401) {
+            // Session revoked / expired — full sign-out.
+            await _api.clearToken();
+            await _cacheUser(null);
+            await _writeSessionUnlocked(false);
+            _user = null;
+            _isAuthenticated = false;
+          } else {
+            // Keep token on API errors (5xx, 429…) — restore from cache if possible.
+            await _restoreCachedSessionKeepingToken();
+          }
+        } catch (_) {
+          // Network / timeout: never wipe the token on app open.
           await _restoreCachedSessionKeepingToken();
         }
-      } catch (_) {
-        // Network / timeout: never wipe the token on app open.
-        await _restoreCachedSessionKeepingToken();
       }
+    } finally {
+      _authChecked = true;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   Future<void> _restoreCachedSessionKeepingToken() async {

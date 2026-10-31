@@ -34,8 +34,13 @@ class ApiService {
 
   String? _token;
   String? _deviceId;
+  /// iOS: first_unlock keeps the JWT across app kills (not only while unlocked).
+  /// Android: encrypted shared prefs. Always mirror token in SharedPreferences.
   final FlutterSecureStorage _secure = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock,
+    ),
   );
 
   static final ApiService _instance = ApiService._();
@@ -62,15 +67,16 @@ class ApiService {
       _token = await _secure.read(key: _tokenKey);
       _deviceId = await _secure.read(key: _deviceIdKey);
     } catch (_) {
-      _token ??= prefs.getString(_tokenKey);
-      _deviceId ??= prefs.getString(_deviceIdKey);
+      /* Keychain can throw before first unlock — fall through to prefs. */
     }
+    // SharedPreferences mirror: survives Keychain hiccups on iOS.
+    _token ??= prefs.getString(_tokenKey);
     if (_deviceId == null || _deviceId!.isEmpty) {
       _deviceId = prefs.getString(_deviceIdKey);
     }
   }
 
-  /// One-shot migration: SharedPreferences → flutter_secure_storage.
+  /// Copy legacy prefs → Keychain once, but KEEP the prefs mirror for resilience.
   Future<void> _migrateTokenIfNeeded(SharedPreferences prefs) async {
     if (prefs.getBool(_migratedKey) == true) return;
 
@@ -82,10 +88,9 @@ class ApiService {
           legacyToken.isNotEmpty) {
         await _secure.write(key: _tokenKey, value: legacyToken);
       }
-      await prefs.remove(_tokenKey);
+      // Do NOT remove prefs token — dual storage avoids silent iOS logouts.
       await prefs.setBool(_migratedKey, true);
     } catch (_) {
-      // Keep legacy prefs token if secure write fails
       prefs.setBool(_migratedKey, false);
     }
   }
@@ -114,14 +119,12 @@ class ApiService {
 
   Future<void> setToken(String token) async {
     _token = token;
+    final prefs = await SharedPreferences.getInstance();
+    // Always mirror in prefs so a Keychain miss does not force re-login.
+    await prefs.setString(_tokenKey, token);
     try {
       await _secure.write(key: _tokenKey, value: token);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_tokenKey);
-    } catch (_) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenKey, token);
-    }
+    } catch (_) {}
   }
 
   Future<void> clearToken() async {

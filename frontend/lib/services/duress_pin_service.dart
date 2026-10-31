@@ -12,6 +12,9 @@ class DuressPinService {
   static const _hashKey = 'duress_pin_hash';
   final FlutterSecureStorage _secure = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock,
+    ),
   );
 
   String _hash(String pin) => sha256.convert(utf8.encode('safealert-duress:$pin')).toString();

@@ -183,8 +183,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
 
     final auth = context.read<AuthProvider>();
+    // Wait for token/PIN restore — never force login during bootstrap (broke
+    // iOS session persistence when opening from a notification).
+    if (!auth.authChecked) return;
     if (!auth.canEnterApp) {
-      if (_navStack.last != 'login') _navigate('login');
+      if (auth.isAuthenticated || auth.hasLocalPin || auth.needsPinSetup) {
+        if (_navStack.last != 'login') _navigate('login');
+      }
       return;
     }
 
@@ -220,8 +225,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       _navStack.add('safety_ping_missed');
     });
   }
-
-  void _consumeSafetyPingMissOpen() => _consumePendingNotificationOpen();
 
   void openNeighborhoodDigest(String quartier, {String? subscriptionId, String? city}) {
     setState(() {
@@ -543,13 +546,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         _currentScreen != 'annuaire' &&
         _currentScreen != 'calculator';
 
-    if (_currentScreen == 'splash' && !maintenanceBlocks) {
+    if (_currentScreen == 'splash' && !maintenanceBlocks && auth.authChecked) {
       if (auth.canEnterApp) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _navStack.last == 'splash') {
             setState(() {
               _navStack..clear()..add('home');
             });
+            _consumePendingNotificationOpen();
           }
         });
       } else if (auth.hasLocalPin || auth.needsPinSetup) {
