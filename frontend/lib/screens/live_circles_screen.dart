@@ -566,9 +566,9 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
               children: [
                 const Text(
                   'Partagez votre position avec vos proches en temps réel. '
-                  'Avec Internet : via le serveur. Sans Internet : Wi‑Fi local '
-                  'ou Bluetooth (appareils proches). Créer / rejoindre ne démarre '
-                  'pas le GPS — utilisez « Partager ma position ».',
+                  'Avec Internet : via le serveur. Sans Internet : même Wi‑Fi '
+                  'ou hotspot partagé (Android ↔ iOS). Créer / rejoindre ne '
+                  'démarre pas le GPS — utilisez « Partager ma position ».',
                   style: TextStyle(fontSize: 12, color: AppColors.gris),
                 ),
                 const SizedBox(height: 12),
