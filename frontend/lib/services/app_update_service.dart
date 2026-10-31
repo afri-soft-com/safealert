@@ -89,7 +89,8 @@ class AppUpdateService {
     final latest = _latestVersion;
     if (latest == null || latest.isEmpty) return;
     _dismissedForCurrentLatest = true;
-    _updateAvailable = false;
+    // Keep _updateAvailable true so a later check can re-show after a new
+    // soft target; visibility is gated by dismissedForCurrentLatest.
     try {
       final prefs = await SharedPreferences.getInstance();
       // Stable dismiss key: marketing version + build (avoids sticky banner
