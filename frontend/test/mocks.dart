@@ -117,6 +117,12 @@ class FakeLocalDatabase implements LocalDatabase {
   }
 
   @override
+  Future<int> enqueueCoalesced(String kind, Map<String, dynamic> payload) async {
+    _pending.removeWhere((row) => row['kind'] == kind);
+    return enqueue(kind, payload);
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> listPendingSos() async {
     return listPending(kind: 'sos');
   }
