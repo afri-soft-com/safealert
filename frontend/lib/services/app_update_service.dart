@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -426,11 +427,6 @@ class AppUpdateBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // viewPadding survives edge-to-edge / Scaffold consumption; plain padding
-    // can be 0 and left the banner under the status bar (looked "broken").
-    final topInset = includeTopSafeArea
-        ? MediaQuery.viewPaddingOf(context).top
-        : 0.0;
     final fromTo = (currentVersion != null &&
             currentVersion!.isNotEmpty &&
             latestVersion != null &&
@@ -440,15 +436,24 @@ class AppUpdateBanner extends StatelessWidget {
             ? 'SafeAlert $latestVersion est prête. Mettez à jour quand vous voulez.'
             : 'Une version plus récente est prête. Mettez à jour quand vous voulez.');
 
-    return Material(
-      elevation: 2,
-      color: AppColors.tealDeep,
-      child: SizedBox(
-        width: double.infinity,
+    // Manual inset from viewPadding (not padding): on Android 15 edge-to-edge
+    // with a bare Column host, padding.top can be 0 while viewPadding is not.
+    final mq = MediaQuery.of(context);
+    final topInset = includeTopSafeArea
+        ? (mq.padding.top > 0 ? mq.padding.top : mq.viewPadding.top)
+        : 0.0;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: Material(
+        elevation: 2,
+        color: AppColors.tealDeep,
         child: Padding(
           padding: EdgeInsets.fromLTRB(12, 10 + topInset, 8, 10),
-          // Two rows: never horizontal overflow with long version strings +
-          // IconButton min sizes on narrow Android devices.
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,

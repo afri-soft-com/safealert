@@ -755,20 +755,36 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       child: KeyedSubtree(key: ValueKey(_currentScreen), child: screen),
     );
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _goBack();
-      },
-      child: Column(
-        children: [
-          if (showSosBanner)
-            Material(
-              color: const Color(0xFF7A4F00),
-              child: SafeArea(
-                bottom: false,
+    final topInset = mq.padding.top > 0 ? mq.padding.top : mq.viewPadding.top;
+    // First visible dark banner owns the status-bar inset + light icons.
+    final softOwnsInset = showSoftBanner && !showSosBanner;
+    final alertOwnsInset =
+        showInAppAlert && !showSosBanner && !showSoftBanner;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: topBannerShown
+          ? SystemUiOverlayStyle.light.copyWith(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: Brightness.light,
+              statusBarBrightness: Brightness.dark,
+            )
+          : SystemUiOverlayStyle.dark.copyWith(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: Brightness.dark,
+              statusBarBrightness: Brightness.light,
+            ),
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _goBack();
+        },
+        child: Column(
+          children: [
+            if (showSosBanner)
+              Material(
+                color: const Color(0xFF7A4F00),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                  padding: EdgeInsets.fromLTRB(16, 10 + topInset, 16, 10),
                   child: Text(
                     cfg.maintenanceBanner.isNotEmpty
                         ? cfg.maintenanceBanner
@@ -777,113 +793,151 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   ),
                 ),
               ),
-            ),
-          if (showSoftBanner)
-            AppUpdateBanner(
-              latestVersion: _appUpdates.latestVersion,
-              currentVersion: _appUpdates.currentVersion,
-              // Avoid double notch padding when the SOS banner is already on top.
-              includeTopSafeArea: !showSosBanner,
-              onUpdate: () => _appUpdates.openStoreOrUpdate(context),
-              onDismiss: () async {
-                await _appUpdates.dismissSoftBanner();
-                if (mounted) setState(() {});
-              },
-            ),
-          if (showInAppAlert)
-            Material(
-              color: AppColors.rouge,
-              child: SafeArea(
-                bottom: false,
-                top: !showSosBanner && !showSoftBanner,
+            if (showSoftBanner)
+              AppUpdateBanner(
+                latestVersion: _appUpdates.latestVersion,
+                currentVersion: _appUpdates.currentVersion,
+                includeTopSafeArea: softOwnsInset,
+                onUpdate: () => _appUpdates.openStoreOrUpdate(context),
+                onDismiss: () async {
+                  await _appUpdates.dismissSoftBanner();
+                  if (mounted) setState(() {});
+                },
+              ),
+            if (showInAppAlert)
+              Material(
+                color: AppColors.rouge,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-                  child: Row(
+                  padding: EdgeInsets.fromLTRB(
+                    12,
+                    8 + (alertOwnsInset ? topInset : 0),
+                    8,
+                    8,
+                  ),
+                  // Two rows — single Row overflowed on many Android widths.
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Icon(Icons.notification_important,
-                          color: Colors.white, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              InAppAlertService.originLabel(inAppBanner['type']),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xFFFFC9C9),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 10,
-                                letterSpacing: 0.2,
-                              ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 2),
+                            child: Icon(
+                              Icons.notification_important,
+                              color: Colors.white,
+                              size: 20,
                             ),
-                            Text(
-                              inAppBanner['title'] ?? 'Alerte SafeAlert',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                            if ((inAppBanner['body'] ?? '').isNotEmpty)
-                              Text(
-                                inAppBanner['body']!,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFFFFE0E0),
-                                  fontSize: 11,
-                                  height: 1.25,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  InAppAlertService.originLabel(
+                                    inAppBanner['type'],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFFFFC9C9),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 10,
+                                    letterSpacing: 0.2,
+                                  ),
                                 ),
-                              ),
-                          ],
-                        ),
+                                Text(
+                                  inAppBanner['title'] ?? 'Alerte SafeAlert',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                if ((inAppBanner['body'] ?? '').isNotEmpty)
+                                  Text(
+                                    inAppBanner['body']!,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFFFFE0E0),
+                                      fontSize: 11,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Fermer',
+                            onPressed: () => _inAppAlerts.dismiss(),
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 36,
+                              minHeight: 36,
+                            ),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 18,
+                            ),
+                          ),
+                        ],
                       ),
-                      TextButton(
-                        onPressed: () {
-                          final data = _inAppAlerts.takeForNavigation();
-                          if (data == null) return;
-                          FCMService().queueOpenFromData(data);
-                          _consumePendingNotificationOpen();
-                        },
-                        child: const Text(
-                          'Voir',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            final data = _inAppAlerts.takeForNavigation();
+                            if (data == null) return;
+                            FCMService().queueOpenFromData(data);
+                            _consumePendingNotificationOpen();
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: const Color(0x55FFFFFF),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            minimumSize: const Size(0, 32),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Voir',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: 'Fermer',
-                        onPressed: () => _inAppAlerts.dismiss(),
-                        icon: const Icon(Icons.close,
-                            color: Colors.white70, size: 18),
                       ),
                     ],
                   ),
                 ),
               ),
+            Expanded(
+              child: topBannerShown
+                  ? MediaQuery(
+                      // Only clear padding.top so StatusBar under the banner
+                      // collapses. Never zero viewPadding — that breaks
+                      // Android 15 edge-to-edge layout.
+                      data: mq.copyWith(
+                        padding: mq.padding.copyWith(top: 0),
+                      ),
+                      child: body,
+                    )
+                  : body,
             ),
-          Expanded(
-            child: topBannerShown
-                ? MediaQuery(
-                    // Zero both padding and viewPadding top so StatusBar /
-                    // SafeArea under the banner do not leave a second notch gap.
-                    data: mq.copyWith(
-                      padding: mq.padding.copyWith(top: 0),
-                      viewPadding: mq.viewPadding.copyWith(top: 0),
-                    ),
-                    child: body,
-                  )
-                : body,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

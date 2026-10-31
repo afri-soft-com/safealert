@@ -8,6 +8,9 @@ class StatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Use padding only — when AppShell zeros padding.top under a system
+    // banner, we must collapse (do not fall back to viewPadding or a second
+    // notch strip appears under the update/alert banner on Android).
     final top = MediaQuery.paddingOf(context).top;
     if (top <= 0) return const SizedBox.shrink();
     return ColoredBox(
