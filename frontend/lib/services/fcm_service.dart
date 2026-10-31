@@ -226,7 +226,9 @@ class FCMService extends ChangeNotifier {
             : 'Une alerte SOS nécessite votre attention.',
         payload: encodeNotificationPayload(message.data),
       );
-      // Foreground miss: also open the recipient screen immediately.
+      // Critical alerts: open the action screen as soon as the user taps the
+      // local notification (queued via AlertSoundService). Also auto-open for
+      // safety-ping miss in foreground so the recipient sees next steps.
       if (type == 'safety_ping_missed') {
         queueOpenFromData(message.data);
       }

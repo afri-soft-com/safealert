@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/alert_sound_service.dart';
 import '../services/api_service.dart';
 import '../services/app_config_service.dart';
+import '../services/fcm_service.dart';
 import '../services/local_database.dart';
 import '../services/location_service.dart';
 import '../services/socket_service.dart';
@@ -113,7 +114,10 @@ class IncidentProvider extends ChangeNotifier {
       _sounds.showSosLocalNotification(
         title: title,
         body: body,
-        payload: type,
+        payload: FCMService.encodeNotificationPayload({
+          ...alert,
+          'type': type,
+        }),
       );
     }
     fetchIncidents();

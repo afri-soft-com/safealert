@@ -165,7 +165,7 @@ const notifyUserGroups = async ({
   io = null,
 }) => {
   const userRes = await pool.query(
-    "SELECT sos_notify_groups FROM users WHERE id = $1",
+    "SELECT sos_notify_groups, pseudo, phone FROM users WHERE id = $1",
     [userId]
   );
   if (userRes.rows.length === 0 || !groupsNotifyEnabled(userRes.rows[0].sos_notify_groups)) {
@@ -183,6 +183,8 @@ const notifyUserGroups = async ({
       disabled: true,
     };
   }
+  const senderPseudo = userRes.rows[0].pseudo || pseudo || "Un membre";
+  const senderPhone = userRes.rows[0].phone ? String(userRes.rows[0].phone) : "";
 
   const groups = await pool.query(
     `SELECT g.id, g.name FROM neighborhood_groups g
@@ -240,6 +242,8 @@ const notifyUserGroups = async ({
           type: copy.pushType,
           groupId: String(group.id),
           userId: String(userId),
+          pseudo: String(senderPseudo),
+          phone: senderPhone,
           lat: String(lat ?? ""),
           lng: String(lng ?? ""),
           zone_name: zoneName ? String(zoneName) : "",

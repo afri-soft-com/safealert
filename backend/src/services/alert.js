@@ -18,7 +18,16 @@ const resolveContactUserId = async (client, contactPhone) => {
   return res.rows[0]?.id || null;
 };
 
-const notifyContacts = async (client, userId, user, messageTitle, messageBody, smsBody, dataType) => {
+const notifyContacts = async (
+  client,
+  userId,
+  user,
+  messageTitle,
+  messageBody,
+  smsBody,
+  dataType,
+  extraData = {}
+) => {
   const contactsResult = await client.query(
     `SELECT tc.contact_name, tc.contact_phone
      FROM trust_contacts tc
@@ -36,7 +45,13 @@ const notifyContacts = async (client, userId, user, messageTitle, messageBody, s
     if (contactUserId) {
       const n = await sendPushToUser(contactUserId, {
         notification: { title: messageTitle, body: messageBody },
-        data: { type: dataType, userId: String(userId) },
+        data: {
+          type: dataType,
+          userId: String(userId),
+          pseudo: user.pseudo ? String(user.pseudo) : "",
+          phone: user.phone ? String(user.phone) : "",
+          ...extraData,
+        },
       });
       if (n > 0) pushSent += 1;
     }
@@ -117,7 +132,7 @@ const locationSnippet = (lat, lng, zoneName) => {
   return coords ? `${place} · ${coords}` : place;
 };
 
-const sendAlert = async (userId, lat, lng, incidentType, zoneName = null) => {
+const sendAlert = async (userId, lat, lng, incidentType, zoneName = null, incidentId = null) => {
   const client = await pool.connect();
   try {
     const userResult = await client.query(
@@ -129,6 +144,13 @@ const sendAlert = async (userId, lat, lng, incidentType, zoneName = null) => {
 
     const where = locationSnippet(lat, lng, zoneName);
     const maps = `https://maps.google.com/?q=${lat},${lng}`;
+    const locationData = {
+      lat: String(lat ?? ""),
+      lng: String(lng ?? ""),
+      zone_name: zoneName ? String(zoneName) : "",
+      incidentType: incidentType ? String(incidentType) : "sos",
+      incidentId: incidentId != null ? String(incidentId) : "",
+    };
 
     const contactStats = await notifyContacts(
       client,
@@ -137,7 +159,8 @@ const sendAlert = async (userId, lat, lng, incidentType, zoneName = null) => {
       "🚨 Alerte SafeAlert",
       `${user.pseudo} a besoin d'aide ! ${where}`,
       `🔴 ALERTE SafeAlert — ${user.pseudo} a besoin d'aide ! Lieu : ${where}. Carte : ${maps}`,
-      "sos_alert"
+      "sos_alert",
+      locationData
     );
 
     const nearbyUsers = await getNearbyUsers(client, userId, lat, lng);
@@ -152,10 +175,9 @@ const sendAlert = async (userId, lat, lng, incidentType, zoneName = null) => {
         data: {
           type: "nearby_alert",
           userId: String(userId),
-          lat: String(lat),
-          lng: String(lng),
-          zone_name: zoneName ? String(zoneName) : "",
-          incidentType,
+          pseudo: user.pseudo ? String(user.pseudo) : "",
+          phone: user.phone ? String(user.phone) : "",
+          ...locationData,
         },
       });
       if (n > 0) nearbyPush += 1;
@@ -190,7 +212,11 @@ const sendCancelAlert = async (userId, lat, lng) => {
       "✅ Fausse alerte — SafeAlert",
       `${user.pseudo} : fausse alerte. Situation sous contrôle, aucune intervention nécessaire.`,
       `✅ FAUSSE ALERTE SafeAlert — ${user.pseudo} a annulé son SOS. Situation sous contrôle.`,
-      "false_alarm"
+      "false_alarm",
+      {
+        lat: String(lat ?? ""),
+        lng: String(lng ?? ""),
+      }
     );
 
     const nearbyUsers = await getNearbyUsers(client, userId, lat, lng);
@@ -204,6 +230,10 @@ const sendCancelAlert = async (userId, lat, lng) => {
         data: {
           type: "false_alarm",
           userId: String(userId),
+          pseudo: user.pseudo ? String(user.pseudo) : "",
+          phone: user.phone ? String(user.phone) : "",
+          lat: String(lat ?? ""),
+          lng: String(lng ?? ""),
         },
       });
     }

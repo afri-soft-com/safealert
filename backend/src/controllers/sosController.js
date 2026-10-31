@@ -195,7 +195,8 @@ const triggerSOS = async (req, res) => {
           lat,
           lng,
           incident_type || "sos",
-          incident.zone_name
+          incident.zone_name,
+          incident.id
         )),
       };
     } catch (alertErr) {
@@ -265,8 +266,12 @@ const triggerSOS = async (req, res) => {
             data: {
               type: "trust_zone_alert",
               zoneId: String(z.id),
+              zoneLabel: String(z.label || ""),
               incidentId: String(incident.id),
               userId: String(req.userId),
+              lat: String(lat ?? ""),
+              lng: String(lng ?? ""),
+              zone_name: incident.zone_name ? String(incident.zone_name) : "",
             },
           });
         }

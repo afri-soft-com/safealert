@@ -27,6 +27,7 @@ import 'screens/splash_screen.dart';
 import 'screens/offline_queue_screen.dart';
 import 'screens/safety_ping_screen.dart';
 import 'screens/safety_ping_missed_screen.dart';
+import 'screens/incoming_sos_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/sos_screen.dart';
@@ -147,6 +148,19 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   AuthProvider? _auth;
   Map<String, String> _safetyPingMissData = {};
   Map<String, String> _neighborhoodDigestData = {};
+  Map<String, String> _incomingSosData = {};
+
+  static const _incomingSosTypes = {
+    'sos_alert',
+    'nearby_alert',
+    'group_sos',
+    'group_report',
+    'sector_sos',
+    'trust_zone_alert',
+    'false_alarm',
+    'group_false_alarm',
+    'group_safe',
+  };
 
   String get _currentScreen => _navStack.last;
 
@@ -161,7 +175,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final pending = _fcm.pendingOpen;
     if (pending == null) return;
     final type = pending['type'];
-    if (type != 'safety_ping_missed' && type != 'neighborhood_digest') return;
+    final isIncomingSos = type != null && _incomingSosTypes.contains(type);
+    if (type != 'safety_ping_missed' &&
+        type != 'neighborhood_digest' &&
+        !isIncomingSos) {
+      return;
+    }
 
     final auth = context.read<AuthProvider>();
     if (!auth.canEnterApp) {
@@ -178,6 +197,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           _navStack.removeLast();
         }
         _navStack.add('neighborhood_digest');
+      });
+      return;
+    }
+
+    if (isIncomingSos) {
+      setState(() {
+        _incomingSosData = data;
+        if (_navStack.last == 'incoming_sos') {
+          _navStack.removeLast();
+        }
+        _navStack.add('incoming_sos');
       });
       return;
     }
@@ -622,6 +652,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       case 'safety_ping_missed':
         screen = SafetyPingMissedScreen(
           data: _safetyPingMissData,
+          onBack: _goBack,
+          onNavigate: _navigate,
+        );
+      case 'incoming_sos':
+        screen = IncomingSosScreen(
+          data: _incomingSosData,
           onBack: _goBack,
           onNavigate: _navigate,
         );
