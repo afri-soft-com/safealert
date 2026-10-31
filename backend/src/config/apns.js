@@ -108,6 +108,33 @@ const stringifyData = (data) => {
   return out;
 };
 
+/** Keep APNs under 4KB — large custom data silently kills killed-state delivery. */
+const APNS_DATA_KEYS = [
+  "type",
+  "incidentId",
+  "userId",
+  "groupId",
+  "lat",
+  "lng",
+  "zone_name",
+  "origin",
+  "pseudo",
+  "phone",
+  "title",
+  "body",
+  "zoneId",
+  "zoneLabel",
+  "incidentType",
+];
+
+const pickApnsData = (data) => {
+  const out = {};
+  for (const k of APNS_DATA_KEYS) {
+    if (data[k] != null && data[k] !== "") out[k] = String(data[k]).slice(0, 200);
+  }
+  return out;
+};
+
 const buildApsBody = (payload) => {
   const data = stringifyData({
     ...(payload.data || {}),
@@ -117,21 +144,29 @@ const buildApsBody = (payload) => {
   const isSos = data?.type && SOS_PUSH_TYPES.has(data.type);
   const title = payload.notification?.title || data.title || "SafeAlert";
   const body = payload.notification?.body || data.body || "";
+  // Always set a bundle sound name. Missing/invalid custom files → iOS plays nothing
+  // on some versions; files ship as Runner/*.caf (re-encoded PCM 44.1kHz).
   return {
     aps: {
-      alert: { title, body },
+      alert: { title: String(title).slice(0, 100), body: String(body).slice(0, 200) },
       sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
       badge: 1,
       "thread-id": isSos ? "safealert-sos" : "safealert",
-      // Use "active" until Time Sensitive entitlement is on the App ID —
-      // "time-sensitive" without entitlement can be dropped by APNs.
-      "interruption-level": "active",
+      // Demotes to active without entitlement — still helps Focus when entitlement exists.
+      "interruption-level": isSos ? "time-sensitive" : "active",
+      "relevance-score": isSos ? 1 : 0.5,
     },
-    ...data,
+    ...pickApnsData(data),
   };
 };
 
-const sendApnsToHost = (deviceToken, apsBody, production) =>
+const collapseIdFor = (payload) => {
+  const data = payload?.data || {};
+  const id = data.incidentId || data.groupId || data.type || "safealert";
+  return String(id).slice(0, 64);
+};
+
+const sendApnsToHost = (deviceToken, apsBody, production, collapseId) =>
   new Promise((resolve) => {
     const host = production
       ? "api.push.apple.com"
@@ -162,7 +197,7 @@ const sendApnsToHost = (deviceToken, apsBody, production) =>
       finish({ ok: false, status: 0, reason: e.message, host });
     });
 
-    const req = client.request({
+    const headers = {
       ":method": "POST",
       ":path": `/3/device/${deviceToken}`,
       authorization: `bearer ${getApnsJwt()}`,
@@ -171,7 +206,9 @@ const sendApnsToHost = (deviceToken, apsBody, production) =>
       "apns-priority": "10",
       "apns-expiration": String(Math.floor(Date.now() / 1000) + 3600),
       "content-type": "application/json",
-    });
+    };
+    if (collapseId) headers["apns-collapse-id"] = collapseId;
+    const req = client.request(headers);
 
     let status = 0;
     let resp = "";
@@ -216,12 +253,13 @@ const sendApns = async (deviceToken, payload) => {
   if (!token || token.length < 32) return null;
 
   const apsBody = buildApsBody(payload);
+  const collapseId = collapseIdFor(payload);
   const preferProd = isProduction();
 
   // Try preferred host first, then the other — Xcode builds use sandbox tokens
   // while TestFlight/App Store use production. A single env flag used to blackhole
   // half of the installs.
-  const first = await sendApnsToHost(token, apsBody, preferProd);
+  const first = await sendApnsToHost(token, apsBody, preferProd, collapseId);
   if (first.ok) return `apns:${first.status}`;
 
   const envMismatch =
@@ -230,7 +268,7 @@ const sendApns = async (deviceToken, payload) => {
     ) || first.status === 400 || first.status === 410;
 
   if (envMismatch) {
-    const second = await sendApnsToHost(token, apsBody, !preferProd);
+    const second = await sendApnsToHost(token, apsBody, !preferProd, collapseId);
     if (second.ok) {
       warn(
         `APNs delivered via ${second.host} after ${first.host} failed (${first.reason || first.status})`

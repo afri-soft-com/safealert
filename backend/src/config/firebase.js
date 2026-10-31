@@ -67,6 +67,9 @@ const sendPush = async (token, payload) => {
       body: payload.notification?.body || payload.data?.body,
     });
     const isSos = data?.type && SOS_PUSH_TYPES.has(data.type);
+    const collapseId = String(
+      data?.incidentId || data?.groupId || data?.type || "safealert"
+    ).slice(0, 64);
     const message = {
       token,
       data,
@@ -74,6 +77,7 @@ const sendPush = async (token, payload) => {
       android: {
         priority: "high",
         ttl: isSos ? 60 * 1000 : undefined,
+        collapseKey: collapseId,
         notification: {
           channelId: isSos ? SOS_CHANNEL_ID : DEFAULT_CHANNEL_ID,
           sound: isSos ? SOS_SOUND_ANDROID : DEFAULT_SOUND_ANDROID,
@@ -95,6 +99,7 @@ const sendPush = async (token, payload) => {
           "apns-push-type": "alert",
           // Keep briefly if device is offline.
           "apns-expiration": String(Math.floor(Date.now() / 1000) + 3600),
+          "apns-collapse-id": collapseId,
         },
         payload: {
           aps: {
@@ -110,11 +115,12 @@ const sendPush = async (token, payload) => {
                   title: data?.title || "SafeAlert",
                   body: data?.body || "",
                 },
+            // Bundle file Runner/safealert_*.caf — must be in the IPA main bundle.
             sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
             badge: 1,
             "thread-id": isSos ? "safealert-sos" : "safealert",
-            // "active" until Time Sensitive entitlement is provisioned.
-            "interruption-level": "active",
+            "interruption-level": isSos ? "time-sensitive" : "active",
+            "relevance-score": isSos ? 1 : 0.5,
           },
         },
       },

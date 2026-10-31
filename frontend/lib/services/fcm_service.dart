@@ -165,7 +165,8 @@ class FCMService extends ChangeNotifier {
         alert: true,
         badge: true,
         sound: true,
-        criticalAlert: false,
+        // Requested when Critical Alerts entitlement is present; ignored otherwise.
+        criticalAlert: true,
         announcement: false,
         provisional: false,
       );

@@ -182,6 +182,20 @@ jobs:
             --export-options-plist=ios/ExportOptions.plist \
             --dart-define=API_BASE_URL="$BASE" \
             --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_ID"
+          # Remote notification sounds require these at the root of Runner.app
+          APP=$(find build/ios/iphoneos -name 'Runner.app' -type d | head -n1 || true)
+          if [ -z "$APP" ]; then
+            APP=$(find build/ios/archive -name 'Runner.app' -type d | head -n1 || true)
+          fi
+          echo "Checking CAF sounds in: ${APP:-missing}"
+          for f in safealert_siren.caf safealert_beacon.caf safealert_pulse.caf; do
+            if [ -n "$APP" ] && [ -f "$APP/$f" ]; then
+              ls -la "$APP/$f"
+            else
+              echo "::error::Missing $f in Runner.app — iOS killed-state push will be silent"
+              exit 1
+            fi
+          done
           ls -la build/ios/ipa/
 
       - name: Upload IPA artifact
