@@ -152,7 +152,9 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
                     padding: const EdgeInsets.all(16),
                     children: [
                       const Text(
-                        'Alertes ciblées lorsque un SOS survient près de votre domicile, travail ou école.',
+                        'Si un SOS est déclenché dans le rayon de votre zone, '
+                        'vous êtes notifié, ainsi que vos contacts SafeAlert '
+                        '(Mes contacts) qui ont l\'application.',
                         style: TextStyle(fontSize: 12, color: AppColors.gris),
                       ),
                       const SizedBox(height: 12),
@@ -189,7 +191,8 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'Tout SOS dans ce rayon autour du point GPS déclenche une alerte à vos contacts.',
+                        'Tout SOS dans ce rayon vous alerte (et vos contacts inscrits). '
+                        'Ajoutez au moins un contact SafeAlert pour élargir l\'entraide.',
                         style: TextStyle(fontSize: 11, color: AppColors.gris),
                       ),
                       const SizedBox(height: 8),

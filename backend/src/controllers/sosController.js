@@ -243,8 +243,39 @@ const triggerSOS = async (req, res) => {
     // Targeted alerts for trust zones containing this SOS
     try {
       const zones = await findMatchingZones(lat, lng);
+      const senderMeta = await pool.query(
+        "SELECT pseudo, phone FROM users WHERE id = $1",
+        [req.userId]
+      );
+      const senderPseudo = senderMeta.rows[0]?.pseudo || "Quelqu'un";
+      const senderPhone = senderMeta.rows[0]?.phone
+        ? String(senderMeta.rows[0].phone)
+        : "";
+      const tzPayload = (z) => ({
+        type: "trust_zone_alert",
+        zoneId: String(z.id),
+        zoneLabel: String(z.label || ""),
+        incidentId: String(incident.id),
+        userId: String(req.userId),
+        pseudo: String(senderPseudo),
+        phone: senderPhone,
+        lat: String(lat ?? ""),
+        lng: String(lng ?? ""),
+        zone_name: incident.zone_name ? String(incident.zone_name) : "",
+      });
       for (const z of zones) {
-        if (z.user_id === req.userId) continue;
+        if (String(z.user_id) === String(req.userId)) continue;
+
+        // Zone owner first — previously only contacts were notified (silent for owner).
+        await sendPushToUser(z.user_id, {
+          notification: {
+            title: `📍 SOS près de ${z.label}`,
+            body: `${senderPseudo} a déclenché un SOS dans votre zone ${z.zone_type}`,
+          },
+          data: tzPayload(z),
+        });
+
+        if (z.notify_contacts === false) continue;
         const tzContacts = await pool.query(
           `SELECT contact_phone FROM trust_contacts WHERE user_id = $1`,
           [z.user_id]
@@ -257,22 +288,19 @@ const triggerSOS = async (req, res) => {
             [variants]
           );
           const uid = matched.rows[0]?.id;
-          if (!uid || String(uid) === String(req.userId)) continue;
+          if (
+            !uid ||
+            String(uid) === String(req.userId) ||
+            String(uid) === String(z.user_id)
+          ) {
+            continue;
+          }
           await sendPushToUser(uid, {
             notification: {
               title: `📍 Alerte près de ${z.label}`,
-              body: `SOS signalé dans votre zone ${z.zone_type}`,
+              body: `SOS signalé près de la zone ${z.label} de ${z.pseudo || "votre proche"}`,
             },
-            data: {
-              type: "trust_zone_alert",
-              zoneId: String(z.id),
-              zoneLabel: String(z.label || ""),
-              incidentId: String(incident.id),
-              userId: String(req.userId),
-              lat: String(lat ?? ""),
-              lng: String(lng ?? ""),
-              zone_name: incident.zone_name ? String(incident.zone_name) : "",
-            },
+            data: tzPayload(z),
           });
         }
       }

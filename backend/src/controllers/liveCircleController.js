@@ -15,7 +15,8 @@ const listMine = async (req, res) => {
   if (!assertEnabled(res)) return;
   try {
     const r = await pool.query(
-      `SELECT c.*, m.role AS my_role, m.share_until
+      `SELECT c.*, m.role AS my_role, m.share_until,
+              (SELECT COUNT(*)::int FROM live_circle_members xm WHERE xm.circle_id = c.id) AS member_count
        FROM live_circles c
        JOIN live_circle_members m ON m.circle_id = c.id
        WHERE m.user_id = $1
@@ -51,9 +52,10 @@ const createCircle = async (req, res) => {
        VALUES ($1, $2, $3) RETURNING *`,
       [req.userId, name || "Famille", code]
     );
+    // No auto-share: position stays private until « Partager ma position ».
     await pool.query(
       `INSERT INTO live_circle_members (circle_id, user_id, role, share_until)
-       VALUES ($1, $2, 'owner', NOW() + INTERVAL '24 hours')`,
+       VALUES ($1, $2, 'owner', NULL)`,
       [circle.rows[0].id, req.userId]
     );
     return res.status(201).json(circle.rows[0]);
@@ -77,10 +79,11 @@ const joinCircle = async (req, res) => {
     if (circle.rows.length === 0) {
       return res.status(404).json({ error: "Cercle introuvable" });
     }
+    // Join without starting a live share (consent = explicit share button).
     await pool.query(
       `INSERT INTO live_circle_members (circle_id, user_id, role, share_until)
-       VALUES ($1, $2, 'member', NOW() + INTERVAL '24 hours')
-       ON CONFLICT (circle_id, user_id) DO UPDATE SET share_until = EXCLUDED.share_until`,
+       VALUES ($1, $2, 'member', NULL)
+       ON CONFLICT (circle_id, user_id) DO NOTHING`,
       [circle.rows[0].id, req.userId]
     );
     return res.json(circle.rows[0]);
@@ -92,14 +95,28 @@ const joinCircle = async (req, res) => {
 
 const setShare = async (req, res) => {
   if (!assertEnabled(res)) return;
-  const hours = Math.min(Math.max(parseInt(req.body.hours, 10) || 24, 1), 72);
+  const stop =
+    req.body.stop === true ||
+    req.body.hours === 0 ||
+    req.body.hours === "0";
   try {
-    const r = await pool.query(
-      `UPDATE live_circle_members SET share_until = NOW() + ($3::int * INTERVAL '1 hour')
-       WHERE circle_id = $1 AND user_id = $2
-       RETURNING *`,
-      [req.params.id, req.userId, hours]
-    );
+    let r;
+    if (stop) {
+      r = await pool.query(
+        `UPDATE live_circle_members SET share_until = NULL
+         WHERE circle_id = $1 AND user_id = $2
+         RETURNING *`,
+        [req.params.id, req.userId]
+      );
+    } else {
+      const hours = Math.min(Math.max(parseInt(req.body.hours, 10) || 24, 1), 72);
+      r = await pool.query(
+        `UPDATE live_circle_members SET share_until = NOW() + ($3::int * INTERVAL '1 hour')
+         WHERE circle_id = $1 AND user_id = $2
+         RETURNING *`,
+        [req.params.id, req.userId, hours]
+      );
+    }
     if (r.rows.length === 0) {
       return res.status(404).json({ error: "Membre introuvable" });
     }
@@ -120,20 +137,58 @@ const membersLive = async (req, res) => {
     if (member.rows.length === 0) {
       return res.status(403).json({ error: "Accès refusé" });
     }
+    // All members (so invitees are visible), plus map-ready flags.
     const r = await pool.query(
       `SELECT u.id, u.pseudo, u.last_lat, u.last_lng, u.last_seen_at,
-              m.role, m.share_until, u.share_presence
+              m.role, m.share_until, u.share_presence,
+              (
+                m.share_until IS NOT NULL
+                AND m.share_until > NOW()
+                AND COALESCE(u.share_presence, true) = true
+                AND u.last_lat IS NOT NULL AND u.last_lng IS NOT NULL
+              ) AS visible_on_map
        FROM live_circle_members m
        JOIN users u ON u.id = m.user_id
        WHERE m.circle_id = $1
-         AND m.share_until > NOW()
-         AND COALESCE(u.share_presence, true) = true
-         AND u.last_lat IS NOT NULL AND u.last_lng IS NOT NULL`,
+       ORDER BY m.joined_at ASC`,
       [req.params.id]
     );
     return res.json(r.rows);
   } catch (err) {
     console.error("liveCircle membersLive error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
+const leaveCircle = async (req, res) => {
+  if (!assertEnabled(res)) return;
+  const circleId = req.params.id;
+  try {
+    const circle = await pool.query(
+      `SELECT * FROM live_circles WHERE id = $1`,
+      [circleId]
+    );
+    if (circle.rows.length === 0) {
+      return res.status(404).json({ error: "Cercle introuvable" });
+    }
+    const isOwner = String(circle.rows[0].owner_id) === String(req.userId);
+    if (isOwner) {
+      await pool.query(`DELETE FROM live_circles WHERE id = $1 AND owner_id = $2`, [
+        circleId,
+        req.userId,
+      ]);
+      return res.json({ message: "Cercle supprimé", deleted: true });
+    }
+    const r = await pool.query(
+      `DELETE FROM live_circle_members WHERE circle_id = $1 AND user_id = $2 RETURNING user_id`,
+      [circleId, req.userId]
+    );
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: "Vous n'êtes pas membre de ce cercle" });
+    }
+    return res.json({ message: "Vous avez quitté le cercle", deleted: false });
+  } catch (err) {
+    console.error("liveCircle leave error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
   }
 };
@@ -144,4 +199,5 @@ module.exports = {
   joinCircle,
   setShare,
   membersLive,
+  leaveCircle,
 };

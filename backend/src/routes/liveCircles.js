@@ -10,5 +10,6 @@ router.post("/", ctrl.createCircle);
 router.post("/join", ctrl.joinCircle);
 router.patch("/:id/share", ctrl.setShare);
 router.get("/:id/members", ctrl.membersLive);
+router.delete("/:id/leave", ctrl.leaveCircle);
 
 module.exports = router;

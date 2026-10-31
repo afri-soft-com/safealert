@@ -24,6 +24,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
   final _api = ApiService();
   final _nameCtrl = TextEditingController(text: 'Famille');
   final _codeCtrl = TextEditingController();
+  final _mapCtrl = MapController();
   List<Map<String, dynamic>> _circles = [];
   List<Map<String, dynamic>> _members = [];
   String? _selectedId;
@@ -43,6 +44,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     _poll?.cancel();
     _nameCtrl.dispose();
     _codeCtrl.dispose();
+    _mapCtrl.dispose();
     super.dispose();
   }
 
@@ -57,15 +59,37 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
         .toList();
   }
 
-  Future<void> _refresh() async {
+  Map<String, dynamic>? get _selectedCircle {
+    if (_selectedId == null) return null;
+    for (final c in _circles) {
+      if (c['id']?.toString() == _selectedId) return c;
+    }
+    return null;
+  }
+
+  bool get _amSharing {
+    final until = _selectedCircle?['share_until']?.toString();
+    if (until == null || until.isEmpty) return false;
+    final t = DateTime.tryParse(until);
+    return t != null && t.isAfter(DateTime.now());
+  }
+
+  bool get _isOwner => _selectedCircle?['my_role']?.toString() == 'owner';
+
+  Future<void> _refresh({String? selectId}) async {
     setState(() => _loading = true);
     try {
       final res = await _api.get('/live-circles');
       final list = _asMapList(res['data'] ?? res);
       if (!mounted) return;
+      final prefer = selectId ?? _selectedId;
+      final stillThere =
+          prefer != null && list.any((c) => c['id']?.toString() == prefer);
       setState(() {
         _circles = list;
         _loading = false;
+        _selectedId = stillThere ? prefer : null;
+        if (!stillThere) _members = [];
       });
       if (_selectedId != null) await _loadMembers(_selectedId!);
     } catch (e) {
@@ -83,12 +107,16 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
       final list = _asMapList(res['data'] ?? res);
       if (!mounted) return;
       setState(() => _members = list);
+      _moveMapToVisible();
       _poll = Timer.periodic(const Duration(seconds: 20), (_) async {
         if (!mounted || _selectedId == null) return;
         try {
           final r = await _api.get('/live-circles/$_selectedId/members');
           final m = _asMapList(r['data'] ?? r);
-          if (mounted) setState(() => _members = m);
+          if (mounted) {
+            setState(() => _members = m);
+            _moveMapToVisible();
+          }
         } catch (_) {}
       });
     } catch (e) {
@@ -98,6 +126,26 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     }
   }
 
+  void _moveMapToVisible() {
+    final visible = _visibleMembers;
+    if (visible.isEmpty) return;
+    final first = visible.first;
+    final lat = (first['last_lat'] as num?)?.toDouble();
+    final lng = (first['last_lng'] as num?)?.toDouble();
+    if (lat == null || lng == null) return;
+    try {
+      _mapCtrl.move(LatLng(lat, lng), 13);
+    } catch (_) {}
+  }
+
+  List<Map<String, dynamic>> get _visibleMembers => _members.where((m) {
+        if (m['visible_on_map'] == true) return true;
+        // Backward-compat if API older / missing flag.
+        return m['last_lat'] != null &&
+            m['last_lng'] != null &&
+            m['share_until'] != null;
+      }).toList();
+
   Future<void> _create() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
@@ -105,10 +153,17 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
       return;
     }
     try {
-      await _api.post('/live-circles', {'name': name});
-      await _refresh();
+      final created = await _api.post('/live-circles', {'name': name});
+      final id = created['id']?.toString();
+      await _refresh(selectId: id);
       if (mounted) {
-        showAppSnackBar(context, 'Cercle créé. Partagez le code d\'invitation.');
+        final code = created['invite_code']?.toString() ?? '';
+        showAppSnackBar(
+          context,
+          code.isNotEmpty
+              ? 'Cercle créé. Code : $code — partagez-le avec vos proches.'
+              : 'Cercle créé. Partagez le code d\'invitation.',
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -124,11 +179,14 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
       return;
     }
     try {
-      await _api.post('/live-circles/join', {'code': code});
+      final joined = await _api.post('/live-circles/join', {'code': code});
       _codeCtrl.clear();
-      await _refresh();
+      await _refresh(selectId: joined['id']?.toString());
       if (mounted) {
-        showAppSnackBar(context, 'Vous avez rejoint le cercle.');
+        showAppSnackBar(
+          context,
+          'Vous avez rejoint le cercle. Partagez votre GPS si vous voulez apparaître sur la carte.',
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -157,8 +215,6 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
         return;
       }
 
-      // Circle share needs server-side share_presence + last_lat/lng, otherwise
-      // membersLive filters the user out even after share_until is set.
       final auth = context.read<AuthProvider>();
       if (!auth.sharePresence) {
         final ok = await auth.updateProfile(sharePresence: true);
@@ -183,7 +239,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
       LocationService().startPeriodicUpdates(
         interval: const Duration(minutes: 1),
       );
-      await _loadMembers(id);
+      await _refresh(selectId: id);
       if (mounted) {
         showAppSnackBar(
           context,
@@ -204,11 +260,86 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     }
   }
 
+  Future<void> _stopSharing() async {
+    final id = _selectedId;
+    if (id == null) return;
+    try {
+      await _api.patch('/live-circles/$id/share', {'stop': true});
+      await _refresh(selectId: id);
+      if (mounted) {
+        showAppSnackBar(context, 'Partage de position arrêté pour ce cercle.');
+      }
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(context, e, isError: true, fallback: 'Arrêt impossible');
+      }
+    }
+  }
+
+  Future<void> _leaveOrDelete() async {
+    final id = _selectedId;
+    final circle = _selectedCircle;
+    if (id == null || circle == null) return;
+    final owner = _isOwner;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(owner ? 'Supprimer le cercle ?' : 'Quitter le cercle ?'),
+        content: Text(
+          owner
+              ? 'Tous les membres perdront l\'accès à « ${circle['name'] ?? 'ce cercle'} ».'
+              : 'Vous ne verrez plus les positions de ce cercle.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(owner ? 'Supprimer' : 'Quitter'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _api.delete('/live-circles/$id/leave');
+      _poll?.cancel();
+      setState(() {
+        _selectedId = null;
+        _members = [];
+      });
+      await _refresh();
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          owner ? 'Cercle supprimé.' : 'Vous avez quitté le cercle.',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(context, e, isError: true, fallback: 'Action impossible');
+      }
+    }
+  }
+
+  String _shareStatusLabel() {
+    final until = _selectedCircle?['share_until']?.toString();
+    if (until == null || until.isEmpty) {
+      return 'Vous ne partagez pas encore votre position.';
+    }
+    final t = DateTime.tryParse(until)?.toLocal();
+    if (t == null) return 'Vous ne partagez pas encore votre position.';
+    if (t.isBefore(DateTime.now())) {
+      return 'Partage expiré — relancez si besoin.';
+    }
+    final h = t.hour.toString().padLeft(2, '0');
+    final m = t.minute.toString().padLeft(2, '0');
+    return 'Partage actif jusqu\'au ${t.day}/${t.month} $h:$m';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final markers = _members
-        .where((m) => m['last_lat'] != null && m['last_lng'] != null)
-        .map((m) {
+    final visible = _visibleMembers;
+    final markers = visible.map((m) {
       final lat = (m['last_lat'] as num).toDouble();
       final lng = (m['last_lng'] as num).toDouble();
       return Marker(
@@ -232,7 +363,9 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 const Text(
-                  'Partagez votre position temporairement avec vos proches (consentement requis).',
+                  'Partagez votre position temporairement avec vos proches. '
+                  'Créer ou rejoindre un cercle ne partage pas encore votre GPS — '
+                  'utilisez le bouton ci-dessous.',
                   style: TextStyle(fontSize: 12, color: AppColors.gris),
                 ),
                 const SizedBox(height: 12),
@@ -275,13 +408,15 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                   final id = c['id']?.toString() ?? '';
                   final selected = id == _selectedId;
                   final role = c['my_role']?.toString();
+                  final count = c['member_count'];
                   return ListTile(
                     selected: selected,
                     selectedTileColor: AppColors.bleu.withValues(alpha: 0.08),
                     title: Text(c['name']?.toString() ?? 'Cercle'),
                     subtitle: Text(
                       'Code : ${c['invite_code'] ?? '—'}'
-                      '${role != null ? ' · $role' : ''}',
+                      '${role != null ? ' · $role' : ''}'
+                      '${count != null ? ' · $count membre(s)' : ''}',
                     ),
                     trailing: IconButton(
                       tooltip: 'Copier le code',
@@ -297,6 +432,11 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                   );
                 }),
                 if (_selectedId != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _shareStatusLabel(),
+                    style: const TextStyle(fontSize: 12, color: AppColors.bleuFonce),
+                  ),
                   const SizedBox(height: 8),
                   const Text(
                     'Partage de position',
@@ -335,16 +475,78 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                           )
                         : const Icon(Icons.my_location, color: Colors.white),
                     label: Text(
-                      _sharing ? 'Partage…' : 'Partager ma position GPS',
+                      _sharing
+                          ? 'Partage…'
+                          : (_amSharing
+                              ? 'Prolonger / actualiser ma position'
+                              : 'Partager ma position GPS'),
                       style: const TextStyle(color: Colors.white),
                     ),
                   ),
+                  if (_amSharing) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _stopSharing,
+                      icon: const Icon(Icons.location_off_outlined),
+                      label: const Text('Arrêter le partage'),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: _leaveOrDelete,
+                    icon: Icon(
+                      _isOwner ? Icons.delete_outline : Icons.exit_to_app,
+                      color: AppColors.rouge,
+                      size: 18,
+                    ),
+                    label: Text(
+                      _isOwner ? 'Supprimer le cercle' : 'Quitter le cercle',
+                      style: const TextStyle(color: AppColors.rouge),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Membres',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.bleuFonce,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (_members.isEmpty)
+                    const Text(
+                      'Aucun membre pour l\'instant.',
+                      style: TextStyle(fontSize: 11, color: AppColors.gris),
+                    )
+                  else
+                    ..._members.map((m) {
+                      final onMap = m['visible_on_map'] == true ||
+                          (m['last_lat'] != null && m['share_until'] != null);
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          onMap ? Icons.location_on : Icons.person_outline,
+                          color: onMap ? AppColors.vert : AppColors.gris,
+                          size: 20,
+                        ),
+                        title: Text(m['pseudo']?.toString() ?? 'Membre'),
+                        subtitle: Text(
+                          onMap
+                              ? 'Visible sur la carte'
+                              : 'Pas de partage GPS actif',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      );
+                    }),
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 220,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: FlutterMap(
+                        mapController: _mapCtrl,
                         options: MapOptions(
                           initialCenter: markers.isNotEmpty
                               ? markers.first.point
@@ -362,9 +564,9 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                     ),
                   ),
                   Text(
-                    _members.isEmpty
-                        ? 'Aucun membre visible pour l’instant. Partagez votre GPS ou invitez un proche avec le code.'
-                        : '${_members.length} membre(s) visibles (rafraîchi toutes les 20 s)',
+                    visible.isEmpty
+                        ? 'Personne sur la carte — chaque membre doit appuyer sur « Partager ma position GPS ».'
+                        : '${visible.length} position(s) visible(s) (rafraîchi toutes les 20 s)',
                     style: const TextStyle(fontSize: 11, color: AppColors.gris),
                   ),
                 ],
