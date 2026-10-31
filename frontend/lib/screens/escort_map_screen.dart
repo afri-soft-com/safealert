@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/trip_provider.dart';
+import '../utils/map_zoom.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 
@@ -60,7 +61,7 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
     if (!force && key == _lastCenteredKey) return;
     _lastCenteredKey = key;
     try {
-      _mapController.move(LatLng(lat.toDouble(), lng.toDouble()), 15);
+      _mapController.move(LatLng(lat.toDouble(), lng.toDouble()), MapZoom.escortFollow);
     } catch (_) {}
   }
 
@@ -215,7 +216,7 @@ class _EscortMapScreenState extends State<EscortMapScreen> {
                     mapController: _mapController,
                     options: MapOptions(
                       initialCenter: center,
-                      initialZoom: 15,
+                      initialZoom: MapZoom.escortFollow,
                       onPositionChanged: (camera, hasGesture) {
                         if (hasGesture && _followLive) {
                           setState(() => _followLive = false);

@@ -82,7 +82,8 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen> {
   Future<void> _retryAll() async {
     setState(() => _flushing = true);
     final trips = context.read<TripProvider>();
-    final a = await context.read<IncidentProvider>().flushOfflineQueue();
+    final a =
+        await context.read<IncidentProvider>().flushOfflineQueue(force: true);
     final b = await trips.flushPendingPings();
     final c = await trips.flushPendingTripActions();
     final sent = a + b + c;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme.dart';
 import '../utils/location_format.dart';
+import '../utils/open_maps.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import 'group_detail_screen.dart';
@@ -120,30 +121,7 @@ class IncomingSosScreen extends StatelessWidget {
   }
 
   Future<void> _openMaps(BuildContext context) async {
-    final la = _lat;
-    final ln = _lng;
-    if (la == null || ln == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Position indisponible pour l’itinéraire')),
-      );
-      return;
-    }
-    final candidates = <Uri>[
-      Uri.parse('geo:$la,$ln?q=$la,$ln'),
-      Uri.parse('google.navigation:q=$la,$ln'),
-      Uri.parse('https://maps.google.com/?q=$la,$ln'),
-      Uri.parse('https://www.google.com/maps/search/?api=1&query=$la,$ln'),
-    ];
-    for (final uri in candidates) {
-      try {
-        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
-      } catch (_) {}
-    }
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible d’ouvrir la carte')),
-      );
-    }
+    await openExternalMapsOrSnack(context, _lat, _lng, label: _headline);
   }
 
   void _openGroup(BuildContext context) {

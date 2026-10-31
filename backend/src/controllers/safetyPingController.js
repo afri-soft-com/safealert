@@ -215,10 +215,14 @@ const remindDuePings = async () => {
 
       const n = await sendPushToUser(ping.user_id, {
         notification: {
-          title: "SafeAlert — Tu es OK ?",
-          body: "Confirmez rapidement que tout va bien.",
+          title: "⏱️ Contrôle sécurité — êtes-vous OK ?",
+          body: "Confirmez rapidement que tout va bien (contrôle SafeAlert).",
         },
-        data: { type: "safety_ping_ask", pingId: String(ping.id) },
+        data: {
+          type: "safety_ping_ask",
+          pingId: String(ping.id),
+          origin: "controle_securite",
+        },
       });
       if (n > 0) reminded += 1;
     } catch (err) {
@@ -256,10 +260,10 @@ const escalateMissedPings = async (io = null) => {
     try {
       circle = await notifyTrustCircle(
         ping.user_id,
-        "⚠️ SafeAlert — Pas de réponse",
+        "⚠️ Contrôle sécurité — pas de réponse",
         "{pseudo} n'a pas confirmé être OK à temps. Contactez-le/la.",
         "safety_ping_missed",
-        `⚠️ SafeAlert — {pseudo} n'a pas répondu au contrôle sécurité.${callHint}`,
+        `⚠️ Contrôle sécurité SafeAlert — {pseudo} n'a pas répondu.${callHint}`,
         missExtra
       );
     } catch (err) {
@@ -299,8 +303,8 @@ const escalateMissedPings = async (io = null) => {
             g.group_id,
             ping.user_id,
             {
-              title: "⚠️ Contrôle sécurité",
-              body: `${pseudo} n'a pas confirmé être OK`,
+              title: "⚠️ Contrôle sécurité — groupe",
+              body: `Groupe : ${pseudo} n'a pas confirmé être OK à temps`,
             },
             missPushData(ping, profile, g.group_id),
             io,

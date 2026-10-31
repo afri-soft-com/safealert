@@ -19,6 +19,7 @@ class GeocodeService {
 
   DateTime _lastRequestAt = DateTime.fromMillisecondsSinceEpoch(0);
   final Map<String, String> _reverseCache = {};
+  final Map<String, PlaceDetails> _placeCache = {};
   final Map<String, ({double lat, double lng, String label})> _forwardCache = {};
   final Map<String, List<({double lat, double lng, String label})>> _suggestCache = {};
 
@@ -35,8 +36,17 @@ class GeocodeService {
 
   /// Reverse geocode → display label (or coords fallback string).
   Future<String?> reverse(double lat, double lng) async {
+    final details = await reverseDetails(lat, lng);
+    return details?.label;
+  }
+
+  /// Reverse geocode with commune (city) + quartier breakdown.
+  Future<PlaceDetails?> reverseDetails(double lat, double lng) async {
     final key = _cacheKey(lat, lng);
-    if (_reverseCache.containsKey(key)) return _reverseCache[key];
+    if (_placeCache.containsKey(key)) return _placeCache[key];
+    if (_reverseCache.containsKey(key) && !_placeCache.containsKey(key)) {
+      // Label-only cache from older calls — still try full fetch below.
+    }
 
     try {
       await _throttle();
@@ -55,11 +65,12 @@ class GeocodeService {
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body);
       if (data is! Map) return null;
-      final label = _pickLabel(data);
-      if (label != null && label.isNotEmpty) {
-        _reverseCache[key] = label;
+      final details = PlaceDetails.fromNominatim(data);
+      if (details.label.isNotEmpty) {
+        _reverseCache[key] = details.label;
+        _placeCache[key] = details;
       }
-      return label;
+      return details;
     } catch (_) {
       return null;
     }
@@ -175,28 +186,76 @@ class GeocodeService {
     }
   }
 
-  String? _pickLabel(Map data) {
-    final display = data['display_name']?.toString().trim();
-    if (display != null && display.isNotEmpty) {
-      final parts = display.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-      if (parts.length <= 3) return display;
-      return parts.take(4).join(', ');
-    }
+  String? _pickLabel(Map data) => PlaceDetails.fromNominatim(data).label;
+}
+
+/// Structured place from Nominatim (commune + quartier for circle member cards).
+class PlaceDetails {
+  final String label;
+  final String? commune;
+  final String? quartier;
+  final String? road;
+  final String? country;
+
+  const PlaceDetails({
+    required this.label,
+    this.commune,
+    this.quartier,
+    this.road,
+    this.country,
+  });
+
+  factory PlaceDetails.fromNominatim(Map data) {
     final address = data['address'];
+    String? quartier;
+    String? commune;
+    String? road;
+    String? country;
     if (address is Map) {
-      final suburb = address['suburb'] ??
-          address['neighbourhood'] ??
-          address['city_district'] ??
-          address['quarter'] ??
-          address['city'] ??
-          address['town'] ??
-          address['village'] ??
-          address['municipality'];
-      final road = address['road'] ?? address['pedestrian'];
-      if (road != null && suburb != null) return '$road, $suburb';
-      if (suburb != null) return suburb.toString();
-      if (road != null) return road.toString();
+      quartier = _str(
+        address['suburb'] ??
+            address['neighbourhood'] ??
+            address['quarter'] ??
+            address['city_district'] ??
+            address['residential'],
+      );
+      commune = _str(
+        address['city'] ??
+            address['town'] ??
+            address['municipality'] ??
+            address['village'] ??
+            address['county'],
+      );
+      road = _str(address['road'] ?? address['pedestrian']);
+      country = _str(address['country']);
     }
-    return null;
+
+    final display = data['display_name']?.toString().trim();
+    String label;
+    if (quartier != null && commune != null && quartier != commune) {
+      label = road != null ? '$road, $quartier, $commune' : '$quartier, $commune';
+    } else if (display != null && display.isNotEmpty) {
+      final parts =
+          display.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      label = parts.length <= 3 ? display : parts.take(4).join(', ');
+    } else if (road != null && (quartier ?? commune) != null) {
+      label = '$road, ${quartier ?? commune}';
+    } else {
+      label = quartier ?? commune ?? road ?? '';
+    }
+
+    return PlaceDetails(
+      label: label,
+      commune: commune,
+      quartier: quartier,
+      road: road,
+      country: country,
+    );
+  }
+
+  static String? _str(Object? v) {
+    final s = v?.toString().trim();
+    if (s == null || s.isEmpty) return null;
+    return s;
   }
 }

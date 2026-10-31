@@ -278,10 +278,10 @@ const groupNotifyCopy = (kind, pseudo, typeLabel, where) => {
       feedType: "info",
       alertTitle: `Fausse alerte — ${pseudo}`,
       alertBody: (groupName) =>
-        `${pseudo} a annulé son SOS dans ${groupName}. Situation sous contrôle. ${where}`,
+        `${pseudo} a annulé son SOS dans le groupe « ${groupName} ». Situation sous contrôle. ${where}`,
       pushTitle: "✅ Fausse alerte — groupe",
       pushBody: (groupName) =>
-        `${pseudo} : fausse alerte dans ${groupName}. Situation sous contrôle. ${where}`,
+        `Groupe « ${groupName} » : ${pseudo} a annulé son SOS. ${where}`,
       pushType: "group_false_alarm",
     };
   }
@@ -290,10 +290,10 @@ const groupNotifyCopy = (kind, pseudo, typeLabel, where) => {
       feedType: "info",
       alertTitle: `En sécurité — ${pseudo}`,
       alertBody: (groupName) =>
-        `${pseudo} confirme être en sécurité (${groupName}). ${where}`,
+        `${pseudo} confirme être en sécurité (groupe « ${groupName} »). ${where}`,
       pushTitle: "✅ En sécurité — groupe",
       pushBody: (groupName) =>
-        `${pseudo} confirme : je suis en sécurité (${groupName}). ${where}`,
+        `Groupe « ${groupName} » : ${pseudo} confirme être en sécurité. ${where}`,
       pushType: "group_safe",
     };
   }
@@ -302,20 +302,21 @@ const groupNotifyCopy = (kind, pseudo, typeLabel, where) => {
       feedType: "danger",
       alertTitle: `Signalement — ${typeLabel}`,
       alertBody: (groupName) =>
-        `${pseudo} a signalé « ${typeLabel} » dans ${groupName}. ${where}`,
+        `${pseudo} a signalé « ${typeLabel} » dans le groupe « ${groupName} ». ${where}`,
       pushTitle: "⚠️ Signalement — groupe",
       pushBody: (groupName) =>
-        `${pseudo} a signalé « ${typeLabel} » dans ${groupName}. ${where}`,
+        `Groupe « ${groupName} » : ${pseudo} a signalé « ${typeLabel} ». ${where}`,
       pushType: "group_report",
     };
   }
   return {
     feedType: "danger",
     alertTitle: `SOS — ${pseudo}`,
-    alertBody: (groupName) => `Alerte SOS déclenchée dans ${groupName}. ${where}`,
-    pushTitle: "🚨 SOS — membre du groupe",
+    alertBody: (groupName) =>
+      `SOS déclenché dans le groupe « ${groupName} ». ${where}`,
+    pushTitle: "🚨 SOS — groupe",
     pushBody: (groupName) =>
-      `${pseudo} a déclenché une alerte SOS dans ${groupName} ! ${where}`,
+      `Groupe « ${groupName} » : ${pseudo} a déclenché un SOS ! ${where}`,
     pushType: "group_sos",
   };
 };

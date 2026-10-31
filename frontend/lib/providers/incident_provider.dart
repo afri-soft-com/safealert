@@ -101,12 +101,17 @@ class IncidentProvider extends ChangeNotifier {
     _lastSosAlert = alert;
     // Destinataires seulement — pas de sirène sur l'appareil émetteur.
     if (!_isOwnIncomingAlert(alert)) {
-      final type = alert['incident_type']?.toString() ??
-          alert['type']?.toString() ??
+      // Prefer push `type` (sos_alert, group_sos…). Socket used to send only
+      // incident_type: "sos", which blocked Incoming SOS / « Voir ».
+      var type = alert['type']?.toString() ??
+          alert['incident_type']?.toString() ??
           'sos_alert';
+      if (type == 'sos' || type == 'danger') type = 'sos_alert';
+      if (type == 'report') type = 'nearby_alert';
       final title = type == 'group_sos' || type == 'group_report'
-          ? (alert['title']?.toString() ?? '🚨 Alerte groupe SafeAlert')
-          : (alert['title']?.toString() ?? '🚨 Alerte SafeAlert');
+          ? (alert['title']?.toString() ?? '🚨 SOS — groupe')
+          : (alert['title']?.toString() ??
+              InAppAlertService.originLabel(type));
       final body = alert['body']?.toString() ??
           alert['zone_name']?.toString() ??
           'Une alerte nécessite votre attention.';
@@ -483,8 +488,9 @@ class IncidentProvider extends ChangeNotifier {
   Future<int> flushPendingSos() async => flushOfflineQueue(kinds: const ['sos']);
 
   /// Flush SOS + signalements + messages + positions / check-in / annulations.
-  Future<int> flushOfflineQueue({List<String>? kinds}) async {
-    final pending = await _cache.listPending(dueOnly: true);
+  /// [force] ignores backoff so Paramètres → Sync retries everything listed.
+  Future<int> flushOfflineQueue({List<String>? kinds, bool force = false}) async {
+    final pending = await _cache.listPending(dueOnly: !force);
     var sent = 0;
     for (final item in pending) {
       final kind = item['kind'] as String;

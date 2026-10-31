@@ -19,6 +19,8 @@ class TripProvider extends ChangeNotifier {
   Map<String, dynamic>? _activeTrip;
   Map<String, dynamic>? _followedTrip;
   String? _followTripId;
+  /// When set, refresh via `/public/trips/:token` (share-link followers).
+  String? _publicFollowToken;
   String? _shareUrl;
   String? _shareText;
   Map<String, dynamic>? _routeSuggestion;
@@ -257,10 +259,25 @@ class TripProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>?> fetchTrip(String id) async {
     try {
+      if (_publicFollowToken != null &&
+          _publicFollowToken!.isNotEmpty &&
+          (_followTripId == null || _followTripId == id)) {
+        final res = await _api.get(
+          '/public/trips/${Uri.encodeComponent(_publicFollowToken!)}',
+        );
+        final trip = res['trip'];
+        if (trip is Map && trip['id'] != null) {
+          _followedTrip = Map<String, dynamic>.from(trip);
+          _followTripId = _followedTrip!['id']?.toString();
+          notifyListeners();
+          return _followedTrip;
+        }
+      }
       final res = await _api.get('/trips/$id');
       if (res['id'] == null) return null;
       _followedTrip = res;
       _followTripId = id;
+      _publicFollowToken = null;
       notifyListeners();
       return res;
     } catch (e) {
@@ -279,6 +296,14 @@ class TripProvider extends ChangeNotifier {
     openEscortForTrip(id);
     final resolved = await resolveFollowInput(id);
     if (resolved == null) return null;
+    // Public share already populated `_followedTrip` — don't call /trips/:id
+    // (403 for non-escorts).
+    if (_followedTrip != null &&
+        _followedTrip!['id']?.toString() == resolved) {
+      _followTripId = resolved;
+      notifyListeners();
+      return _followedTrip;
+    }
     _followTripId = resolved;
     return fetchTrip(resolved);
   }
@@ -298,8 +323,15 @@ class TripProvider extends ChangeNotifier {
     if (token.contains('-')) return token;
     try {
       final res = await _api.get('/public/trips/${Uri.encodeComponent(token)}');
-      final id = (res['trip'] as Map?)?['id']?.toString();
-      if (id != null && id.isNotEmpty) return id;
+      final trip = res['trip'];
+      if (trip is Map && trip['id'] != null) {
+        final mapped = Map<String, dynamic>.from(trip);
+        _followedTrip = mapped;
+        _followTripId = mapped['id']?.toString();
+        _publicFollowToken = token;
+        notifyListeners();
+        return _followTripId;
+      }
     } catch (_) {}
     return token;
   }
@@ -307,6 +339,7 @@ class TripProvider extends ChangeNotifier {
   void clearFollowedTrip() {
     _followedTrip = null;
     _followTripId = null;
+    _publicFollowToken = null;
     notifyListeners();
   }
 

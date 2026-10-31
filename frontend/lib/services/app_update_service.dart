@@ -200,18 +200,15 @@ class AppUpdateService {
       final prefs = await SharedPreferences.getInstance();
       final stored = prefs.getString(_kDismissPrefsKey) ?? '';
       final expected = _dismissKey(latest, _latestBuild);
-      final legacyExact = stored == latest;
-      final sameTarget = stored == expected ||
-          legacyExact ||
-          stored == latest.split(' ').first.trim() ||
-          (stored.contains('#') &&
-              stored.split('#').first == expected.split('#').first &&
-              _latestBuild != null &&
-              stored.endsWith('#$_latestBuild'));
       final dismissedBuild = prefs.getInt(_kDismissBuildPrefsKey);
-      final sameBuild = _latestBuild == null
-          ? true
-          : dismissedBuild == null || dismissedBuild == _latestBuild;
+      // Exact version#build match only — a marketing-only dismiss must not
+      // hide a later soft target that only bumped the build number.
+      final sameTarget = stored == expected ||
+          (stored == latest &&
+              (_latestBuild == null || dismissedBuild == _latestBuild));
+      final sameBuild = _latestBuild == null ||
+          dismissedBuild == _latestBuild ||
+          (stored.contains('#') && stored.endsWith('#$_latestBuild'));
       _dismissedForCurrentLatest = sameTarget && sameBuild;
     } catch (_) {
       _dismissedForCurrentLatest = false;
@@ -442,65 +439,81 @@ class AppUpdateBanner extends StatelessWidget {
     return Material(
       elevation: 2,
       color: AppColors.tealDeep,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(12, 10 + topInset, 4, 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const Icon(Icons.system_update_alt, color: Colors.white, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(12, 10 + topInset, 4, 10),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 340;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Text(
-                    'Nouvelle version disponible',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                  const Icon(Icons.system_update_alt, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Nouvelle version disponible',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          fromTo,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFB8E0D2),
+                            fontSize: 11,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    fromTo,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFFB8E0D2),
-                      fontSize: 11,
-                      height: 1.3,
+                  if (narrow)
+                    IconButton(
+                      tooltip: 'Mettre à jour',
+                      onPressed: onUpdate,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.download, color: Colors.white, size: 20),
+                    )
+                  else
+                    TextButton(
+                      onPressed: onUpdate,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(0, 36),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        'Mettre à jour',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
+                  IconButton(
+                    tooltip: 'Plus tard',
+                    onPressed: onDismiss,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close, color: Colors.white70, size: 18),
                   ),
                 ],
-              ),
-            ),
-            TextButton(
-              onPressed: onUpdate,
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 36),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text(
-                'Mettre à jour',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Plus tard',
-              onPressed: onDismiss,
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.close, color: Colors.white70, size: 18),
-            ),
-          ],
+              );
+            },
+          ),
         ),
       ),
     );

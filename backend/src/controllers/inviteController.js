@@ -106,10 +106,14 @@ const acceptCircleInvite = async (req, res) => {
     if (host.fcm_token) {
       await sendPush(host.fcm_token, {
         notification: {
-          title: "Cercle SafeAlert",
+          title: "👥 Cercle de confiance",
           body: `${accepter.pseudo} a rejoint votre cercle de confiance`,
         },
-        data: { type: "circle_invite_accepted", userId: String(accepter.id) },
+        data: {
+          type: "circle_invite_accepted",
+          userId: String(accepter.id),
+          origin: "cercle_confiance",
+        },
       });
     }
 

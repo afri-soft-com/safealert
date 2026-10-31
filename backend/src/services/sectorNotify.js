@@ -66,8 +66,8 @@ const notifyLeadersForSOS = async (incident) => {
         const where = coords ? `${place} · ${coords}` : place;
         await sendPush(leader.fcm_token, {
           notification: {
-            title: "🚨 SOS dans votre secteur",
-            body: `${incident_type || "sos"} — ${where}`,
+            title: "🚨 SOS — secteur",
+            body: `Alerte secteur (${incident_type || "sos"}) — ${where}`,
           },
           data: {
             type: "sector_sos",
@@ -76,6 +76,7 @@ const notifyLeadersForSOS = async (incident) => {
             lat: String(lat),
             lng: String(lng),
             zone_name: zone_name ? String(zone_name) : "",
+            origin: "secteur",
           },
         });
         leadersNotified += 1;

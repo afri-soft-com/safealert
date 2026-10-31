@@ -13,6 +13,7 @@ import '../services/share_helper.dart';
 import '../services/location_service.dart';
 import '../services/geocode_service.dart';
 import '../utils/location_format.dart';
+import '../utils/map_zoom.dart';
 import '../utils/trip_eta.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
@@ -131,7 +132,7 @@ class _TripScreenState extends State<TripScreen> {
     });
     final point = LatLng(place.lat, place.lng);
     try {
-      _mapController.move(point, 15);
+      _mapController.move(point, MapZoom.tripPlace);
     } catch (_) {}
     await _applyPoint(target, point, reverseGeocode: false, addressOverride: place.label);
   }
@@ -147,7 +148,7 @@ class _TripScreenState extends State<TripScreen> {
         _locating = false;
       });
       try {
-        _mapController.move(point, 14);
+        _mapController.move(point, MapZoom.tripInitial);
       } catch (_) {}
       await _applyPoint(_MapPickTarget.origin, point, reverseGeocode: true);
     } else {
@@ -257,7 +258,7 @@ class _TripScreenState extends State<TripScreen> {
     }
     final point = LatLng(pos.latitude, pos.longitude);
     try {
-      _mapController.move(point, 15);
+      _mapController.move(point, MapZoom.tripPlace);
     } catch (_) {}
     await _applyPoint(target, point, reverseGeocode: true);
   }
@@ -297,7 +298,7 @@ class _TripScreenState extends State<TripScreen> {
     }
     final point = LatLng(found.lat, found.lng);
     try {
-      _mapController.move(point, 15);
+      _mapController.move(point, MapZoom.tripPlace);
     } catch (_) {}
     await _applyPoint(target, point, reverseGeocode: false, addressOverride: found.label);
   }
@@ -315,7 +316,7 @@ class _TripScreenState extends State<TripScreen> {
     }
     final point = LatLng(lat, lng);
     try {
-      _mapController.move(point, 15);
+      _mapController.move(point, MapZoom.tripPlace);
     } catch (_) {}
     _applyPoint(target, point, reverseGeocode: true);
   }
@@ -813,7 +814,7 @@ class _TripScreenState extends State<TripScreen> {
                   mapController: _mapController,
                   options: MapOptions(
                     initialCenter: _mapCenter,
-                    initialZoom: 13,
+                    initialZoom: MapZoom.tripInitial,
                     onTap: _onMapTap,
                   ),
                   children: [

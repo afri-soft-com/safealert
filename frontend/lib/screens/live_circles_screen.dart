@@ -8,8 +8,11 @@ import '../theme.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/circle_mesh_service.dart';
+import '../services/geocode_service.dart';
 import '../services/local_database.dart';
 import '../services/location_service.dart';
+import '../utils/map_zoom.dart';
+import '../utils/open_maps.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/app_feedback.dart';
@@ -35,6 +38,8 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
   int _shareHours = 24;
   Timer? _poll;
   bool _offlineMode = false;
+  /// Recenter map only on first member load / explicit focus — not every poll.
+  bool _mapNeedsFit = true;
   final _mesh = CircleMeshService();
   final _cache = LocalDatabase();
 
@@ -59,10 +64,11 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
 
   void _onMeshUpdate() {
     if (!mounted || _selectedId == null) return;
+    // Do not re-center on every mesh packet — that fights user pan/zoom and
+    // makes members look stationary when the camera keeps jumping.
     setState(() {
       _members = _mergeMeshIntoMembers(_members);
     });
-    _moveMapToVisible();
   }
 
   List<Map<String, dynamic>> _mergeMeshIntoMembers(
@@ -203,6 +209,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
 
   Future<void> _loadMembers(String id) async {
     _poll?.cancel();
+    _mapNeedsFit = true;
     setState(() => _selectedId = id);
     await _ensureMesh(sharing: _amSharing);
     if (_amSharing) {
@@ -257,16 +264,208 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     }
   }
 
-  void _moveMapToVisible() {
-    final visible = _visibleMembers;
-    if (visible.isEmpty) return;
-    final first = visible.first;
-    final lat = (first['last_lat'] as num?)?.toDouble();
-    final lng = (first['last_lng'] as num?)?.toDouble();
+  void _moveMapToVisible({bool force = false}) {
+    if (!force && !_mapNeedsFit) return;
+    final points = <LatLng>[];
+    for (final m in _visibleMembers) {
+      final lat = (m['last_lat'] as num?)?.toDouble();
+      final lng = (m['last_lng'] as num?)?.toDouble();
+      if (lat != null && lng != null) points.add(LatLng(lat, lng));
+    }
+    if (points.isEmpty) return;
+    try {
+      if (points.length == 1) {
+        _mapCtrl.move(points.first, MapZoom.circleFocus);
+      } else {
+        _mapCtrl.fitCamera(
+          CameraFit.coordinates(
+            coordinates: points,
+            padding: const EdgeInsets.all(56),
+            maxZoom: MapZoom.circleFocus,
+            minZoom: 13,
+          ),
+        );
+      }
+      _mapNeedsFit = false;
+    } catch (_) {
+      try {
+        _mapCtrl.move(points.first, MapZoom.circleFocus);
+        _mapNeedsFit = false;
+      } catch (_) {}
+    }
+  }
+
+  void _focusMember(Map<String, dynamic> member) {
+    final lat = (member['last_lat'] as num?)?.toDouble();
+    final lng = (member['last_lng'] as num?)?.toDouble();
     if (lat == null || lng == null) return;
     try {
-      _mapCtrl.move(LatLng(lat, lng), 13);
+      _mapCtrl.move(LatLng(lat, lng), MapZoom.circleFocus);
     } catch (_) {}
+  }
+
+  Future<void> _showMemberDetails(Map<String, dynamic> member) async {
+    final lat = (member['last_lat'] as num?)?.toDouble();
+    final lng = (member['last_lng'] as num?)?.toDouble();
+    final name = member['pseudo']?.toString() ?? 'Membre';
+    final hasPos = lat != null && lng != null;
+    if (hasPos) _focusMember(member);
+
+    PlaceDetails? place;
+    if (hasPos && mounted) {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ),
+        ),
+      );
+      place = await GeocodeService().reverseDetails(lat, lng);
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    }
+
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        final seen = member['last_seen_at']?.toString() ??
+            member['mesh_at']?.toString();
+        final role = member['role']?.toString();
+        final mesh = member['mesh'] == true;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.bleuFonce,
+                  ),
+                ),
+                if (role != null && role.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Rôle : $role',
+                    style: const TextStyle(fontSize: 12, color: AppColors.gris),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                if (!hasPos)
+                  const Text(
+                    'Pas de position partagée pour le moment.',
+                    style: TextStyle(fontSize: 13, color: AppColors.gris),
+                  )
+                else ...[
+                  _detailRow(
+                    Icons.location_city_outlined,
+                    'Commune',
+                    place?.commune ?? 'Non déterminée',
+                  ),
+                  _detailRow(
+                    Icons.holiday_village_outlined,
+                    'Quartier',
+                    place?.quartier ??
+                        ((place?.label.isNotEmpty ?? false)
+                            ? place!.label
+                            : 'Non déterminé'),
+                  ),
+                  if ((place?.road ?? '').isNotEmpty)
+                    _detailRow(Icons.signpost_outlined, 'Rue', place!.road!),
+                  _detailRow(
+                    Icons.my_location,
+                    'Coordonnées',
+                    '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
+                  ),
+                  if (seen != null && seen.isNotEmpty)
+                    _detailRow(Icons.schedule, 'Dernière MAJ', seen),
+                  if (mesh)
+                    _detailRow(
+                      Icons.wifi_tethering,
+                      'Source',
+                      'Réseau local (hors Internet)',
+                    ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      openExternalMapsOrSnack(
+                        context,
+                        lat,
+                        lng,
+                        label: name,
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.bleuFonce,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.directions, color: Colors.white),
+                    label: const Text(
+                      'Naviguer vers cette position',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _focusMember(member);
+                    },
+                    icon: const Icon(Icons.center_focus_strong),
+                    label: const Text('Centrer sur la carte'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: AppColors.bleuFonce),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.gris,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(value, style: const TextStyle(fontSize: 13)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   List<Map<String, dynamic>> get _visibleMembers => _members.where((m) {
@@ -419,13 +618,43 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
   Future<void> _stopSharing() async {
     final id = _selectedId;
     if (id == null) return;
+    final me = context.read<AuthProvider>().user?['id']?.toString();
     try {
       LocationService().stopCircleLiveShare();
       await _mesh.setSharing(false);
+      // Optimistic local clear so offline cache cannot keep « Partage actif ».
+      if (!mounted) return;
+      setState(() {
+        _members = _members.map((m) {
+          final copy = Map<String, dynamic>.from(m);
+          final uid = copy['user_id']?.toString() ?? copy['id']?.toString();
+          if (me != null && uid == me) {
+            copy['share_until'] = null;
+            copy['visible_on_map'] = false;
+          }
+          return copy;
+        }).toList();
+      });
       try {
         await _api.patch('/live-circles/$id/share', {'stop': true});
       } catch (_) {
         await _cache.enqueue('circle_share_stop', {'circle_id': id});
+        final cached =
+            await _cache.get('live_circle_members_$id', maxAgeSeconds: 86400);
+        if (cached is List) {
+          final patched = cached
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .map((m) {
+            final uid = m['user_id']?.toString() ?? m['id']?.toString();
+            if (me != null && uid == me) {
+              m['share_until'] = null;
+              m['visible_on_map'] = false;
+            }
+            return m;
+          }).toList();
+          await _cache.put('live_circle_members_$id', patched);
+        }
       }
       await _refresh(selectId: id);
       if (mounted) {
@@ -551,7 +780,11 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
         width: 120,
         height: 64,
         alignment: Alignment.bottomCenter,
-        child: _namedPin(name),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _showMemberDetails(m),
+          child: _namedPin(name),
+        ),
       );
     }).toList();
 
@@ -737,15 +970,32 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                         title: Text(m['pseudo']?.toString() ?? 'Membre'),
                         subtitle: Text(
                           onMap
-                              ? 'Visible sur la carte'
+                              ? 'Toucher pour détails · naviguer'
                               : 'Pas de partage GPS actif',
                           style: const TextStyle(fontSize: 11),
                         ),
+                        trailing: onMap
+                            ? IconButton(
+                                tooltip: 'Naviguer',
+                                icon: const Icon(Icons.directions, size: 20),
+                                onPressed: () {
+                                  final la = (m['last_lat'] as num?)?.toDouble();
+                                  final ln = (m['last_lng'] as num?)?.toDouble();
+                                  openExternalMapsOrSnack(
+                                    context,
+                                    la,
+                                    ln,
+                                    label: m['pseudo']?.toString(),
+                                  );
+                                },
+                              )
+                            : null,
+                        onTap: onMap ? () => _showMemberDetails(m) : null,
                       );
                     }),
                   const SizedBox(height: 12),
                   SizedBox(
-                    height: 220,
+                    height: 280,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: FlutterMap(
@@ -754,7 +1004,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                           initialCenter: markers.isNotEmpty
                               ? markers.first.point
                               : const LatLng(-4.3217, 15.3125),
-                          initialZoom: 12,
+                          initialZoom: MapZoom.circleInitial,
                         ),
                         children: [
                           TileLayer(

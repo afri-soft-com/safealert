@@ -10,6 +10,7 @@ import '../theme.dart';
 import '../providers/incident_provider.dart';
 import '../services/location_service.dart';
 import '../utils/location_format.dart';
+import '../utils/map_zoom.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
 import '../widgets/nav_bar.dart';
@@ -63,7 +64,7 @@ class _MapScreenState extends State<MapScreen> {
         _center = LatLng(pos.latitude, pos.longitude);
         _locating = false;
       });
-      _mapController.move(_center, 14);
+      _mapController.move(_center, MapZoom.communityGps);
     } else if (mounted) {
       setState(() => _locating = false);
     }
@@ -564,7 +565,7 @@ class _MapScreenState extends State<MapScreen> {
                                   mapController: _mapController,
                                   options: MapOptions(
                                     initialCenter: _center,
-                                    initialZoom: 13,
+                                    initialZoom: MapZoom.communityInitial,
                                     onTap: (_, __) => setState(() => _selectedId = null),
                                   ),
                                   children: [

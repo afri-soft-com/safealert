@@ -809,6 +809,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
+                              InAppAlertService.originLabel(inAppBanner['type']),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFFFFC9C9),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                            Text(
                               inAppBanner['title'] ?? 'Alerte SafeAlert',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

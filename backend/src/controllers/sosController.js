@@ -262,6 +262,7 @@ const triggerSOS = async (req, res) => {
         lat: String(lat ?? ""),
         lng: String(lng ?? ""),
         zone_name: incident.zone_name ? String(incident.zone_name) : "",
+        origin: "zone_confiance",
       });
       for (const z of zones) {
         if (String(z.user_id) === String(req.userId)) continue;
@@ -269,8 +270,8 @@ const triggerSOS = async (req, res) => {
         // Zone owner first — previously only contacts were notified (silent for owner).
         await sendPushToUser(z.user_id, {
           notification: {
-            title: `📍 SOS près de ${z.label}`,
-            body: `${senderPseudo} a déclenché un SOS dans votre zone ${z.zone_type}`,
+            title: `📍 Zone de confiance — ${z.label}`,
+            body: `SOS de ${senderPseudo} dans votre zone « ${z.label} » (${z.zone_type})`,
           },
           data: tzPayload(z),
         });
@@ -297,8 +298,8 @@ const triggerSOS = async (req, res) => {
           }
           await sendPushToUser(uid, {
             notification: {
-              title: `📍 Alerte près de ${z.label}`,
-              body: `SOS signalé près de la zone ${z.label} de ${z.pseudo || "votre proche"}`,
+              title: `📍 Zone de confiance — contact`,
+              body: `SOS près de la zone « ${z.label} » de ${z.pseudo || "votre proche"}`,
             },
             data: tzPayload(z),
           });
@@ -321,12 +322,17 @@ const triggerSOS = async (req, res) => {
     if (io) {
       io.emit("sos_alert", {
         id: incident.id,
+        type: "sos_alert",
         user_id: req.userId,
         lat: incident.lat,
         lng: incident.lng,
         zone_name: incident.zone_name,
         incident_type: incident.incident_type,
         created_at: incident.created_at,
+        title: "🚨 SOS — contact d'urgence",
+        body: incident.zone_name
+          ? `Alerte SOS — ${incident.zone_name}`
+          : "Une alerte SOS nécessite votre attention.",
       });
     }
 

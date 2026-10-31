@@ -156,9 +156,9 @@ const sendAlert = async (userId, lat, lng, incidentType, zoneName = null, incide
       client,
       userId,
       user,
-      "🚨 Alerte SafeAlert",
-      `${user.pseudo} a besoin d'aide ! ${where}`,
-      `🔴 ALERTE SafeAlert — ${user.pseudo} a besoin d'aide ! Lieu : ${where}. Carte : ${maps}`,
+      "🚨 SOS — contact d'urgence",
+      `${user.pseudo} a déclenché un SOS. ${where}`,
+      `🔴 SOS SafeAlert (contact d'urgence) — ${user.pseudo} a besoin d'aide ! Lieu : ${where}. Carte : ${maps}`,
       "sos_alert",
       locationData
     );
@@ -169,14 +169,15 @@ const sendAlert = async (userId, lat, lng, incidentType, zoneName = null, incide
     for (const nu of nearbyUsers) {
       const n = await sendPushToUser(nu.id, {
         notification: {
-          title: "🚨 Alerte dans votre quartier",
-          body: `${user.pseudo} signale un incident à proximité — ${where}`,
+          title: "🏘️ Signalement — quartier",
+          body: `${user.pseudo} a signalé un incident près de vous — ${where}`,
         },
         data: {
           type: "nearby_alert",
           userId: String(userId),
           pseudo: user.pseudo ? String(user.pseudo) : "",
           phone: user.phone ? String(user.phone) : "",
+          origin: "quartier",
           ...locationData,
         },
       });
@@ -209,13 +210,14 @@ const sendCancelAlert = async (userId, lat, lng) => {
       client,
       userId,
       user,
-      "✅ Fausse alerte — SafeAlert",
-      `${user.pseudo} : fausse alerte. Situation sous contrôle, aucune intervention nécessaire.`,
-      `✅ FAUSSE ALERTE SafeAlert — ${user.pseudo} a annulé son SOS. Situation sous contrôle.`,
+      "✅ Fausse alerte — SOS annulé",
+      `${user.pseudo} a annulé son SOS (contact d'urgence). Situation sous contrôle.`,
+      `✅ FAUSSE ALERTE SafeAlert (contact) — ${user.pseudo} a annulé son SOS. Situation sous contrôle.`,
       "false_alarm",
       {
         lat: String(lat ?? ""),
         lng: String(lng ?? ""),
+        origin: "contact",
       }
     );
 
@@ -224,8 +226,8 @@ const sendCancelAlert = async (userId, lat, lng) => {
     for (const nu of nearbyUsers) {
       await sendPushToUser(nu.id, {
         notification: {
-          title: "Fausse alerte — quartier",
-          body: `${user.pseudo} : fausse alerte. Situation sous contrôle.`,
+          title: "✅ Fausse alerte — quartier",
+          body: `${user.pseudo} a annulé l'alerte de proximité. Situation sous contrôle.`,
         },
         data: {
           type: "false_alarm",
@@ -234,6 +236,7 @@ const sendCancelAlert = async (userId, lat, lng) => {
           phone: user.phone ? String(user.phone) : "",
           lat: String(lat ?? ""),
           lng: String(lng ?? ""),
+          origin: "quartier",
         },
       });
     }

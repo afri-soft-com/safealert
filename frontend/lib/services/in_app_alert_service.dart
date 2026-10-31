@@ -75,21 +75,60 @@ class InAppAlertService extends ChangeNotifier {
 
   static String _defaultTitle(String type) {
     switch (type) {
+      case 'sos_alert':
+        return '🚨 SOS — contact d\'urgence';
+      case 'nearby_alert':
+        return '🏘️ Signalement — quartier';
       case 'group_sos':
+        return '🚨 SOS — groupe';
       case 'group_report':
-        return 'Alerte groupe';
+        return '⚠️ Signalement — groupe';
+      case 'sector_sos':
+        return '🚨 SOS — secteur';
+      case 'trust_zone_alert':
+        return '📍 Zone de confiance';
+      case 'safety_ping_ask':
+        return '⏱️ Contrôle sécurité';
+      case 'safety_ping_missed':
+        return '⚠️ Contrôle sécurité — pas de réponse';
+      case 'false_alarm':
+        return '✅ Fausse alerte';
+      case 'group_false_alarm':
+        return '✅ Fausse alerte — groupe';
+      case 'group_safe':
+        return '✅ En sécurité — groupe';
+      default:
+        return 'SafeAlert';
+    }
+  }
+
+  /// Short origin chip for in-app / system banners.
+  static String originLabel(String? type) {
+    switch (type) {
+      case 'sos_alert':
+        return 'SOS · Contact';
+      case 'nearby_alert':
+        return 'Signalement · Quartier';
+      case 'group_sos':
+        return 'SOS · Groupe';
+      case 'group_report':
+        return 'Signalement · Groupe';
+      case 'sector_sos':
+        return 'SOS · Secteur';
       case 'trust_zone_alert':
         return 'Zone de confiance';
       case 'safety_ping_ask':
+        return 'Contrôle sécurité';
       case 'safety_ping_missed':
-        return 'Safety ping';
+        return 'Contrôle manqué';
       case 'false_alarm':
-      case 'group_false_alarm':
         return 'Fausse alerte';
+      case 'group_false_alarm':
+        return 'Fausse alerte · Groupe';
       case 'group_safe':
-        return 'En sécurité';
+        return 'En sécurité · Groupe';
       default:
-        return 'Alerte SafeAlert';
+        return 'SafeAlert';
     }
   }
 
