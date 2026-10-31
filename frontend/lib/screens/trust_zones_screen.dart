@@ -6,6 +6,7 @@ import '../services/location_service.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
+import 'trust_zone_detail_screen.dart';
 
 class TrustZonesScreen extends StatefulWidget {
   final VoidCallback onBack;
@@ -249,26 +250,21 @@ class _TrustZonesScreenState extends State<TrustZonesScreen> {
                             title: Text(z['label'] as String? ?? ''),
                             subtitle: Text(
                               '${_zoneTypeLabel(z['zone_type'] as String?)} · '
-                              'Rayon : ${_radiusLabel((z['radius_m'] as num?)?.toInt() ?? 200)}',
+                              'Rayon : ${_radiusLabel((z['radius_m'] as num?)?.toInt() ?? 200)}'
+                              '${z['notify_contacts'] == false ? ' · vous seul' : ' · + contacts'}',
                             ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline, color: AppColors.rouge),
-                              onPressed: () async {
-                                try {
-                                  await _api.delete('/trust-zones/${z['id']}');
-                                  await _load();
-                                } catch (e) {
-                                  if (mounted) {
-                                    showAppSnackBar(
-                                      context,
-                                      e,
-                                      isError: true,
-                                      fallback: 'Impossible de supprimer la zone.',
-                                    );
-                                  }
-                                }
-                              },
-                            ),
+                            trailing: const Icon(Icons.chevron_right, color: AppColors.gris),
+                            onTap: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => TrustZoneDetailScreen(
+                                    zone: Map<String, dynamic>.from(z),
+                                    onChanged: _load,
+                                  ),
+                                ),
+                              );
+                              if (mounted) await _load();
+                            },
                           ),
                         ),
                     ],

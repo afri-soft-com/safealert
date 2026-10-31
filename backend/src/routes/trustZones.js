@@ -6,6 +6,7 @@ const router = Router();
 
 router.get("/", authenticate, ctrl.listZones);
 router.post("/", authenticate, ctrl.createZone);
+router.patch("/:id", authenticate, ctrl.updateZone);
 router.delete("/:id", authenticate, ctrl.deleteZone);
 
 module.exports = router;
