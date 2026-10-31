@@ -17,16 +17,29 @@ describe("geocode service", () => {
     vi.useRealTimers();
   });
 
-  it("pickZoneName prefers suburb then city", () => {
+  it("pickZoneName prefers neighbourhood/suburb over mega city province", () => {
     expect(pickZoneName({ suburb: "Gombe", city: "Kinshasa" })).toBe("Gombe");
-    expect(pickZoneName({ city: "Kinshasa" })).toBe("Kinshasa");
+    expect(
+      pickZoneName({
+        neighbourhood: "Socimat",
+        suburb: "Gombe",
+        city: "Kinshasa",
+      })
+    ).toBe("Socimat");
+    // Province alone is not a quartier — avoid false labels.
+    expect(pickZoneName({ city: "Kinshasa" })).toBeNull();
+    // Non-mega cities still fall back to city name.
+    expect(pickZoneName({ city: "Matadi" })).toBe("Matadi");
     expect(pickZoneName({})).toBeNull();
   });
 
-  it("pickCity prefers city over state", () => {
-    expect(pickCity({ suburb: "Gombe", city: "Kinshasa", state: "Kinshasa" })).toBe(
-      "Kinshasa"
-    );
+  it("pickCity uses commune for mega cities, city otherwise", () => {
+    expect(
+      pickCity({ suburb: "Gombe", city: "Kinshasa", state: "Kinshasa" })
+    ).toBe("Gombe");
+    expect(
+      pickCity({ city_district: "Commune de Lingwala", city: "Kinshasa" })
+    ).toBe("Lingwala");
     expect(pickCity({ town: "Matadi" })).toBe("Matadi");
     expect(pickCity({})).toBeNull();
   });
