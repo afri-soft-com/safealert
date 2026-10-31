@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../firebase_options.dart';
 import 'alert_sound_service.dart';
 import 'api_service.dart';
+import 'in_app_alert_service.dart';
 
 class FCMService extends ChangeNotifier {
   static final FCMService _instance = FCMService._();
@@ -368,14 +369,28 @@ class FCMService extends ChangeNotifier {
             : 'Une alerte SOS nécessite votre attention.',
         payload: encodeNotificationPayload(data),
       );
-      if (type == 'safety_ping_missed') {
-        queueOpenFromData(data);
-      }
+      // App ouverte : ouvrir l'écran d'actions + bannière in-app.
+      queueOpenFromData(data);
+      InAppAlertService().present({
+        ...data,
+        if (title.isNotEmpty) 'title': title,
+        if (body.isNotEmpty) 'body': body,
+      });
       return;
     }
 
     if (title.isNotEmpty || body.isNotEmpty) {
       await AlertSoundService().playGeneralAlert();
+      await AlertSoundService().showSosLocalNotification(
+        title: title.isNotEmpty ? title : 'SafeAlert',
+        body: body,
+        payload: encodeNotificationPayload(data),
+      );
+      InAppAlertService().present({
+        ...data,
+        'title': title,
+        'body': body,
+      });
     }
   }
 

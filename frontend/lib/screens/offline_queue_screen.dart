@@ -50,6 +50,14 @@ class _OfflineQueueScreenState extends State<OfflineQueueScreen> {
         return 'Position trajet (hors ligne)';
       case 'trip_action':
         return 'Fin / annulation trajet (hors ligne)';
+      case 'position':
+        return 'Position cercle / présence';
+      case 'checkin':
+        return 'Signal « En sécurité »';
+      case 'sos_cancel':
+        return 'Annulation SOS / fausse alerte';
+      case 'sos_live':
+        return 'MàJ live SOS (batterie / GPS)';
       default:
         return kind;
     }

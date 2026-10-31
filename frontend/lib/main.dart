@@ -58,6 +58,7 @@ import 'screens/live_circles_screen.dart';
 import 'services/volume_sos_service.dart';
 import 'services/shake_sos_service.dart';
 import 'services/fcm_service.dart';
+import 'services/in_app_alert_service.dart';
 import 'services/app_update_service.dart';
 import 'services/app_config_service.dart';
 
@@ -160,7 +161,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     'false_alarm',
     'group_false_alarm',
     'group_safe',
+    'safety_ping_ask',
   };
+
+  final _inAppAlerts = InAppAlertService();
 
   String get _currentScreen => _navStack.last;
 
@@ -169,6 +173,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _onFcmPending() {
     if (!mounted) return;
     _consumePendingNotificationOpen();
+  }
+
+  void _onInAppAlert() {
+    if (!mounted) return;
+    setState(() {});
+    // Critical alerts also open the action screen while the app is foreground.
+    final banner = _inAppAlerts.banner;
+    final type = banner?['type'];
+    if (type != null && _incomingSosTypes.contains(type)) {
+      _consumePendingNotificationOpen();
+    }
   }
 
   void _consumePendingNotificationOpen() {
@@ -333,6 +348,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       _initDeepLinks();
       _appUpdates.startPolling(context);
       _fcm.addListener(_onFcmPending);
+      _inAppAlerts.addListener(_onInAppAlert);
       await _fcm.refreshPendingOpens();
       _consumePendingNotificationOpen();
 
@@ -418,6 +434,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     _auth?.removeListener(_onAuthChanged);
     _fcm.removeListener(_onFcmPending);
+    _inAppAlerts.removeListener(_onInAppAlert);
     WidgetsBinding.instance.removeObserver(this);
     _appUpdates.dispose();
     ShakeSOSService.dispose();
@@ -720,10 +737,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         !_discreetLocked &&
         _currentScreen != 'splash' &&
         _currentScreen != 'calculator';
+    final inAppBanner = _inAppAlerts.banner;
+    final showInAppAlert = inAppBanner != null &&
+        !_discreetLocked &&
+        _currentScreen != 'splash' &&
+        _currentScreen != 'calculator' &&
+        _currentScreen != 'incoming_sos';
 
     // Top system banners already consume the notch inset — zero it for screens
     // below so StatusBar / SafeArea do not double-pad under the update banner.
-    final topBannerShown = showSoftBanner || showSosBanner;
+    final topBannerShown = showSoftBanner || showSosBanner || showInAppAlert;
     final mq = MediaQuery.of(context);
     final body = AnimatedSwitcher(
       duration: const Duration(milliseconds: 260),
@@ -766,6 +789,75 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 await _appUpdates.dismissSoftBanner();
                 if (mounted) setState(() {});
               },
+            ),
+          if (showInAppAlert)
+            Material(
+              color: AppColors.rouge,
+              child: SafeArea(
+                bottom: false,
+                top: !showSosBanner && !showSoftBanner,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.notification_important,
+                          color: Colors.white, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              inAppBanner['title'] ?? 'Alerte SafeAlert',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                            if ((inAppBanner['body'] ?? '').isNotEmpty)
+                              Text(
+                                inAppBanner['body']!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFFFFE0E0),
+                                  fontSize: 11,
+                                  height: 1.25,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          final data = _inAppAlerts.takeForNavigation();
+                          if (data == null) return;
+                          FCMService().queueOpenFromData(data);
+                          _consumePendingNotificationOpen();
+                        },
+                        child: const Text(
+                          'Voir',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Fermer',
+                        onPressed: () => _inAppAlerts.dismiss(),
+                        icon: const Icon(Icons.close,
+                            color: Colors.white70, size: 18),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           Expanded(
             child: topBannerShown

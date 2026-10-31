@@ -9,6 +9,7 @@ import '../services/alert_sound_service.dart';
 import '../services/api_service.dart';
 import '../services/app_config_service.dart';
 import '../services/fcm_service.dart';
+import '../services/in_app_alert_service.dart';
 import '../services/local_database.dart';
 import '../services/location_service.dart';
 import '../services/socket_service.dart';
@@ -109,16 +110,22 @@ class IncidentProvider extends ChangeNotifier {
       final body = alert['body']?.toString() ??
           alert['zone_name']?.toString() ??
           'Une alerte nécessite votre attention.';
+      final openData = <String, dynamic>{
+        ...alert,
+        'type': type,
+        'title': title,
+        'body': body,
+      };
       _sounds.playSosAlert();
       // Notif locale avec son SafeAlert (complète FCM si l'OS a muet le canal).
       _sounds.showSosLocalNotification(
         title: title,
         body: body,
-        payload: FCMService.encodeNotificationPayload({
-          ...alert,
-          'type': type,
-        }),
+        payload: FCMService.encodeNotificationPayload(openData),
       );
+      // App ouverte : bannière + écran d'actions (groupe / contacts / zone…).
+      FCMService().queueOpenFromData(openData);
+      InAppAlertService().present(openData);
     }
     fetchIncidents();
   }
@@ -242,12 +249,17 @@ class IncidentProvider extends ChangeNotifier {
       try {
         battery = await Battery().batteryLevel;
       } catch (_) {}
-      await _api.post('/sos/live', {
+      final payload = {
         'incident_id': incidentId,
         'lat': pos.latitude,
         'lng': pos.longitude,
         if (battery != null) 'battery_pct': battery,
-      });
+      };
+      try {
+        await _api.post('/sos/live', payload);
+      } catch (_) {
+        await _cache.enqueueCoalesced('sos_live', payload);
+      }
     } catch (_) {}
   }
 
@@ -470,13 +482,15 @@ class IncidentProvider extends ChangeNotifier {
   /// Renvoie les SOS en file locale (après perte réseau).
   Future<int> flushPendingSos() async => flushOfflineQueue(kinds: const ['sos']);
 
-  /// Flush SOS + signalements + messages groupe hors-ligne (avec backoff).
+  /// Flush SOS + signalements + messages + positions / check-in / annulations.
   Future<int> flushOfflineQueue({List<String>? kinds}) async {
     final pending = await _cache.listPending(dueOnly: true);
     var sent = 0;
     for (final item in pending) {
       final kind = item['kind'] as String;
       if (kinds != null && !kinds.contains(kind)) continue;
+      // Trip kinds are flushed by TripProvider (idempotent client_event_id).
+      if (kind == 'trip_ping' || kind == 'trip_action') continue;
       final id = item['id'] as int;
       final payload = item['payload'] as Map<String, dynamic>;
       try {
@@ -489,6 +503,17 @@ class IncidentProvider extends ChangeNotifier {
           await _api.post('/groups/$groupId/messages', {
             'content': payload['content'],
           });
+        } else if (kind == 'position') {
+          await _api.put('/auth/position', {
+            'lat': payload['lat'],
+            'lng': payload['lng'],
+          });
+        } else if (kind == 'checkin') {
+          await _api.post('/checkin', payload);
+        } else if (kind == 'sos_cancel') {
+          await _api.post('/sos/cancel', {});
+        } else if (kind == 'sos_live') {
+          await _api.post('/sos/live', payload);
         } else {
           continue;
         }
@@ -496,7 +521,6 @@ class IncidentProvider extends ChangeNotifier {
         sent++;
       } catch (_) {
         await _cache.bumpPendingAttempt(id);
-        // Continue other kinds; stop only for same kind chain via backoff
         continue;
       }
     }
@@ -512,7 +536,18 @@ class IncidentProvider extends ChangeNotifier {
     try {
       await _api.post('/sos/cancel', {});
       return true;
-    } catch (_) {
+    } catch (e) {
+      final isNet = e is SocketException || e is http.ClientException;
+      if (isNet || (e is ApiException && e.statusCode >= 500)) {
+        try {
+          await _cache.enqueue('sos_cancel', {
+            'at': DateTime.now().toUtc().toIso8601String(),
+          });
+          _isOffline = true;
+          notifyListeners();
+          return true;
+        } catch (_) {}
+      }
       return false;
     }
   }

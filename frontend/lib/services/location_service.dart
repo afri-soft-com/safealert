@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'local_database.dart';
 
 class LocationService {
   static final LocationService _instance = LocationService._();
@@ -9,6 +10,7 @@ class LocationService {
   factory LocationService() => _instance;
 
   final ApiService _api = ApiService();
+  final LocalDatabase _offline = LocalDatabase();
   Timer? _timer;
   StreamSubscription<Position>? _circleStream;
   bool sharePresence = true;
@@ -154,7 +156,19 @@ class LocationService {
     try {
       await _api.put('/auth/position', {'lat': lat, 'lng': lng});
       await _cacheGoodPosition(lat, lng);
-    } catch (_) {}
+    } catch (_) {
+      // Circle / presence share: keep latest GPS for sync when back online.
+      if (force || _circleLiveForce || sharePresence) {
+        try {
+          await _offline.enqueueCoalesced('position', {
+            'lat': lat,
+            'lng': lng,
+            'at': DateTime.now().toUtc().toIso8601String(),
+          });
+          await _cacheGoodPosition(lat, lng);
+        } catch (_) {}
+      }
+    }
   }
 
   Future<void> syncCurrentPosition({bool force = false}) async {

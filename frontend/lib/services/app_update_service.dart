@@ -88,14 +88,24 @@ class AppUpdateService {
     final latest = _latestVersion;
     if (latest == null || latest.isEmpty) return;
     _dismissedForCurrentLatest = true;
+    _updateAvailable = false;
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_kDismissPrefsKey, latest);
+      // Stable dismiss key: marketing version + build (avoids sticky banner
+      // when display labels flip between "1.0.72" and "1.0.72 (100)").
+      final key = _dismissKey(latest, _latestBuild);
+      await prefs.setString(_kDismissPrefsKey, key);
       if (_latestBuild != null) {
         await prefs.setInt(_kDismissBuildPrefsKey, _latestBuild!);
       }
     } catch (_) {}
     _onStateChanged?.call();
+  }
+
+  static String _dismissKey(String latestLabel, int? build) {
+    final ver = latestLabel.split(' ').first.trim();
+    if (build != null && build > 0) return '$ver#$build';
+    return ver;
   }
 
   Future<void> check(BuildContext context, {bool force = false}) async {
@@ -188,14 +198,21 @@ class AppUpdateService {
   Future<void> _loadDismissState(String latest) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final sameVersion = prefs.getString(_kDismissPrefsKey) == latest;
+      final stored = prefs.getString(_kDismissPrefsKey) ?? '';
+      final expected = _dismissKey(latest, _latestBuild);
+      final legacyExact = stored == latest;
+      final sameTarget = stored == expected ||
+          legacyExact ||
+          stored == latest.split(' ').first.trim() ||
+          (stored.contains('#') &&
+              stored.split('#').first == expected.split('#').first &&
+              _latestBuild != null &&
+              stored.endsWith('#$_latestBuild'));
       final dismissedBuild = prefs.getInt(_kDismissBuildPrefsKey);
-      // If we track a build number, require an exact dismissed build match.
-      // (A null dismissed build must NOT hide newer build-only soft updates.)
       final sameBuild = _latestBuild == null
           ? true
-          : dismissedBuild != null && dismissedBuild == _latestBuild;
-      _dismissedForCurrentLatest = sameVersion && sameBuild;
+          : dismissedBuild == null || dismissedBuild == _latestBuild;
+      _dismissedForCurrentLatest = sameTarget && sameBuild;
     } catch (_) {
       _dismissedForCurrentLatest = false;
     }
@@ -426,11 +443,12 @@ class AppUpdateBanner extends StatelessWidget {
       elevation: 2,
       color: AppColors.tealDeep,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(16, 10 + topInset, 8, 12),
+        padding: EdgeInsets.fromLTRB(12, 10 + topInset, 4, 10),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Icon(Icons.system_update_alt, color: Colors.white, size: 22),
-            const SizedBox(width: 12),
+            const Icon(Icons.system_update_alt, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -438,6 +456,8 @@ class AppUpdateBanner extends StatelessWidget {
                 children: [
                   const Text(
                     'Nouvelle version disponible',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -447,6 +467,8 @@ class AppUpdateBanner extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     fromTo,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Color(0xFFB8E0D2),
                       fontSize: 11,
@@ -458,6 +480,11 @@ class AppUpdateBanner extends StatelessWidget {
             ),
             TextButton(
               onPressed: onUpdate,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 36),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               child: const Text(
                 'Mettre à jour',
                 style: TextStyle(
@@ -470,6 +497,7 @@ class AppUpdateBanner extends StatelessWidget {
             IconButton(
               tooltip: 'Plus tard',
               onPressed: onDismiss,
+              visualDensity: VisualDensity.compact,
               icon: const Icon(Icons.close, color: Colors.white70, size: 18),
             ),
           ],

@@ -134,6 +134,16 @@ class LocalDatabase {
     });
   }
 
+  /// Keep only the latest item for [kind] (e.g. live position while offline).
+  Future<int> enqueueCoalesced(String kind, Map<String, dynamic> payload) async {
+    final existing = await listPending(kind: kind);
+    for (final row in existing) {
+      final id = row['id'];
+      if (id is int) await removePending(id);
+    }
+    return enqueue(kind, payload);
+  }
+
   Future<List<Map<String, dynamic>>> listPendingSos() async {
     final all = await listPending(kind: 'sos');
     return all;
