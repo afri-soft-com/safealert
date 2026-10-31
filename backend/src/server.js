@@ -10,6 +10,7 @@ const { apiLimiter } = require("./middleware/rateLimit");
 const { maintenanceGate } = require("./middleware/maintenance");
 const { pool } = require("./config/database");
 const { initFCM, isFcmConfigured } = require("./config/firebase");
+const { isApnsConfigured } = require("./config/apns");
 const { initSMS, isSMSConfigured } = require("./services/sms");
 const { initRedis, isRedisReady } = require("./config/redis");
 const { socketRedisAdapter } = require("./config/features");
@@ -406,6 +407,7 @@ function startBackgroundJobs() {
 
 async function bootstrap() {
   initFCM();
+  isApnsConfigured();
   initSMS();
   await initRedis().catch((err) => console.warn("Redis init skipped:", err.message));
   await attachSocketRedisAdapter();

@@ -442,6 +442,11 @@ const migrate = async () => {
         WHERE revoked_at IS NULL;
     `);
 
+    // Native APNs device token (iOS killed-state push without Firebase APNs key).
+    await client.query(`
+      ALTER TABLE user_devices ADD COLUMN IF NOT EXISTS apns_token TEXT;
+    `);
+
     // Widen group_alerts type CHECK for utility outage types
     await client.query(`
       ALTER TABLE group_alerts DROP CONSTRAINT IF EXISTS group_alerts_type_check;

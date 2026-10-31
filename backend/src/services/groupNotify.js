@@ -1,11 +1,9 @@
 const { pool } = require("../config/database");
-const { sendPush } = require("../config/firebase");
+const { sendPushToUser } = require("./pushTargets");
 const { sendSMS } = require("./sms");
 
-/**
- * Active FCM tokens for group members (users.fcm_token ∪ user_devices).
- */
-const getGroupMemberTokens = async (groupId, excludeUserId = null) => {
+/** Distinct member user ids (for push via sendPushToUser → FCM and/or APNs). */
+const getGroupMemberUserIds = async (groupId, excludeUserId = null) => {
   const params = [groupId];
   let excludeClause = "";
   if (excludeUserId) {
@@ -13,25 +11,17 @@ const getGroupMemberTokens = async (groupId, excludeUserId = null) => {
     params.push(String(excludeUserId));
   }
   const result = await pool.query(
-    `SELECT u.id, u.pseudo, t.fcm_token
+    `SELECT DISTINCT u.id, u.pseudo
      FROM group_members gm
      JOIN users u ON u.id = gm.user_id
-     JOIN (
-       SELECT id AS user_id, fcm_token
-         FROM users
-        WHERE fcm_token IS NOT NULL AND length(trim(fcm_token)) > 0
-       UNION
-       SELECT user_id, fcm_token
-         FROM user_devices
-        WHERE revoked_at IS NULL
-          AND fcm_token IS NOT NULL
-          AND length(trim(fcm_token)) > 0
-     ) t ON t.user_id = u.id
      WHERE gm.group_id = $1 ${excludeClause}`,
     params
   );
   return result.rows;
 };
+
+/** @deprecated kept for tests — prefer getGroupMemberUserIds */
+const getGroupMemberTokens = getGroupMemberUserIds;
 
 /** Members (with phone) for SMS / socket — even without FCM. */
 const getGroupMembersContactable = async (groupId, excludeUserId = null) => {
@@ -59,15 +49,15 @@ const notifyGroupMembers = async (
   io = null,
   { sms = false } = {}
 ) => {
-  const tokenRows = await getGroupMemberTokens(groupId, excludeUserId);
+  const members = await getGroupMemberUserIds(groupId, excludeUserId);
   let pushNotified = 0;
-  const seenTokens = new Set();
-  for (const member of tokenRows) {
-    const token = member.fcm_token;
-    if (!token || seenTokens.has(token)) continue;
-    seenTokens.add(token);
-    const ok = await sendPush(token, { notification, data });
-    if (ok) pushNotified += 1;
+  const seenUsers = new Set();
+  for (const member of members) {
+    const uid = member.id;
+    if (!uid || seenUsers.has(uid)) continue;
+    seenUsers.add(uid);
+    const n = await sendPushToUser(uid, { notification, data });
+    if (n > 0) pushNotified += 1;
   }
 
   let smsNotified = 0;

@@ -11,7 +11,7 @@ Guide pas à pas pour activer les notifications push (FCM) sur Android et le bac
 | Projet Firebase | `safealert-be940` (remplace l’ancien `safealert-prod`) |
 | Package Android | `com.safealert.safealert` |
 | `google-services.json` | Présent dans le dépôt : `frontend/android/app/google-services.json` |
-| `firebase_options.dart` | Présent (`frontend/lib/firebase_options.dart`) — Android/web = `safealert-be940` ; iOS à migrer |
+| `firebase_options.dart` | Présent — Android / web / **iOS** = `safealert-be940` |
 | Plugin Gradle `google-services` | Configuré (`settings.gradle.kts` + `app/build.gradle.kts`) |
 | Backend Admin SDK | `backend/src/config/firebase.js` — **HTTP v1 via compte de service** |
 | Vars Render `FCM_*` | `FCM_PROJECT_ID` / `FCM_CLIENT_EMAIL` / `FCM_PRIVATE_KEY` sur `safealert-api` |
@@ -97,21 +97,36 @@ Si l'ancienne app iOS utilisait `com.safealert.safealert`, ajoutez une **nouvell
 
 | Fichier | Rôle |
 |---------|------|
-| `frontend/ios/Runner/GoogleService-Info.plist` | Config Firebase iOS (`safealert-prod`) |
-| `frontend/lib/firebase_options.dart` | Section `ios` complétée |
+| `frontend/ios/Runner/GoogleService-Info.plist` | Config Firebase iOS (`safealert-be940`, bundle `com.kakiranya.safealert`) |
+| `frontend/lib/firebase_options.dart` | Section `ios` = `safealert-be940` |
 | `frontend/ios/Podfile` | CocoaPods (Firebase via plugins Flutter) |
 | `frontend/ios/Runner/Runner.entitlements` | Push Notifications (`aps-environment: development`) |
 | `frontend/ios/Runner/Info.plist` | `UIBackgroundModes` : `remote-notification` |
 
 > **Attention :** un `GoogleService-Info.plist` trouvé dans `Downloads` peut appartenir à un **autre projet**. Vérifiez `BUNDLE_ID` = `com.kakiranya.safealert`.
 
-### Étapes manuelles restantes (Apple + push prod)
+### Push iOS app fermée (APNs direct)
+
+Le backend envoie aussi via **APNs HTTP/2** (clé `.p8`) dès qu’un `apns_token` est enregistré
+par l’app. Cela ne dépend **pas** de l’upload de la clé dans Firebase Console.
+
+Secrets GitHub / Render :
+
+| Variable | Exemple |
+|----------|---------|
+| `APNS_KEY_ID` | `WWU5SZZ38C` |
+| `APNS_TEAM_ID` | `SW53MG3W9P` |
+| `APNS_KEY_P8` | contenu PEM du `.p8` (avec `\n`) |
+| `APNS_BUNDLE_ID` | `com.kakiranya.safealert` |
+| `APNS_PRODUCTION` | `true` (TestFlight / App Store) |
+
+Optionnel : uploader la même clé sur Firebase **`safealert-be940`** → Cloud Messaging → Apple
+(pour que FCM iOS marche aussi sans `apns_token`).
 
 1. **Compte Apple Developer** — certificat / provisioning pour `com.kakiranya.safealert`
 2. **Clé APNs** (.p8) — [Apple Developer → Keys](https://developer.apple.com/account/resources/authkeys/list)
-3. **Firebase Console** → Paramètres → **Cloud Messaging** → **Configuration Apple** → téléverser la clé APNs (Key ID, Team ID, .p8)
-4. **Xcode** (Mac) → target Runner → **Signing & Capabilities** → Push Notifications + Background Modes (*Remote notifications*)
-5. **Release / TestFlight** : passer `aps-environment` à `production` dans `Runner.entitlements`
+3. **Xcode** → Push Notifications + Background Modes (*Remote notifications*)
+4. Rebuild / réinstaller l’app iOS (projet `safealert-be940` + enregistrement FCM+APNs)
 
 ---
 

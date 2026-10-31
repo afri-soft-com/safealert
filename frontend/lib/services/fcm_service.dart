@@ -190,6 +190,18 @@ class FCMService extends ChangeNotifier {
 
       await restorePersistedPending();
 
+      // iOS: FCM token is useless until APNs registration completes. Without
+      // this wait, getToken() often returns null or a token that never receives
+      // pushes when the app is killed.
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        final apns = await _waitForApnsToken(messaging);
+        debugPrint(
+          apns == null
+              ? 'FCM: APNs token still null after wait — push may fail when killed'
+              : 'FCM: APNs token ready (${apns.length} chars)',
+        );
+      }
+
       _token = await messaging.getToken();
       if (_token == null) {
         debugPrint('FCM: no token — push disabled');
@@ -199,7 +211,7 @@ class FCMService extends ChangeNotifier {
       }
 
       _available = true;
-      debugPrint('FCM initialized');
+      debugPrint('FCM initialized tokenPrefix=${_token!.substring(0, 12)}…');
 
       messaging.onTokenRefresh.listen((t) {
         _token = t;
@@ -236,6 +248,19 @@ class FCMService extends ChangeNotifier {
     } catch (e) {
       debugPrint('FCM not configured — push notifications disabled ($e)');
     }
+  }
+
+  Future<String?> _waitForApnsToken(FirebaseMessaging messaging) async {
+    for (var i = 0; i < 15; i++) {
+      try {
+        final t = await messaging.getAPNSToken();
+        if (t != null && t.isNotEmpty) return t;
+      } catch (e) {
+        debugPrint('FCM getAPNSToken attempt $i failed: $e');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    return null;
   }
 
   Future<void> _captureInitialMessage(FirebaseMessaging messaging) async {
@@ -297,12 +322,25 @@ class FCMService extends ChangeNotifier {
       await _api.init();
       if (!_api.hasToken) return;
       final deviceId = await _api.ensureDeviceId();
+      String? apnsToken;
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        try {
+          apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+        } catch (e) {
+          debugPrint('FCM upload: getAPNSToken failed: $e');
+        }
+      }
       await _api.put('/auth/fcm-token', {
         'fcm_token': _token!,
         'device_id': deviceId,
         'device_label': defaultTargetPlatform.name,
+        if (apnsToken != null && apnsToken.isNotEmpty) 'apns_token': apnsToken,
       });
-      debugPrint('FCM token registered with API');
+      debugPrint(
+        apnsToken == null || apnsToken.isEmpty
+            ? 'FCM token registered with API'
+            : 'FCM+APNs tokens registered with API',
+      );
     } catch (e) {
       debugPrint('FCM token upload failed: $e');
     }

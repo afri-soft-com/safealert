@@ -11,7 +11,7 @@ on:
       app_latest_version:
         description: APP_LATEST_VERSION
         required: true
-        default: "1.0.71"
+        default: "1.0.72"
       admin_web_version:
         description: ADMIN_WEB_VERSION
         required: true
@@ -44,7 +44,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           RESTORE_JWT: ${{ inputs.restore_jwt }}
           APP_LATEST_VERSION: ${{ inputs.app_latest_version }}
-          APP_LATEST_BUILD: "98"
+          APP_LATEST_BUILD: "100"
           ADMIN_WEB_VERSION: ${{ inputs.admin_web_version }}
           APPLE_CLIENT_IDS: ${{ inputs.apple_client_ids }}
           GOOGLE_CLIENT_ID: ${{ inputs.google_client_id }}
@@ -57,6 +57,11 @@ jobs:
           FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
           FCM_CLIENT_EMAIL: ${{ secrets.FCM_CLIENT_EMAIL }}
           FCM_PRIVATE_KEY: ${{ secrets.FCM_PRIVATE_KEY }}
+          APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+          APNS_TEAM_ID: ${{ secrets.APNS_TEAM_ID }}
+          APNS_KEY_P8: ${{ secrets.APNS_KEY_P8 }}
+          APNS_BUNDLE_ID: ${{ secrets.APNS_BUNDLE_ID }}
+          APNS_PRODUCTION: ${{ secrets.APNS_PRODUCTION }}
         run: |
           set -euo pipefail
           put_key() {
@@ -83,7 +88,7 @@ jobs:
             put_key JWT_SECRET "$JWT_SECRET"
           fi
           put_key APP_LATEST_VERSION "$APP_LATEST_VERSION"
-          put_key APP_LATEST_BUILD "${APP_LATEST_BUILD:-98}"
+          put_key APP_LATEST_BUILD "${APP_LATEST_BUILD:-100}"
           put_key ADMIN_WEB_VERSION "$ADMIN_WEB_VERSION"
           put_key APPLE_CLIENT_IDS "$APPLE_CLIENT_IDS"
           put_key GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID"
@@ -112,6 +117,17 @@ jobs:
             put_key FCM_PRIVATE_KEY "$FCM_PRIVATE_KEY"
           else
             echo "WARN: FCM_* GitHub secrets missing — SOS push will stay disabled until set (see docs/FIREBASE_SETUP.md)"
+          fi
+
+          # Direct APNs (iOS killed-state — does not require Firebase Console APNs key)
+          if [ -n "${APNS_KEY_ID:-}" ] && [ -n "${APNS_TEAM_ID:-}" ] && [ -n "${APNS_KEY_P8:-}" ]; then
+            put_key APNS_KEY_ID "$APNS_KEY_ID"
+            put_key APNS_TEAM_ID "$APNS_TEAM_ID"
+            put_key APNS_KEY_P8 "$APNS_KEY_P8"
+            put_key APNS_BUNDLE_ID "${APNS_BUNDLE_ID:-com.kakiranya.safealert}"
+            put_key APNS_PRODUCTION "${APNS_PRODUCTION:-true}"
+          else
+            echo "WARN: APNS_* GitHub secrets missing — iOS closed-app push may fail until set"
           fi
 
       - name: List env keys (names only)

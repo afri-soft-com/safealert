@@ -706,8 +706,12 @@ const updatePosition = async (req, res) => {
 };
 
 const updateFCMToken = async (req, res) => {
-  const { fcm_token, device_id, device_label } = req.body;
+  const { fcm_token, device_id, device_label, apns_token } = req.body;
   if (!fcm_token) return res.status(400).json({ error: "FCM token requis" });
+  const apns =
+    typeof apns_token === "string" && apns_token.trim().length >= 32
+      ? apns_token.trim().replace(/\s/g, "")
+      : null;
   try {
     await pool.query("UPDATE users SET fcm_token = $1, updated_at = NOW() WHERE id = $2", [
       fcm_token,
@@ -717,21 +721,38 @@ const updateFCMToken = async (req, res) => {
     const deviceId = device_id || req.deviceId || crypto.randomUUID();
     try {
       await pool.query(
-        `INSERT INTO user_devices (user_id, device_id, device_label, session_jti, fcm_token, last_seen_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())
+        `INSERT INTO user_devices (user_id, device_id, device_label, session_jti, fcm_token, apns_token, last_seen_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())
          ON CONFLICT (user_id, device_id) DO UPDATE SET
            fcm_token = EXCLUDED.fcm_token,
+           apns_token = COALESCE(EXCLUDED.apns_token, user_devices.apns_token),
            device_label = COALESCE(EXCLUDED.device_label, user_devices.device_label),
            session_jti = COALESCE(EXCLUDED.session_jti, user_devices.session_jti),
            last_seen_at = NOW(),
            revoked_at = NULL`,
-        [req.userId, deviceId, device_label || null, req.sessionJti || null, fcm_token]
+        [req.userId, deviceId, device_label || null, req.sessionJti || null, fcm_token, apns]
       );
     } catch (devErr) {
+      // Pre-migrate DBs without apns_token: upsert FCM only.
       console.error("updateFCMToken device upsert:", devErr.message);
+      try {
+        await pool.query(
+          `INSERT INTO user_devices (user_id, device_id, device_label, session_jti, fcm_token, last_seen_at)
+           VALUES ($1, $2, $3, $4, $5, NOW())
+           ON CONFLICT (user_id, device_id) DO UPDATE SET
+             fcm_token = EXCLUDED.fcm_token,
+             device_label = COALESCE(EXCLUDED.device_label, user_devices.device_label),
+             session_jti = COALESCE(EXCLUDED.session_jti, user_devices.session_jti),
+             last_seen_at = NOW(),
+             revoked_at = NULL`,
+          [req.userId, deviceId, device_label || null, req.sessionJti || null, fcm_token]
+        );
+      } catch (fallbackErr) {
+        console.error("updateFCMToken device fallback:", fallbackErr.message);
+      }
     }
 
-    return res.json({ message: "Token mis à jour", deviceId });
+    return res.json({ message: "Token mis à jour", deviceId, apns: Boolean(apns) });
   } catch (err) {
     console.error("updateFCMToken error:", err);
     return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });

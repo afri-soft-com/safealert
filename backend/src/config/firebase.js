@@ -93,25 +93,26 @@ const sendPush = async (token, payload) => {
           // 10 = immediate delivery (required for audible alerts when app is killed).
           "apns-priority": "10",
           "apns-push-type": "alert",
+          // Keep briefly if device is offline.
+          "apns-expiration": String(Math.floor(Date.now() / 1000) + 3600),
         },
         payload: {
           aps: {
-            // Explicit alert ensures iOS shows + plays sound even if app is terminated.
+            // Visible banner + sound when app is terminated. Do NOT set
+            // content-available here — silent wakes are dropped after force-quit
+            // and can interfere with alert delivery on some iOS versions.
             alert: payload.notification
               ? {
-                  title: payload.notification.title || "",
+                  title: payload.notification.title || "SafeAlert",
                   body: payload.notification.body || "",
                 }
-              : undefined,
+              : {
+                  title: data?.title || "SafeAlert",
+                  body: data?.body || "",
+                },
             sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
             badge: 1,
-            ...(isSos
-              ? {
-                  "interruption-level": "time-sensitive",
-                  // Wake app briefly when possible (sound still comes from aps.sound).
-                  "content-available": 1,
-                }
-              : {}),
+            "thread-id": isSos ? "safealert-sos" : "safealert",
           },
         },
       },

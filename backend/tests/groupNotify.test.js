@@ -1,7 +1,7 @@
 const path = require("path");
 
 const mockQuery = vi.fn();
-const mockSendPush = vi.fn().mockResolvedValue("msg-1");
+const mockSendPushToUser = vi.fn().mockResolvedValue(1);
 const mockSendSMS = vi.fn().mockResolvedValue(true);
 
 const dbPath = path.resolve(__dirname, "../src/config/database.js");
@@ -12,12 +12,12 @@ require.cache[dbPath] = {
   exports: { pool: { query: mockQuery } },
 };
 
-const firebasePath = path.resolve(__dirname, "../src/config/firebase.js");
-require.cache[firebasePath] = {
-  id: firebasePath,
-  filename: firebasePath,
+const pushTargetsPath = path.resolve(__dirname, "../src/services/pushTargets.js");
+require.cache[pushTargetsPath] = {
+  id: pushTargetsPath,
+  filename: pushTargetsPath,
   loaded: true,
-  exports: { sendPush: mockSendPush },
+  exports: { sendPushToUser: mockSendPushToUser },
 };
 
 const smsPath = path.resolve(__dirname, "../src/services/sms.js");
@@ -41,7 +41,7 @@ const {
 describe("notifyUserGroupsOnSOS", () => {
   beforeEach(() => {
     mockQuery.mockReset();
-    mockSendPush.mockClear();
+    mockSendPushToUser.mockClear();
     mockSendSMS.mockClear();
   });
 
@@ -62,8 +62,8 @@ describe("notifyUserGroupsOnSOS", () => {
         rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000000" }],
       }) // otherMembers count
       .mockResolvedValueOnce({
-        rows: [{ id: "u2", fcm_token: "tok", pseudo: "Bob" }],
-      }) // tokens
+        rows: [{ id: "u2", pseudo: "Bob" }],
+      }) // member user ids for push
       .mockResolvedValueOnce({
         rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000000" }],
       }); // contactable for SMS
@@ -75,7 +75,7 @@ describe("notifyUserGroupsOnSOS", () => {
     expect(out.otherMembers).toBe(1);
     expect(out.pushNotified).toBe(1);
     expect(out.smsNotified).toBe(1);
-    expect(mockSendPush).toHaveBeenCalledTimes(1);
+    expect(mockSendPushToUser).toHaveBeenCalledTimes(1);
     expect(mockSendSMS).toHaveBeenCalledTimes(1);
   });
 
@@ -85,21 +85,21 @@ describe("notifyUserGroupsOnSOS", () => {
       .mockResolvedValueOnce({ rows: [{ id: "g1", name: "Voisins" }] })
       .mockResolvedValueOnce({ rows: [{ id: "a1" }] })
       .mockResolvedValueOnce({ rows: [] }) // otherMembers
-      .mockResolvedValueOnce({ rows: [] }) // no tokens
+      .mockResolvedValueOnce({ rows: [] }) // no members for push
       .mockResolvedValueOnce({ rows: [] }); // no phones
 
     const out = await notifyUserGroupsOnSOS("u1", -4.3, 15.3, "Alice");
     expect(out.alertsCreated).toBe(1);
     expect(out.alone).toBe(true);
     expect(out.pushNotified).toBe(0);
-    expect(mockSendPush).not.toHaveBeenCalled();
+    expect(mockSendPushToUser).not.toHaveBeenCalled();
   });
 });
 
 describe("notifyUserGroupsOnReport", () => {
   beforeEach(() => {
     mockQuery.mockReset();
-    mockSendPush.mockClear();
+    mockSendPushToUser.mockClear();
     mockSendSMS.mockClear();
   });
 
@@ -112,7 +112,7 @@ describe("notifyUserGroupsOnReport", () => {
         rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000001" }],
       }) // otherMembers
       .mockResolvedValueOnce({
-        rows: [{ id: "u2", fcm_token: "tok", pseudo: "Bob" }],
+        rows: [{ id: "u2", pseudo: "Bob" }],
       });
 
     const out = await notifyUserGroupsOnReport(
@@ -127,14 +127,14 @@ describe("notifyUserGroupsOnReport", () => {
     expect(out.alertsCreated).toBe(1);
     expect(out.pushNotified).toBe(1);
     expect(mockSendSMS).not.toHaveBeenCalled();
-    expect(mockSendPush.mock.calls[0][1].data.type).toBe("group_report");
+    expect(mockSendPushToUser.mock.calls[0][1].data.type).toBe("group_report");
   });
 });
 
 describe("notifyUserGroupsOnFalseAlarm / OnSafe", () => {
   beforeEach(() => {
     mockQuery.mockReset();
-    mockSendPush.mockClear();
+    mockSendPushToUser.mockClear();
     mockSendSMS.mockClear();
   });
 
@@ -147,7 +147,7 @@ describe("notifyUserGroupsOnFalseAlarm / OnSafe", () => {
         rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000002" }],
       })
       .mockResolvedValueOnce({
-        rows: [{ id: "u2", fcm_token: "tok", pseudo: "Bob" }],
+        rows: [{ id: "u2", pseudo: "Bob" }],
       })
       .mockResolvedValueOnce({
         rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000002" }],
@@ -164,7 +164,7 @@ describe("notifyUserGroupsOnFalseAlarm / OnSafe", () => {
     expect(out.alertsCreated).toBe(1);
     expect(out.pushNotified).toBe(1);
     expect(out.smsNotified).toBe(1);
-    expect(mockSendPush.mock.calls[0][1].data.type).toBe("group_false_alarm");
+    expect(mockSendPushToUser.mock.calls[0][1].data.type).toBe("group_false_alarm");
     expect(mockQuery.mock.calls[2][0]).toMatch(/INSERT INTO group_alerts/);
     expect(mockQuery.mock.calls[2][1][2]).toBe("info");
   });
@@ -178,7 +178,7 @@ describe("notifyUserGroupsOnFalseAlarm / OnSafe", () => {
         rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000003" }],
       })
       .mockResolvedValueOnce({
-        rows: [{ id: "u2", fcm_token: "tok", pseudo: "Bob" }],
+        rows: [{ id: "u2", pseudo: "Bob" }],
       })
       .mockResolvedValueOnce({
         rows: [{ id: "u2", pseudo: "Bob", phone: "+243810000003" }],
@@ -186,7 +186,7 @@ describe("notifyUserGroupsOnFalseAlarm / OnSafe", () => {
 
     const out = await notifyUserGroupsOnSafe("u1", -4.3, 15.3, "Alice");
     expect(out.alertsCreated).toBe(1);
-    expect(mockSendPush.mock.calls[0][1].data.type).toBe("group_safe");
+    expect(mockSendPushToUser.mock.calls[0][1].data.type).toBe("group_safe");
     expect(mockSendSMS).toHaveBeenCalled();
   });
 });

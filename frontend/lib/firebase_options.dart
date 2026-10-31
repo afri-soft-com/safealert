@@ -33,13 +33,13 @@ class DefaultFirebaseOptions {
     storageBucket: 'safealert-be940.firebasestorage.app',
   );
 
-  // iOS : encore l’ancien projet jusqu’à dépôt d’un GoogleService-Info.plist safealert-be940.
+  // iOS aligné sur safealert-be940 (même projet que le backend FCM / Android).
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyC8eWVdUmyxjdfwcLt5G-fxG4u8wcPWaMQ',
-    appId: '1:844603867770:ios:d22d977de1ee3f604ff1c3',
-    messagingSenderId: '844603867770',
-    projectId: 'safealert-prod',
-    storageBucket: 'safealert-prod.firebasestorage.app',
+    apiKey: 'AIzaSyDA1LkClrZfgFaWN3hOcexFF0oR6QAJo4M',
+    appId: '1:552870535150:ios:38fd4c3f1836a2305938ff',
+    messagingSenderId: '552870535150',
+    projectId: 'safealert-be940',
+    storageBucket: 'safealert-be940.firebasestorage.app',
     iosBundleId: 'com.kakiranya.safealert',
   );
 }
