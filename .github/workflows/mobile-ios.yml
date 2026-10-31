@@ -188,7 +188,8 @@ jobs:
             APP=$(find build/ios/archive -name 'Runner.app' -type d | head -n1 || true)
           fi
           echo "Checking CAF sounds in: ${APP:-missing}"
-          for f in safealert_siren.caf safealert_beacon.caf safealert_pulse.caf; do
+          for f in safealert_siren.wav safealert_beacon.wav safealert_pulse.wav \
+                   safealert_siren.caf safealert_beacon.caf safealert_pulse.caf; do
             if [ -n "$APP" ] && [ -f "$APP/$f" ]; then
               ls -la "$APP/$f"
             else

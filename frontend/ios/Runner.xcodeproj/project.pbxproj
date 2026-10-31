@@ -17,6 +17,9 @@
 		A1B2C3D41E8E86230040F401 /* safealert_siren.caf in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D41E8E86230040F411 /* safealert_siren.caf */; };
 		A1B2C3D41E8E86230040F402 /* safealert_pulse.caf in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D41E8E86230040F412 /* safealert_pulse.caf */; };
 		A1B2C3D41E8E86230040F403 /* safealert_beacon.caf in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D41E8E86230040F413 /* safealert_beacon.caf */; };
+		A1B2C3D41E8E86230040F404 /* safealert_siren.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D41E8E86230040F414 /* safealert_siren.wav */; };
+		A1B2C3D41E8E86230040F405 /* safealert_pulse.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D41E8E86230040F415 /* safealert_pulse.wav */; };
+		A1B2C3D41E8E86230040F406 /* safealert_beacon.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D41E8E86230040F416 /* safealert_beacon.wav */; };
 		F1B2C3D51CF9000F007C117E /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = F1B2C3D41CF9000F007C117E /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
@@ -63,6 +66,9 @@
 		A1B2C3D41E8E86230040F411 /* safealert_siren.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = safealert_siren.caf; sourceTree = "<group>"; };
 		A1B2C3D41E8E86230040F412 /* safealert_pulse.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = safealert_pulse.caf; sourceTree = "<group>"; };
 		A1B2C3D41E8E86230040F413 /* safealert_beacon.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = safealert_beacon.caf; sourceTree = "<group>"; };
+		A1B2C3D41E8E86230040F414 /* safealert_siren.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = safealert_siren.wav; sourceTree = "<group>"; };
+		A1B2C3D41E8E86230040F415 /* safealert_pulse.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = safealert_pulse.wav; sourceTree = "<group>"; };
+		A1B2C3D41E8E86230040F416 /* safealert_beacon.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = safealert_beacon.wav; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -125,6 +131,9 @@
 				A1B2C3D41E8E86230040F411 /* safealert_siren.caf */,
 				A1B2C3D41E8E86230040F412 /* safealert_pulse.caf */,
 				A1B2C3D41E8E86230040F413 /* safealert_beacon.caf */,
+				A1B2C3D41E8E86230040F414 /* safealert_siren.wav */,
+				A1B2C3D41E8E86230040F415 /* safealert_pulse.wav */,
+				A1B2C3D41E8E86230040F416 /* safealert_beacon.wav */,
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
@@ -232,6 +241,9 @@
 				A1B2C3D41E8E86230040F401 /* safealert_siren.caf in Resources */,
 				A1B2C3D41E8E86230040F402 /* safealert_pulse.caf in Resources */,
 				A1B2C3D41E8E86230040F403 /* safealert_beacon.caf in Resources */,
+				A1B2C3D41E8E86230040F404 /* safealert_siren.wav in Resources */,
+				A1B2C3D41E8E86230040F405 /* safealert_pulse.wav in Resources */,
+				A1B2C3D41E8E86230040F406 /* safealert_beacon.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

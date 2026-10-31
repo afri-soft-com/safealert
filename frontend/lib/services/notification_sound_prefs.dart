@@ -56,15 +56,15 @@ extension SafeAlertSoundIdX on SafeAlertSoundId {
     }
   }
 
-  /// iOS bundle sound for local + remote notifications.
+  /// iOS bundle / Library/Sounds name for local + remote notifications.
   String get iosSoundFile {
     switch (this) {
       case SafeAlertSoundId.siren:
-        return 'safealert_siren.caf';
+        return 'safealert_siren.wav';
       case SafeAlertSoundId.pulse:
-        return 'safealert_pulse.caf';
+        return 'safealert_pulse.wav';
       case SafeAlertSoundId.beacon:
-        return 'safealert_beacon.caf';
+        return 'safealert_beacon.wav';
     }
   }
 

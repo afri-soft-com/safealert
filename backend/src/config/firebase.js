@@ -24,9 +24,9 @@ const SOS_CHANNEL_ID_LEGACY = "sos_alerts";
 const SOS_CHANNEL_ID_V2 = "safealert_sos_siren_v2";
 const DEFAULT_CHANNEL_ID = "safealert_general_v2";
 const SOS_SOUND_ANDROID = "safealert_siren";
-const SOS_SOUND_IOS = "safealert_siren.caf";
+const SOS_SOUND_IOS = "safealert_siren.wav";
 const DEFAULT_SOUND_ANDROID = "safealert_beacon";
-const DEFAULT_SOUND_IOS = "safealert_beacon.caf";
+const DEFAULT_SOUND_IOS = "safealert_beacon.wav";
 
 const initFCM = () => {
   const projectId = process.env.FCM_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
@@ -115,12 +115,11 @@ const sendPush = async (token, payload) => {
                   title: data?.title || "SafeAlert",
                   body: data?.body || "",
                 },
-            // Bundle file Runner/safealert_*.caf — must be in the IPA main bundle.
+            // Bundle / Library/Sounds file — must match exactly (wav preferred).
             sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
             badge: 1,
             "thread-id": isSos ? "safealert-sos" : "safealert",
             "interruption-level": isSos ? "time-sensitive" : "active",
-            "relevance-score": isSos ? 1 : 0.5,
           },
         },
       },

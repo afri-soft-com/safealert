@@ -23,8 +23,9 @@ const SOS_PUSH_TYPES = new Set([
   "safety_ping_ask",
   "safety_ping_missed",
 ]);
-const SOS_SOUND_IOS = "safealert_siren.caf";
-const DEFAULT_SOUND_IOS = "safealert_beacon.caf";
+// Prefer .wav (also seeded into Library/Sounds at runtime). .caf remains in the IPA as fallback.
+const SOS_SOUND_IOS = "safealert_siren.wav";
+const DEFAULT_SOUND_IOS = "safealert_beacon.wav";
 // Keep in sync with firebase.js channel naming for docs only (APNs has no channels).
 
 let cachedJwt = null;
@@ -152,9 +153,7 @@ const buildApsBody = (payload) => {
       sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
       badge: 1,
       "thread-id": isSos ? "safealert-sos" : "safealert",
-      // Demotes to active without entitlement — still helps Focus when entitlement exists.
       "interruption-level": isSos ? "time-sensitive" : "active",
-      "relevance-score": isSos ? 1 : 0.5,
     },
     ...pickApnsData(data),
   };

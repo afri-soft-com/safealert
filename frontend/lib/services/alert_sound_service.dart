@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'notification_sound_prefs.dart';
 
@@ -91,7 +94,9 @@ class AlertSoundService {
       } catch (_) {}
 
       await _ensureAndroidChannels();
-      await _configureAudioSession();
+      await _seedIosLibrarySounds();
+      // Do not activate playback session at idle — it blocks APNs alert sounds
+      // while the app is backgrounded. Activate only in playSosAlert / preview.
 
       await _player.setReleaseMode(ReleaseMode.stop);
       await _player.setVolume(1.0);
@@ -102,6 +107,31 @@ class AlertSoundService {
       );
     } catch (e) {
       debugPrint('AlertSoundService init failed: $e');
+    }
+  }
+
+  /// Copy branded WAVs into Library/Sounds so APNs can resolve them even if
+  /// a given IPA missed a Copy Bundle Resources entry.
+  Future<void> _seedIosLibrarySounds() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return;
+    try {
+      final library = await getLibraryDirectory();
+      final soundsDir = Directory('${library.path}/Sounds');
+      if (!await soundsDir.exists()) {
+        await soundsDir.create(recursive: true);
+      }
+      for (final id in SafeAlertSoundId.values) {
+        final out = File('${soundsDir.path}/${id.iosSoundFile}');
+        if (await out.exists() && await out.length() > 1000) continue;
+        final data = await rootBundle.load('assets/${id.assetPath}');
+        await out.writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+          flush: true,
+        );
+        debugPrint('AlertSoundService seeded ${out.path}');
+      }
+    } catch (e) {
+      debugPrint('AlertSoundService seed Library/Sounds failed: $e');
     }
   }
 
@@ -120,6 +150,13 @@ class AlertSoundService {
     } catch (e) {
       debugPrint('AlertSoundService audio session: $e');
     }
+  }
+
+  /// Release playback focus so system notification sounds can play.
+  Future<void> releaseAudioSession() async {
+    try {
+      await _player.stop();
+    } catch (_) {}
   }
 
   Future<void> _ensureAndroidChannels() async {

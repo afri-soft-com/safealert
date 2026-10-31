@@ -10,11 +10,13 @@ import UserNotifications
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
-    // Playback category so in-app SOS siren ignores the mute switch.
+
+    // Category only — do NOT setActive(true) here. An active .playback session
+    // while the app is backgrounded suppresses APNs alert sounds (banner OK,
+    // silence). Activate only when playing an in-app SOS via audioplayers.
     do {
       let session = AVAudioSession.sharedInstance()
       try session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
-      try session.setActive(true, options: [])
     } catch {
       NSLog("SafeAlert AVAudioSession: \(error.localizedDescription)")
     }
@@ -28,6 +30,19 @@ import UserNotifications
     let ok = super.application(application, didFinishLaunchingWithOptions: launchOptions)
     application.registerForRemoteNotifications()
     return ok
+  }
+
+  override func applicationDidEnterBackground(_ application: UIApplication) {
+    // Free the audio session so the system can play remote-notification sounds.
+    do {
+      try AVAudioSession.sharedInstance().setActive(
+        false,
+        options: [.notifyOthersOnDeactivation]
+      )
+    } catch {
+      NSLog("SafeAlert AVAudioSession deactivate: \(error.localizedDescription)")
+    }
+    super.applicationDidEnterBackground(application)
   }
 
   override func application(

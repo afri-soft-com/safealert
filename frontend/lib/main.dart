@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app_links/app_links.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -57,6 +59,7 @@ import 'screens/fake_call_screen.dart';
 import 'screens/live_circles_screen.dart';
 import 'services/volume_sos_service.dart';
 import 'services/shake_sos_service.dart';
+import 'services/alert_sound_service.dart';
 import 'services/fcm_service.dart';
 import 'services/in_app_alert_service.dart';
 import 'services/app_update_service.dart';
@@ -401,6 +404,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!mounted) return;
+    // Free AVAudioSession so APNs can play alert sounds while backgrounded.
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      unawaited(AlertSoundService().releaseAudioSession());
+    }
     // Closing / backgrounding the app must NOT force the PIN screen.
     // PIN is required only after explicit « Verrouiller » (persisted flag).
     if (state == AppLifecycleState.resumed) {
