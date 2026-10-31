@@ -108,47 +108,36 @@ const stringifyData = (data) => {
   return out;
 };
 
-/**
- * @param {string} deviceToken hex APNs device token
- * @param {{ notification?: {title?:string,body?:string}, data?: object }} payload
- */
-const sendApns = (deviceToken, payload) =>
+const buildApsBody = (payload) => {
+  const data = stringifyData({
+    ...(payload.data || {}),
+    title: payload.notification?.title || payload.data?.title,
+    body: payload.notification?.body || payload.data?.body,
+  });
+  const isSos = data?.type && SOS_PUSH_TYPES.has(data.type);
+  const title = payload.notification?.title || data.title || "SafeAlert";
+  const body = payload.notification?.body || data.body || "";
+  return {
+    aps: {
+      alert: { title, body },
+      sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
+      badge: 1,
+      "thread-id": isSos ? "safealert-sos" : "safealert",
+      // Use "active" until Time Sensitive entitlement is on the App ID —
+      // "time-sensitive" without entitlement can be dropped by APNs.
+      "interruption-level": "active",
+    },
+    ...data,
+  };
+};
+
+const sendApnsToHost = (deviceToken, apsBody, production) =>
   new Promise((resolve) => {
-    if (!isApnsConfigured()) {
-      resolve(null);
-      return;
-    }
-    const token = String(deviceToken || "")
-      .trim()
-      .replace(/\s/g, "");
-    if (!token || token.length < 32) {
-      resolve(null);
-      return;
-    }
-
-    const data = stringifyData({
-      ...(payload.data || {}),
-      title: payload.notification?.title || payload.data?.title,
-      body: payload.notification?.body || payload.data?.body,
-    });
-    const isSos = data?.type && SOS_PUSH_TYPES.has(data.type);
-    const title =
-      payload.notification?.title || data.title || "SafeAlert";
-    const body = payload.notification?.body || data.body || "";
-
-    const apsBody = {
-      aps: {
-        alert: { title, body },
-        sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
-        badge: 1,
-        "thread-id": isSos ? "safealert-sos" : "safealert",
-        "interruption-level": isSos ? "time-sensitive" : "active",
-      },
-      ...data,
-    };
-
-    const host = isProduction() ? "api.push.apple.com" : "api.sandbox.push.apple.com";
+    const host = production
+      ? "api.push.apple.com"
+      : "api.sandbox.push.apple.com";
     let settled = false;
+    let client;
     const finish = (val) => {
       if (settled) return;
       settled = true;
@@ -160,23 +149,22 @@ const sendApns = (deviceToken, payload) =>
       resolve(val);
     };
 
-    let client;
     try {
       client = http2.connect(`https://${host}`);
     } catch (e) {
       logError("APNs connect error:", e.message);
-      resolve(null);
+      resolve({ ok: false, status: 0, reason: e.message, host });
       return;
     }
 
     client.on("error", (e) => {
       logError("APNs session error:", e.message);
-      finish(null);
+      finish({ ok: false, status: 0, reason: e.message, host });
     });
 
     const req = client.request({
       ":method": "POST",
-      ":path": `/3/device/${token}`,
+      ":path": `/3/device/${deviceToken}`,
       authorization: `bearer ${getApnsJwt()}`,
       "apns-topic": bundleId(),
       "apns-push-type": "alert",
@@ -195,19 +183,63 @@ const sendApns = (deviceToken, payload) =>
       resp += chunk;
     });
     req.on("end", () => {
+      let reason = "";
+      try {
+        reason = JSON.parse(resp || "{}").reason || "";
+      } catch (_) {
+        reason = resp.slice(0, 120);
+      }
       if (status >= 200 && status < 300) {
-        finish(`apns:${status}`);
+        finish({ ok: true, status, reason: "", host });
         return;
       }
-      logError("APNs send failed:", status, resp.slice(0, 300));
-      finish(null);
+      logError("APNs send failed:", host, status, resp.slice(0, 300));
+      finish({ ok: false, status, reason, host });
     });
     req.on("error", (e) => {
       logError("APNs request error:", e.message);
-      finish(null);
+      finish({ ok: false, status: 0, reason: e.message, host });
     });
     req.end(JSON.stringify(apsBody));
   });
+
+/**
+ * @param {string} deviceToken hex APNs device token
+ * @param {{ notification?: {title?:string,body?:string}, data?: object }} payload
+ * @returns {Promise<string|null>} id on success, null on failure
+ */
+const sendApns = async (deviceToken, payload) => {
+  if (!isApnsConfigured()) return null;
+  const token = String(deviceToken || "")
+    .trim()
+    .replace(/\s/g, "");
+  if (!token || token.length < 32) return null;
+
+  const apsBody = buildApsBody(payload);
+  const preferProd = isProduction();
+
+  // Try preferred host first, then the other — Xcode builds use sandbox tokens
+  // while TestFlight/App Store use production. A single env flag used to blackhole
+  // half of the installs.
+  const first = await sendApnsToHost(token, apsBody, preferProd);
+  if (first.ok) return `apns:${first.status}`;
+
+  const envMismatch =
+    /BadDeviceToken|BadEnvironment|DeviceTokenNotForTopic|ExpiredToken/i.test(
+      first.reason || ""
+    ) || first.status === 400 || first.status === 410;
+
+  if (envMismatch) {
+    const second = await sendApnsToHost(token, apsBody, !preferProd);
+    if (second.ok) {
+      warn(
+        `APNs delivered via ${second.host} after ${first.host} failed (${first.reason || first.status})`
+      );
+      return `apns:${second.status}`;
+    }
+  }
+  return null;
+};
 
 module.exports = {
   isApnsConfigured,

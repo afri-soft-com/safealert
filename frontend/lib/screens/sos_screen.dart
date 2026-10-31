@@ -90,6 +90,8 @@ class _SOSScreenState extends State<SOSScreen> {
     // Allow retry while queued/failed; block only during in-flight or success.
     if (_sending || (_completed && !_queued)) return;
     _holdTimer?.cancel();
+    // Prefetch GPS during the 1.5s hold so Android is ready at release.
+    unawaited(LocationService().getPositionForSos());
     setState(() {
       _holding = true;
       _holdProgress = 0;

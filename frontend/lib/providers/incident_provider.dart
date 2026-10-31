@@ -311,8 +311,9 @@ class IncidentProvider extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> triggerSOS(double lat, double lng, {String? type, String? description}) async {
-    await AppConfigService().refresh();
+    // Soft cache only — do not block SOS on a fresh /app/config round-trip.
     if (!AppConfigService().canSendSos) {
+      unawaited(AppConfigService().refresh());
       return {
         'blocked': true,
         'message': AppConfigService().maintenanceBanner.isNotEmpty
@@ -320,8 +321,10 @@ class IncidentProvider extends ChangeNotifier {
             : 'Les alertes sont temporairement indisponibles. Utilisez l\'annuaire d\'urgence si besoin.',
       };
     }
+    unawaited(AppConfigService().refresh());
 
-    final resolved = await LocationService().getPositionWithSource();
+    // Urgent: last-known/cache first so Android does not wait 15–23s on GPS.
+    final resolved = await LocationService().getPositionWithSource(urgent: true);
     final pos = resolved.position;
     var useLat = pos?.latitude ?? lat;
     var useLng = pos?.longitude ?? lng;
@@ -333,8 +336,12 @@ class IncidentProvider extends ChangeNotifier {
 
     int? battery;
     try {
-      battery = await Battery().batteryLevel;
-    } catch (_) {}
+      battery = await Battery().batteryLevel
+          .timeout(const Duration(milliseconds: 400), onTimeout: () => -1);
+      if (battery! < 0) battery = null;
+    } catch (_) {
+      battery = null;
+    }
 
     final payload = {
       'lat': useLat,
@@ -345,13 +352,12 @@ class IncidentProvider extends ChangeNotifier {
     };
     final isDiscrete = (type ?? 'sos') == 'sos_discret';
     try {
+      // Fire-and-forget: never delay /sos/trigger for position PUT or wake ping.
       if (pos != null) {
-        await LocationService().updatePosition(useLat, useLng);
+        unawaited(LocationService().updatePosition(useLat, useLng));
       }
-      // Wake Render (cold start) before the critical SOS call.
-      try {
-        await _api.get('/app/config');
-      } catch (_) {}
+      unawaited(_api.get('/app/config').catchError((_) => <String, dynamic>{}));
+
       Map<String, dynamic> res;
       try {
         res = await _api.post(
@@ -360,9 +366,9 @@ class IncidentProvider extends ChangeNotifier {
           timeout: const Duration(seconds: 45),
         );
       } catch (first) {
-        // One retry after wake delay — timeouts are NOT treated as offline.
+        // One retry after short wake delay — timeouts are NOT treated as offline.
         if (first is ApiException) rethrow;
-        await Future<void>.delayed(const Duration(seconds: 3));
+        await Future<void>.delayed(const Duration(seconds: 2));
         res = await _api.post(
           '/sos/trigger',
           payload,

@@ -228,15 +228,27 @@ class FCMService extends ChangeNotifier {
         }));
       }
 
+      messaging.onTokenRefresh.listen((t) {
+        _token = t;
+        _available = true;
+        uploadToken();
+        notifyListeners();
+      });
+
       _token = await messaging.getToken();
       if (_token == null) {
-        debugPrint('FCM: no token yet — listeners active, will retry on refresh');
-        messaging.onTokenRefresh.listen((t) {
-          _token = t;
-          _available = true;
-          uploadToken();
-          notifyListeners();
-        });
+        debugPrint('FCM: no token yet — listeners active, will retry');
+        // iOS: APNs often arrives after first getToken(); poll briefly.
+        unawaited(Future<void>.delayed(const Duration(seconds: 2), () async {
+          try {
+            _token ??= await messaging.getToken();
+            if (_token != null) {
+              _available = true;
+              await uploadToken();
+              notifyListeners();
+            }
+          } catch (_) {}
+        }));
         await _api.init();
         notifyListeners();
         return;
@@ -245,13 +257,17 @@ class FCMService extends ChangeNotifier {
       _available = true;
       debugPrint('FCM initialized tokenPrefix=${_token!.substring(0, 12)}…');
 
-      messaging.onTokenRefresh.listen((t) {
-        _token = t;
-        uploadToken();
-      });
-
       await _api.init();
       if (_api.hasToken) await uploadToken();
+
+      // iOS: APNs token can appear after FCM token — re-upload once settled.
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        unawaited(Future<void>.delayed(const Duration(seconds: 3), () async {
+          try {
+            await uploadToken();
+          } catch (_) {}
+        }));
+      }
 
       notifyListeners();
     } catch (e) {

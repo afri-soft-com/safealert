@@ -113,8 +113,8 @@ const sendPush = async (token, payload) => {
             sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
             badge: 1,
             "thread-id": isSos ? "safealert-sos" : "safealert",
-            // iOS 15+: play over Focus when allowed (not full Critical Alert).
-            "interruption-level": isSos ? "time-sensitive" : "active",
+            // "active" until Time Sensitive entitlement is provisioned.
+            "interruption-level": "active",
           },
         },
       },

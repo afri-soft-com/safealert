@@ -5,7 +5,7 @@ const {
   notifyUserGroupsOnFalseAlarm,
 } = require("../services/groupNotify");
 const { invalidateActiveAlerts } = require("../config/redis");
-const { resolveZoneName, resolvePlace } = require("../utils/incidentZone");
+const { resolvePlace } = require("../utils/incidentZone");
 const { deliverEvent } = require("../services/partnerWebhooks");
 const { notifyLeadersForSOS } = require("../services/sectorNotify");
 const { findMatchingZones } = require("./trustZoneController");
@@ -81,17 +81,19 @@ const triggerSOS = async (req, res) => {
   try {
     let zoneName = null;
     let zoneCity = null;
+    // Cap geocode wait — Nominatim cold calls were adding seconds before 201.
     try {
-      const place = await resolvePlace(lat, lng);
+      const place = await Promise.race([
+        resolvePlace(lat, lng),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("resolvePlace timeout")), 700)
+        ),
+      ]);
       zoneName = place.zoneName;
       zoneCity = place.city;
     } catch (zErr) {
       console.warn("resolvePlace error:", zErr.message);
-      try {
-        zoneName = await resolveZoneName(lat, lng);
-      } catch (_) {
-        /* ignore */
-      }
+      // Leave null — fan-out / UI can still use lat/lng; enrich later if needed.
     }
 
     let priorityBoost = false;
@@ -178,175 +180,169 @@ const triggerSOS = async (req, res) => {
       }
     }
 
-    // Notifications are best-effort: the SOS row must still return 201.
-    let notification = {
-      contactsNotified: 0,
-      contactsPush: 0,
-      contactsSms: 0,
-      nearbyNotified: 0,
-      nearbyPush: 0,
-      degraded: false,
-    };
-    try {
-      notification = {
-        ...notification,
-        ...(await sendAlert(
+    // Return 201 immediately — push/SMS/geocode fan-out must not block the phone.
+    const shareUrl = shareToken
+      ? `${PUBLIC_BASE.replace(/\/$/, "")}/s/${shareToken}`
+      : null;
+    const io = req.app.get("io");
+
+    res.status(201).json({
+      incident,
+      notification: {
+        contactsNotified: 0,
+        contactsPush: 0,
+        contactsSms: 0,
+        nearbyNotified: 0,
+        nearbyPush: 0,
+        degraded: false,
+        async: true,
+      },
+      share_url: shareUrl,
+      mediation_requested: !!wantMediation,
+      sos_audio_enabled: sosAudio(),
+    });
+
+    const fanOut = async () => {
+      try {
+        await sendAlert(
           req.userId,
           lat,
           lng,
           incident_type || "sos",
           incident.zone_name,
           incident.id
-        )),
-      };
-    } catch (alertErr) {
-      console.error("sendAlert error:", alertErr.message);
-      notification.degraded = true;
-      notification.error = true;
-    }
-
-    try {
-      const userRes = await pool.query("SELECT pseudo FROM users WHERE id = $1", [req.userId]);
-      const groupNotification = await notifyUserGroupsOnSOS(
-        req.userId,
-        lat,
-        lng,
-        userRes.rows[0]?.pseudo || "Un membre",
-        incident.zone_name,
-        req.app.get("io")
-      );
-      notification.groupSos = groupNotification;
-    } catch (groupErr) {
-      console.error("notifyUserGroupsOnSOS error:", groupErr.message);
-      notification.groupSos = {
-        groupsNotified: 0,
-        membersNotified: 0,
-        alertsCreated: 0,
-        otherMembers: 0,
-        error: true,
-      };
-    }
-
-    try {
-      await invalidateActiveAlerts();
-    } catch (cacheErr) {
-      console.error("invalidateActiveAlerts error:", cacheErr.message);
-    }
-
-    try {
-      notification.sectorLeaders = await notifyLeadersForSOS(incident);
-    } catch (sectorErr) {
-      console.error("notifyLeadersForSOS error:", sectorErr.message);
-      notification.sectorLeaders = { leadersNotified: 0, error: true };
-    }
-
-    // Targeted alerts for trust zones containing this SOS
-    try {
-      const zones = await findMatchingZones(lat, lng);
-      const senderMeta = await pool.query(
-        "SELECT pseudo, phone FROM users WHERE id = $1",
-        [req.userId]
-      );
-      const senderPseudo = senderMeta.rows[0]?.pseudo || "Quelqu'un";
-      const senderPhone = senderMeta.rows[0]?.phone
-        ? String(senderMeta.rows[0].phone)
-        : "";
-      const tzPayload = (z) => ({
-        type: "trust_zone_alert",
-        zoneId: String(z.id),
-        zoneLabel: String(z.label || ""),
-        incidentId: String(incident.id),
-        userId: String(req.userId),
-        pseudo: String(senderPseudo),
-        phone: senderPhone,
-        lat: String(lat ?? ""),
-        lng: String(lng ?? ""),
-        zone_name: incident.zone_name ? String(incident.zone_name) : "",
-        origin: "zone_confiance",
-      });
-      for (const z of zones) {
-        if (String(z.user_id) === String(req.userId)) continue;
-
-        // Zone owner first — previously only contacts were notified (silent for owner).
-        await sendPushToUser(z.user_id, {
-          notification: {
-            title: `📍 Zone de confiance — ${z.label}`,
-            body: `SOS de ${senderPseudo} dans votre zone « ${z.label} » (${z.zone_type})`,
-          },
-          data: tzPayload(z),
-        });
-
-        if (z.notify_contacts === false) continue;
-        const tzContacts = await pool.query(
-          `SELECT contact_phone FROM trust_contacts WHERE user_id = $1`,
-          [z.user_id]
         );
-        for (const tc of tzContacts.rows) {
-          const variants = phoneLookupVariants(tc.contact_phone);
-          if (!variants.length) continue;
-          const matched = await pool.query(
-            `SELECT id FROM users WHERE phone = ANY($1::text[]) LIMIT 1`,
-            [variants]
-          );
-          const uid = matched.rows[0]?.id;
-          if (
-            !uid ||
-            String(uid) === String(req.userId) ||
-            String(uid) === String(z.user_id)
-          ) {
-            continue;
-          }
-          await sendPushToUser(uid, {
+      } catch (alertErr) {
+        console.error("sendAlert error:", alertErr.message);
+      }
+
+      try {
+        const userRes = await pool.query(
+          "SELECT pseudo FROM users WHERE id = $1",
+          [req.userId]
+        );
+        await notifyUserGroupsOnSOS(
+          req.userId,
+          lat,
+          lng,
+          userRes.rows[0]?.pseudo || "Un membre",
+          incident.zone_name,
+          io
+        );
+      } catch (groupErr) {
+        console.error("notifyUserGroupsOnSOS error:", groupErr.message);
+      }
+
+      try {
+        await invalidateActiveAlerts();
+      } catch (cacheErr) {
+        console.error("invalidateActiveAlerts error:", cacheErr.message);
+      }
+
+      try {
+        await notifyLeadersForSOS(incident);
+      } catch (sectorErr) {
+        console.error("notifyLeadersForSOS error:", sectorErr.message);
+      }
+
+      try {
+        const zones = await findMatchingZones(lat, lng);
+        const senderMeta = await pool.query(
+          "SELECT pseudo, phone FROM users WHERE id = $1",
+          [req.userId]
+        );
+        const senderPseudo = senderMeta.rows[0]?.pseudo || "Quelqu'un";
+        const senderPhone = senderMeta.rows[0]?.phone
+          ? String(senderMeta.rows[0].phone)
+          : "";
+        const tzPayload = (z) => ({
+          type: "trust_zone_alert",
+          zoneId: String(z.id),
+          zoneLabel: String(z.label || ""),
+          incidentId: String(incident.id),
+          userId: String(req.userId),
+          pseudo: String(senderPseudo),
+          phone: senderPhone,
+          lat: String(lat ?? ""),
+          lng: String(lng ?? ""),
+          zone_name: incident.zone_name ? String(incident.zone_name) : "",
+          origin: "zone_confiance",
+        });
+        for (const z of zones) {
+          if (String(z.user_id) === String(req.userId)) continue;
+
+          await sendPushToUser(z.user_id, {
             notification: {
-              title: `📍 Zone de confiance — contact`,
-              body: `SOS près de la zone « ${z.label} » de ${z.pseudo || "votre proche"}`,
+              title: `📍 Zone de confiance — ${z.label}`,
+              body: `SOS de ${senderPseudo} dans votre zone « ${z.label} » (${z.zone_type})`,
             },
             data: tzPayload(z),
           });
+
+          if (z.notify_contacts === false) continue;
+          const tzContacts = await pool.query(
+            `SELECT contact_phone FROM trust_contacts WHERE user_id = $1`,
+            [z.user_id]
+          );
+          for (const tc of tzContacts.rows) {
+            const variants = phoneLookupVariants(tc.contact_phone);
+            if (!variants.length) continue;
+            const matched = await pool.query(
+              `SELECT id FROM users WHERE phone = ANY($1::text[]) LIMIT 1`,
+              [variants]
+            );
+            const uid = matched.rows[0]?.id;
+            if (
+              !uid ||
+              String(uid) === String(req.userId) ||
+              String(uid) === String(z.user_id)
+            ) {
+              continue;
+            }
+            await sendPushToUser(uid, {
+              notification: {
+                title: `📍 Zone de confiance — contact`,
+                body: `SOS près de la zone « ${z.label} » de ${z.pseudo || "votre proche"}`,
+              },
+              data: tzPayload(z),
+            });
+          }
         }
+      } catch (tzErr) {
+        console.error("trust zone notify error:", tzErr.message);
       }
-    } catch (tzErr) {
-      console.error("trust zone notify error:", tzErr.message);
-    }
 
-    deliverEvent("sos", {
-      id: incident.id,
-      lat: incident.lat,
-      lng: incident.lng,
-      incident_type: incident.incident_type,
-      zone_name: incident.zone_name,
-      created_at: incident.created_at,
-    }).catch(() => {});
-
-    const io = req.app.get("io");
-    if (io) {
-      io.emit("sos_alert", {
+      deliverEvent("sos", {
         id: incident.id,
-        type: "sos_alert",
-        user_id: req.userId,
         lat: incident.lat,
         lng: incident.lng,
-        zone_name: incident.zone_name,
         incident_type: incident.incident_type,
+        zone_name: incident.zone_name,
         created_at: incident.created_at,
-        title: "🚨 SOS — contact d'urgence",
-        body: incident.zone_name
-          ? `Alerte SOS — ${incident.zone_name}`
-          : "Une alerte SOS nécessite votre attention.",
-      });
-    }
+      }).catch(() => {});
 
-    const shareUrl = shareToken
-      ? `${PUBLIC_BASE.replace(/\/$/, "")}/s/${shareToken}`
-      : null;
+      if (io) {
+        io.emit("sos_alert", {
+          id: incident.id,
+          type: "sos_alert",
+          user_id: req.userId,
+          lat: incident.lat,
+          lng: incident.lng,
+          zone_name: incident.zone_name,
+          incident_type: incident.incident_type,
+          created_at: incident.created_at,
+          title: "🚨 SOS — contact d'urgence",
+          body: incident.zone_name
+            ? `Alerte SOS — ${incident.zone_name}`
+            : "Une alerte SOS nécessite votre attention.",
+        });
+      }
+    };
 
-    return res.status(201).json({
-      incident,
-      notification,
-      share_url: shareUrl,
-      mediation_requested: !!wantMediation,
-      sos_audio_enabled: sosAudio(),
+    setImmediate(() => {
+      fanOut().catch((e) => console.error("SOS fanOut error:", e.message));
     });
+    return;
   } catch (err) {
     console.error("triggerSOS error:", err.code || "", err.message, err.stack);
     // Last-chance minimal insert (any failure above).

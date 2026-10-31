@@ -49,16 +49,46 @@ class LocationService {
     );
   }
 
-  /// Best-effort GPS for SOS: current → lastKnown → cached local → null.
+  /// Best-effort GPS for SOS: lastKnown/cache first, then short GPS.
   /// Never returns 0,0.
   Future<Position?> getPositionForSos() async {
-    final resolved = await getPositionWithSource();
+    final resolved = await getPositionWithSource(urgent: true);
     return resolved.position;
   }
 
   /// Same cascade as [getPositionForSos], with a source label for UI messages.
   /// Sources: `gps` | `last_known` | `cache` | `none`.
-  Future<({Position? position, String source})> getPositionWithSource() async {
+  ///
+  /// SOS path: last-known / cache FIRST (instant), then a short GPS race so
+  /// Android does not block 15–23s before POSTing `/sos/trigger`.
+  Future<({Position? position, String source})> getPositionWithSource({
+    bool urgent = false,
+  }) async {
+    if (urgent) {
+      try {
+        final last = await Geolocator.getLastKnownPosition();
+        if (last != null && !_isNullIsland(last.latitude, last.longitude)) {
+          // Refine in background — do not delay the SOS HTTP call.
+          unawaited(_refreshGpsInBackground());
+          return (position: last, source: 'last_known');
+        }
+      } catch (_) {}
+
+      final cached = await _cachedPosition();
+      if (cached != null) {
+        unawaited(_refreshGpsInBackground());
+        return (position: cached, source: 'cache');
+      }
+
+      // No cache — short GPS only (Android indoors used to wait 15s+8s).
+      final quick = await getCurrentPosition(urgent: true);
+      if (quick != null && !_isNullIsland(quick.latitude, quick.longitude)) {
+        await _cacheGoodPosition(quick.latitude, quick.longitude);
+        return (position: quick, source: 'gps');
+      }
+      return (position: null, source: 'none');
+    }
+
     final current = await getCurrentPosition();
     if (current != null && !_isNullIsland(current.latitude, current.longitude)) {
       await _cacheGoodPosition(current.latitude, current.longitude);
@@ -76,6 +106,18 @@ class LocationService {
     final cached = await _cachedPosition();
     if (cached != null) return (position: cached, source: 'cache');
     return (position: null, source: 'none');
+  }
+
+  Future<void> _refreshGpsInBackground() async {
+    try {
+      final pos = await getCurrentPosition(urgent: false);
+      if (pos != null && !_isNullIsland(pos.latitude, pos.longitude)) {
+        await _cacheGoodPosition(pos.latitude, pos.longitude);
+        if (_api.hasToken) {
+          await updatePosition(pos.latitude, pos.longitude, force: true);
+        }
+      }
+    } catch (_) {}
   }
 
   /// Why [getCurrentPosition] / cascade may fail (for UI copy).
@@ -104,7 +146,7 @@ class LocationService {
 
   Future<bool> openSystemLocationSettings() => Geolocator.openLocationSettings();
 
-  Future<Position?> getCurrentPosition() async {
+  Future<Position?> getCurrentPosition({bool urgent = false}) async {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return null;
 
@@ -114,6 +156,23 @@ class LocationService {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        return null;
+      }
+
+      if (urgent) {
+        // SOS: one short low-accuracy attempt only (Android FLP can hang 15s+).
+        try {
+          final pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.low,
+              timeLimit: Duration(seconds: 3),
+            ),
+          );
+          if (!_isNullIsland(pos.latitude, pos.longitude)) {
+            await _cacheGoodPosition(pos.latitude, pos.longitude);
+            return pos;
+          }
+        } catch (_) {}
         return null;
       }
 

@@ -4,8 +4,8 @@ const { sendApns, isApnsConfigured } = require("../config/apns");
 
 /**
  * Per-device targets. Prefer direct APNs on iOS when configured so killed-app
- * delivery works without a Firebase Console APNs key (and without duplicate
- * FCM+APNs banners for the same device).
+ * delivery works without a Firebase Console APNs key — but ALWAYS fall back to
+ * FCM if APNs fails (sandbox/prod mismatch, BadDeviceToken, etc.).
  */
 const getUserPushTargets = async (userId) => {
   const devices = [];
@@ -66,15 +66,23 @@ const sendPushToUser = async (userId, payload) => {
   let sent = 0;
 
   for (const device of devices) {
+    // Dual-path for iOS: APNs direct AND FCM in parallel.
+    // Previously APNs "success" skipped FCM — if the token was stale or the
+    // host mismatched, the user got nothing. Duplicate banners on SOS are
+    // preferable to silent failure.
+    const tasks = [];
     if (apnsOk && device.apns) {
-      const ok = await sendApns(device.apns, payload);
-      if (ok) sent += 1;
-      continue;
+      tasks.push(
+        sendApns(device.apns, payload).then((ok) => Boolean(ok))
+      );
     }
     if (device.fcm) {
-      const ok = await sendPush(device.fcm, payload);
-      if (ok) sent += 1;
+      tasks.push(sendPush(device.fcm, payload).then((ok) => Boolean(ok)));
     }
+    if (!tasks.length) continue;
+
+    const results = await Promise.all(tasks);
+    if (results.some(Boolean)) sent += 1;
   }
   return sent;
 };
