@@ -24,8 +24,12 @@ const SOS_PUSH_TYPES = new Set([
   "safety_ping_missed",
 ]);
 // Prefer .wav (also seeded into Library/Sounds at runtime). .caf remains in the IPA as fallback.
-const SOS_SOUND_IOS = "safealert_siren.wav";
-const DEFAULT_SOUND_IOS = "safealert_beacon.wav";
+// Closed-app iOS: custom .wav/.caf kept failing silently on devices even when
+// bundled. Use system "default" so killed-state alerts are audible (mute off).
+// Override with SOS_IOS_SOUND / DEFAULT_IOS_SOUND env if needed.
+const SOS_SOUND_IOS = (process.env.SOS_IOS_SOUND || "default").trim() || "default";
+const DEFAULT_SOUND_IOS =
+  (process.env.DEFAULT_IOS_SOUND || "default").trim() || "default";
 // Keep in sync with firebase.js channel naming for docs only (APNs has no channels).
 
 let cachedJwt = null;
@@ -145,15 +149,12 @@ const buildApsBody = (payload) => {
   const isSos = data?.type && SOS_PUSH_TYPES.has(data.type);
   const title = payload.notification?.title || data.title || "SafeAlert";
   const body = payload.notification?.body || data.body || "";
-  // Always set a bundle sound name. Missing/invalid custom files → iOS plays nothing
-  // on some versions; files ship as Runner/*.caf (re-encoded PCM 44.1kHz).
+  // Minimal aps — extra keys have caused quiet/dropped delivery on some iOS builds.
   return {
     aps: {
       alert: { title: String(title).slice(0, 100), body: String(body).slice(0, 200) },
       sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
       badge: 1,
-      "thread-id": isSos ? "safealert-sos" : "safealert",
-      "interruption-level": isSos ? "time-sensitive" : "active",
     },
     ...pickApnsData(data),
   };
@@ -253,28 +254,23 @@ const sendApns = async (deviceToken, payload) => {
 
   const apsBody = buildApsBody(payload);
   const collapseId = collapseIdFor(payload);
-  const preferProd = isProduction();
 
-  // Try preferred host first, then the other — Xcode builds use sandbox tokens
-  // while TestFlight/App Store use production. A single env flag used to blackhole
-  // half of the installs.
-  const first = await sendApnsToHost(token, apsBody, preferProd, collapseId);
-  if (first.ok) return `apns:${first.status}`;
-
-  const envMismatch =
-    /BadDeviceToken|BadEnvironment|DeviceTokenNotForTopic|ExpiredToken/i.test(
-      first.reason || ""
-    ) || first.status === 400 || first.status === 410;
-
-  if (envMismatch) {
-    const second = await sendApnsToHost(token, apsBody, !preferProd, collapseId);
-    if (second.ok) {
-      warn(
-        `APNs delivered via ${second.host} after ${first.host} failed (${first.reason || first.status})`
-      );
-      return `apns:${second.status}`;
-    }
+  // TestFlight = production host; Xcode debug = sandbox. Race both so a wrong
+  // APNS_PRODUCTION flag cannot blackhole killed-state alerts.
+  const [prod, sand] = await Promise.all([
+    sendApnsToHost(token, apsBody, true, collapseId),
+    sendApnsToHost(token, apsBody, false, collapseId),
+  ]);
+  if (prod.ok) return `apns:production:${prod.status}`;
+  if (sand.ok) {
+    warn(`APNs delivered via sandbox (production failed: ${prod.reason || prod.status})`);
+    return `apns:sandbox:${sand.status}`;
   }
+  logError(
+    "APNs both hosts failed:",
+    `prod=${prod.reason || prod.status}`,
+    `sand=${sand.reason || sand.status}`
+  );
   return null;
 };
 

@@ -24,9 +24,11 @@ const SOS_CHANNEL_ID_LEGACY = "sos_alerts";
 const SOS_CHANNEL_ID_V2 = "safealert_sos_siren_v2";
 const DEFAULT_CHANNEL_ID = "safealert_general_v2";
 const SOS_SOUND_ANDROID = "safealert_siren";
-const SOS_SOUND_IOS = "safealert_siren.wav";
+// Match apns.js — system default is reliable when the app is killed.
+const SOS_SOUND_IOS = (process.env.SOS_IOS_SOUND || "default").trim() || "default";
 const DEFAULT_SOUND_ANDROID = "safealert_beacon";
-const DEFAULT_SOUND_IOS = "safealert_beacon.wav";
+const DEFAULT_SOUND_IOS =
+  (process.env.DEFAULT_IOS_SOUND || "default").trim() || "default";
 
 const initFCM = () => {
   const projectId = process.env.FCM_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
@@ -115,11 +117,8 @@ const sendPush = async (token, payload) => {
                   title: data?.title || "SafeAlert",
                   body: data?.body || "",
                 },
-            // Bundle / Library/Sounds file — must match exactly (wav preferred).
             sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
             badge: 1,
-            "thread-id": isSos ? "safealert-sos" : "safealert",
-            "interruption-level": isSos ? "time-sensitive" : "active",
           },
         },
       },
