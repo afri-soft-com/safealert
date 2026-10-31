@@ -873,8 +873,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           Expanded(
             child: topBannerShown
                 ? MediaQuery(
+                    // Zero both padding and viewPadding top so StatusBar /
+                    // SafeArea under the banner do not leave a second notch gap.
                     data: mq.copyWith(
                       padding: mq.padding.copyWith(top: 0),
+                      viewPadding: mq.viewPadding.copyWith(top: 0),
                     ),
                     child: body,
                   )

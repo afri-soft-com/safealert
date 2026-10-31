@@ -21,11 +21,13 @@ void main() {
   testWidgets('AppUpdateBanner shows French copy and version', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: AppUpdateBanner(
-          latestVersion: '1.0.8',
-          currentVersion: '1.0.7',
-          onUpdate: () {},
-          onDismiss: () {},
+        home: Scaffold(
+          body: AppUpdateBanner(
+            latestVersion: '1.0.8',
+            currentVersion: '1.0.7',
+            onUpdate: () {},
+            onDismiss: () {},
+          ),
         ),
       ),
     );
@@ -38,15 +40,39 @@ void main() {
   testWidgets('AppUpdateBanner shows build when versions match', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: AppUpdateBanner(
-          latestVersion: '1.0.51 (74)',
-          currentVersion: '1.0.51 (73)',
-          onUpdate: () {},
-          onDismiss: () {},
+        home: Scaffold(
+          body: AppUpdateBanner(
+            latestVersion: '1.0.51 (74)',
+            currentVersion: '1.0.51 (73)',
+            onUpdate: () {},
+            onDismiss: () {},
+          ),
         ),
       ),
     );
 
     expect(find.textContaining('1.0.51 (73) → 1.0.51 (74)'), findsOneWidget);
+  });
+
+  testWidgets('AppUpdateBanner fits a narrow phone without overflow', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppUpdateBanner(
+            latestVersion: '1.0.80 (108)',
+            currentVersion: '1.0.79 (107)',
+            includeTopSafeArea: true,
+            onUpdate: () {},
+            onDismiss: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Mettre à jour'), findsOneWidget);
   });
 }

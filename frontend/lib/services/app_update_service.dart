@@ -426,7 +426,11 @@ class AppUpdateBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final topInset = includeTopSafeArea ? MediaQuery.paddingOf(context).top : 0.0;
+    // viewPadding survives edge-to-edge / Scaffold consumption; plain padding
+    // can be 0 and left the banner under the status bar (looked "broken").
+    final topInset = includeTopSafeArea
+        ? MediaQuery.viewPaddingOf(context).top
+        : 0.0;
     final fromTo = (currentVersion != null &&
             currentVersion!.isNotEmpty &&
             latestVersion != null &&
@@ -442,14 +446,24 @@ class AppUpdateBanner extends StatelessWidget {
       child: SizedBox(
         width: double.infinity,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(12, 10 + topInset, 4, 10),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final narrow = constraints.maxWidth < 340;
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+          padding: EdgeInsets.fromLTRB(12, 10 + topInset, 8, 10),
+          // Two rows: never horizontal overflow with long version strings +
+          // IconButton min sizes on narrow Android devices.
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.system_update_alt, color: Colors.white, size: 20),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.system_update_alt,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -469,7 +483,7 @@ class AppUpdateBanner extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           fromTo,
-                          maxLines: 2,
+                          maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Color(0xFFB8E0D2),
@@ -480,39 +494,48 @@ class AppUpdateBanner extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (narrow)
-                    IconButton(
-                      tooltip: 'Mettre à jour',
-                      onPressed: onUpdate,
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.download, color: Colors.white, size: 20),
-                    )
-                  else
-                    TextButton(
-                      onPressed: onUpdate,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        minimumSize: const Size(0, 36),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text(
-                        'Mettre à jour',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
                   IconButton(
                     tooltip: 'Plus tard',
                     onPressed: onDismiss,
                     visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.close, color: Colors.white70, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 36,
+                      minHeight: 36,
+                    ),
+                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
                   ),
                 ],
-              );
-            },
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: onUpdate,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.teal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    minimumSize: const Size(0, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  icon: const Icon(Icons.download, size: 16),
+                  label: const Text(
+                    'Mettre à jour',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
