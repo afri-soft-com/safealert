@@ -18,9 +18,11 @@ class AlertSoundService {
   AlertSoundService._();
   factory AlertSoundService() => _instance;
 
-  /// Legacy channel — kept for older installs; new pushes use preferred channel.
+  /// Legacy channel — kept for older installs; FCM SOS uses *_v2 now.
   static const legacySosChannelId = 'sos_alerts';
-  static const generalChannelId = 'safealert_general_v1';
+  static const fcmSosChannelId = 'safealert_sos_siren_v2';
+  static const generalChannelId = 'safealert_general_v2';
+  static const legacyGeneralChannelId = 'safealert_general_v1';
 
   static const _sosTypes = {
     'sos_alert',
@@ -80,6 +82,7 @@ class AlertSoundService {
       );
 
       await _ensureAndroidChannels();
+      await _configureAudioSession();
 
       await _player.setReleaseMode(ReleaseMode.stop);
       await _player.setVolume(1.0);
@@ -90,6 +93,23 @@ class AlertSoundService {
       );
     } catch (e) {
       debugPrint('AlertSoundService init failed: $e');
+    }
+  }
+
+  /// Play SOS even if the hardware mute switch is on (iOS) / DND light.
+  Future<void> _configureAudioSession() async {
+    try {
+      final ctx = AudioContextConfig(
+        respectSilence: false,
+        stayAwake: true,
+        focus: AudioContextConfigFocus.duckOthers,
+        route: AudioContextConfigRoute.system,
+      ).build();
+      await AudioPlayer.global.setAudioContext(ctx);
+      await _player.setAudioContext(ctx);
+      await _player.setPlayerMode(PlayerMode.mediaPlayer);
+    } catch (e) {
+      debugPrint('AlertSoundService audio session: $e');
     }
   }
 
@@ -113,6 +133,20 @@ class AlertSoundService {
         ),
       );
     }
+
+    // Channel id used by FCM sendPush (must match backend SOS_CHANNEL_ID).
+    await android.createNotificationChannel(
+      const AndroidNotificationChannel(
+        fcmSosChannelId,
+        'Alertes SOS SafeAlert (sirène)',
+        description: 'Canal FCM SOS — son sirène SafeAlert',
+        importance: Importance.max,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('safealert_siren'),
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+      ),
+    );
 
     // Soft general channel still uses SafeAlert beacon (not system default).
     await android.createNotificationChannel(
@@ -194,10 +228,12 @@ class AlertSoundService {
   Future<void> playGeneralAlert() async {
     try {
       if (!_ready) await initialize();
+      await _configureAudioSession();
       await _player.stop();
       await _player.play(
         AssetSource(SafeAlertSoundId.beacon.assetPath),
         volume: 0.85,
+        mode: PlayerMode.mediaPlayer,
       );
     } catch (e) {
       debugPrint('playGeneralAlert failed: $e');
@@ -215,16 +251,25 @@ class AlertSoundService {
     try {
       if (!_ready) await initialize();
       if (!_prefs.loaded) await _prefs.load();
+      await _configureAudioSession();
       await HapticFeedback.heavyImpact();
       await _player.stop();
       await _player.play(
         AssetSource(_prefs.current.assetPath),
         volume: 1.0,
+        mode: PlayerMode.mediaPlayer,
       );
     } catch (e) {
       debugPrint('playSosAlert failed: $e');
       try {
         await SystemSound.play(SystemSoundType.alert);
+      } catch (_) {}
+      // Last resort: system tray local notif (plays channel / .caf sound).
+      try {
+        await showSosLocalNotification(
+          title: 'SafeAlert',
+          body: 'Alerte reçue',
+        );
       } catch (_) {}
     }
   }
@@ -268,6 +313,8 @@ class AlertSoundService {
             presentAlert: true,
             presentBadge: true,
             presentSound: true,
+            presentBanner: true,
+            presentList: true,
             sound: sound.iosSoundFile,
             interruptionLevel: InterruptionLevel.timeSensitive,
           ),

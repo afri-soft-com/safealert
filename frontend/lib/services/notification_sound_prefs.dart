@@ -68,8 +68,8 @@ extension SafeAlertSoundIdX on SafeAlertSoundId {
     }
   }
 
-  /// Dedicated Android channel (sticky — new id when sound changes).
-  String get androidSosChannelId => 'safealert_sos_${name}_v1';
+  /// Dedicated Android channel (sticky — bump suffix if sound was wrong once).
+  String get androidSosChannelId => 'safealert_sos_${name}_v2';
 }
 
 class NotificationSoundPrefs {

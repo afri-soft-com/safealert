@@ -16,13 +16,13 @@ const SOS_PUSH_TYPES = new Set([
 ]);
 
 /**
- * Prefer sticky legacy channel so ALL installed builds receive SOS
- * (new builds also create safealert_sos_*_v1 + re-create sos_alerts with siren).
+ * Android 8+ locks channel sound at first creation. Never reuse sos_alerts /
+ * safealert_sos_*_v1 if they were created without custom sound — bump the id.
  */
-const SOS_CHANNEL_ID = "sos_alerts";
+const SOS_CHANNEL_ID = "safealert_sos_siren_v2";
 const SOS_CHANNEL_ID_LEGACY = "sos_alerts";
-const SOS_CHANNEL_ID_V2 = "safealert_sos_siren_v1";
-const DEFAULT_CHANNEL_ID = "safealert_general_v1";
+const SOS_CHANNEL_ID_V2 = "safealert_sos_siren_v2";
+const DEFAULT_CHANNEL_ID = "safealert_general_v2";
 const SOS_SOUND_ANDROID = "safealert_siren";
 const SOS_SOUND_IOS = "safealert_siren.caf";
 const DEFAULT_SOUND_ANDROID = "safealert_beacon";
@@ -113,6 +113,8 @@ const sendPush = async (token, payload) => {
             sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
             badge: 1,
             "thread-id": isSos ? "safealert-sos" : "safealert",
+            // iOS 15+: play over Focus when allowed (not full Critical Alert).
+            "interruption-level": isSos ? "time-sensitive" : "active",
           },
         },
       },

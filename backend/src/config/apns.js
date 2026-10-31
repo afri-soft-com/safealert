@@ -25,6 +25,7 @@ const SOS_PUSH_TYPES = new Set([
 ]);
 const SOS_SOUND_IOS = "safealert_siren.caf";
 const DEFAULT_SOUND_IOS = "safealert_beacon.caf";
+// Keep in sync with firebase.js channel naming for docs only (APNs has no channels).
 
 let cachedJwt = null;
 let cachedJwtExp = 0;
@@ -141,6 +142,7 @@ const sendApns = (deviceToken, payload) =>
         sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
         badge: 1,
         "thread-id": isSos ? "safealert-sos" : "safealert",
+        "interruption-level": isSos ? "time-sensitive" : "active",
       },
       ...data,
     };
