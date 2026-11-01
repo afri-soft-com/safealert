@@ -118,7 +118,6 @@ const sendPush = async (token, payload) => {
             },
             sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
             badge: 1,
-            "interruption-level": isSos ? "time-sensitive" : "active",
           },
         },
       },
@@ -127,7 +126,14 @@ const sendPush = async (token, payload) => {
     return msg;
   } catch (err) {
     const code = err?.errorInfo?.code || err?.code || "";
-    // Stale tokens: clear is handled elsewhere; log for ops.
+    // Expected for every iOS token until an APNs key is uploaded in Firebase Console.
+    // Closed-app iOS delivery uses direct APNs (APNS_* env) instead.
+    if (code === "messaging/third-party-auth-error") {
+      warn(
+        "FCM→iOS blocked (Invalid APNs credential in Firebase). Relying on direct APNs."
+      );
+      return null;
+    }
     logError("FCM send error:", code || err.message, err?.errorInfo || "");
     return null;
   }

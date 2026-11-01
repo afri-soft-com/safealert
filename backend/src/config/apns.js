@@ -157,7 +157,6 @@ const buildApsBody = (payload) => {
       },
       sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
       badge: 1,
-      "interruption-level": isSos ? "time-sensitive" : "active",
     },
     ...pickApnsData(data),
   };
@@ -210,7 +209,7 @@ const sendApnsToHost = (deviceToken, apsBody, production, collapseId) =>
       "apns-topic": bundleId(),
       "apns-push-type": "alert",
       "apns-priority": "10",
-      "apns-expiration": String(Math.floor(Date.now() / 1000) + 3600),
+      "apns-expiration": String(Math.floor(Date.now() / 1000) + 86400),
       "content-type": "application/json",
     };
     if (collapseId) headers["apns-collapse-id"] = collapseId;

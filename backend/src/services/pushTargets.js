@@ -12,15 +12,16 @@ const getUserPushTargets = async (userId) => {
   const fcmSeen = new Set();
   try {
     const rows = await pool.query(
-      `SELECT fcm_token, apns_token FROM user_devices
+      `SELECT fcm_token, apns_token, device_label FROM user_devices
        WHERE user_id = $1 AND revoked_at IS NULL`,
       [userId]
     );
     for (const row of rows.rows) {
       const fcm = row.fcm_token || null;
       const apns = row.apns_token || null;
+      const label = (row.device_label || "").toLowerCase();
       if (!fcm && !apns) continue;
-      devices.push({ fcm, apns });
+      devices.push({ fcm, apns, label });
       if (fcm) fcmSeen.add(fcm);
     }
   } catch (_) {
@@ -33,7 +34,7 @@ const getUserPushTargets = async (userId) => {
       );
       for (const row of rows.rows) {
         if (!row.fcm_token) continue;
-        devices.push({ fcm: row.fcm_token, apns: null });
+        devices.push({ fcm: row.fcm_token, apns: null, label: "" });
         fcmSeen.add(row.fcm_token);
       }
     } catch (__) {
@@ -45,7 +46,7 @@ const getUserPushTargets = async (userId) => {
     const user = await pool.query(`SELECT fcm_token FROM users WHERE id = $1`, [userId]);
     const legacy = user.rows[0]?.fcm_token;
     if (legacy && !fcmSeen.has(legacy)) {
-      devices.push({ fcm: legacy, apns: null });
+      devices.push({ fcm: legacy, apns: null, label: "" });
     }
   } catch (_) {
     /* ignore */
@@ -66,16 +67,32 @@ const sendPushToUser = async (userId, payload) => {
   let sent = 0;
 
   for (const device of devices) {
-    // Dual-path for iOS: APNs direct AND FCM in parallel.
-    // Previously APNs "success" skipped FCM — if the token was stale or the
-    // host mismatched, the user got nothing. Duplicate banners on SOS are
-    // preferable to silent failure.
+    const isIos =
+      /ios|iphone|ipad|darwin/.test(device.label || "") || Boolean(device.apns);
+
+    // Firebase Console APNs key is INVALID (messaging/third-party-auth-error).
+    // Android still works via FCM; iOS killed-state MUST use direct APNs.
     const tasks = [];
     if (apnsOk && device.apns) {
       tasks.push(
-        sendApns(device.apns, payload).then((ok) => Boolean(ok))
+        sendApns(device.apns, payload).then((ok) => {
+          if (!ok && isIos) {
+            console.error(
+              "Direct APNs failed for iOS device — check APNS_* env / token",
+              String(device.apns).slice(-8)
+            );
+          }
+          return Boolean(ok);
+        })
+      );
+    } else if (isIos && apnsOk && !device.apns) {
+      console.error(
+        "iOS device has no apns_token — open app once to re-register push",
+        userId
       );
     }
+
+    // Still try FCM (works for Android; iOS fails until Firebase APNs key fixed).
     if (device.fcm) {
       tasks.push(sendPush(device.fcm, payload).then((ok) => Boolean(ok)));
     }

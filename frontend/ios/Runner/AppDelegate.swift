@@ -5,6 +5,9 @@ import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
+  /// Mirrored into UserDefaults for Flutter SharedPreferences (`flutter.` prefix).
+  private static let apnsPrefsKey = "flutter.safealert_apns_device_token"
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -12,8 +15,7 @@ import UserNotifications
     GeneratedPluginRegistrant.register(with: self)
 
     // Category only — do NOT setActive(true) here. An active .playback session
-    // while the app is backgrounded suppresses APNs alert sounds (banner OK,
-    // silence). Activate only when playing an in-app SOS via audioplayers.
+    // while the app is backgrounded suppresses APNs alert sounds.
     do {
       let session = AVAudioSession.sharedInstance()
       try session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
@@ -21,8 +23,6 @@ import UserNotifications
       NSLog("SafeAlert AVAudioSession: \(error.localizedDescription)")
     }
 
-    // Ensure we can present banners+sound while the app is foregrounded.
-    // Firebase swizzling may also set the delegate — calling super keeps both paths.
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self
     }
@@ -33,7 +33,6 @@ import UserNotifications
   }
 
   override func applicationDidEnterBackground(_ application: UIApplication) {
-    // Free the audio session so the system can play remote-notification sounds.
     do {
       try AVAudioSession.sharedInstance().setActive(
         false,
@@ -49,6 +48,11 @@ import UserNotifications
     _ application: UIApplication,
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
   ) {
+    // Hex token for direct APNs (FCM Console APNs key is invalid — iOS killed
+    // push must use our server APNS_* path with this native token).
+    let hex = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+    UserDefaults.standard.set(hex, forKey: AppDelegate.apnsPrefsKey)
+    NSLog("SafeAlert APNs device token ready (\(hex.count) hex chars)")
     super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
   }
 
@@ -60,7 +64,6 @@ import UserNotifications
     super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
   }
 
-  /// Foreground: always show banner + play sound for remote AND local alerts.
   override func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     willPresent notification: UNNotification,

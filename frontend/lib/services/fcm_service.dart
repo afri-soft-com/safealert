@@ -342,20 +342,45 @@ class FCMService extends ChangeNotifier {
     }
   }
 
+  /// Native APNs hex from AppDelegate UserDefaults (flutter. prefix).
+  Future<String?> _nativeApnsToken() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final t = prefs.getString('safealert_apns_device_token');
+      if (t != null && t.length >= 32) return t.replaceAll(RegExp(r'\s'), '');
+    } catch (_) {}
+    return null;
+  }
+
+  Future<String?> _resolveApnsToken() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) return null;
+    // Prefer Firebase helper, then native AppDelegate capture.
+    for (var i = 0; i < 8; i++) {
+      try {
+        final t = await FirebaseMessaging.instance.getAPNSToken();
+        if (t != null && t.isNotEmpty) {
+          return t.replaceAll(RegExp(r'\s'), '');
+        }
+      } catch (e) {
+        debugPrint('FCM getAPNSToken: $e');
+      }
+      final native = await _nativeApnsToken();
+      if (native != null) return native;
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+    }
+    return _nativeApnsToken();
+  }
+
   Future<void> uploadToken() async {
     if (!_available || _token == null) return;
     try {
       await _api.init();
       if (!_api.hasToken) return;
       final deviceId = await _api.ensureDeviceId();
-      String? apnsToken;
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-        try {
-          apnsToken = await FirebaseMessaging.instance.getAPNSToken();
-        } catch (e) {
-          debugPrint('FCM upload: getAPNSToken failed: $e');
-        }
-      }
+      // Critical for iOS: Firebase Console APNs key is invalid, so killed-state
+      // delivery uses direct APNs with this device token.
+      final apnsToken = await _resolveApnsToken();
       await _api.put('/auth/fcm-token', {
         'fcm_token': _token!,
         'device_id': deviceId,
@@ -364,9 +389,19 @@ class FCMService extends ChangeNotifier {
       });
       debugPrint(
         apnsToken == null || apnsToken.isEmpty
-            ? 'FCM token registered with API'
-            : 'FCM+APNs tokens registered with API',
+            ? 'FCM token registered (no APNs yet — iOS killed push will fail)'
+            : 'FCM+APNs tokens registered (${apnsToken.length} hex chars)',
       );
+      // Keep retrying APNs upload — registration often finishes after first FCM token.
+      if (!kIsWeb &&
+          defaultTargetPlatform == TargetPlatform.iOS &&
+          (apnsToken == null || apnsToken.isEmpty)) {
+        unawaited(Future<void>.delayed(const Duration(seconds: 4), () async {
+          try {
+            await uploadToken();
+          } catch (_) {}
+        }));
+      }
     } catch (e) {
       debugPrint('FCM token upload failed: $e');
     }
