@@ -114,7 +114,7 @@ Secrets GitHub / Render :
 
 | Variable | Exemple |
 |----------|---------|
-| `APNS_KEY_ID` | `WWU5SZZ38C` |
+| `APNS_KEY_ID` | `M9DC5BTZU3` (production; `WWU5SZZ38C` is sandbox-only) |
 | `APNS_TEAM_ID` | `SW53MG3W9P` |
 | `APNS_KEY_P8` | contenu PEM du `.p8` (avec `\n`) |
 | `APNS_BUNDLE_ID` | `com.kakiranya.safealert` |
