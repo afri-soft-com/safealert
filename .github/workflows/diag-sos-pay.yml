@@ -22,6 +22,11 @@ jobs:
           FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
           FCM_CLIENT_EMAIL: ${{ secrets.FCM_CLIENT_EMAIL }}
           FCM_PRIVATE_KEY: ${{ secrets.FCM_PRIVATE_KEY }}
+          APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+          APNS_TEAM_ID: ${{ secrets.APNS_TEAM_ID }}
+          APNS_KEY_P8: ${{ secrets.APNS_KEY_P8 }}
+          APNS_BUNDLE_ID: ${{ secrets.APNS_BUNDLE_ID }}
+          APNS_PRODUCTION: ${{ secrets.APNS_PRODUCTION }}
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           SERVICE_ID: ${{ secrets.RENDER_API_SERVICE_ID }}
         working-directory: backend
@@ -270,6 +275,25 @@ jobs:
                   console.log("FCM iOS ALERT send OK");
                 } catch (e) {
                   console.log("FCM iOS ALERT send FAIL", e.errorInfo || e.message);
+                }
+                // Direct APNs (bypasses Firebase) — this is the path Render uses.
+                if (ios.apns_token && process.env.APNS_KEY_ID && process.env.APNS_KEY_P8) {
+                  try {
+                    const { sendApns, isApnsConfigured } = require("./src/config/apns");
+                    console.log("Direct APNs configured=", isApnsConfigured());
+                    const id = await sendApns(ios.apns_token, {
+                      notification: {
+                        title: "SafeAlert diag APNs",
+                        body: "Test direct APNs " + new Date().toISOString(),
+                      },
+                      data: { type: "diag_ping", ts: String(Date.now()) },
+                    });
+                    console.log("Direct APNs send result=", id);
+                  } catch (e) {
+                    console.log("Direct APNs FAIL", e.message);
+                  }
+                } else {
+                  console.log("Direct APNs skipped (no token or APNS_* secrets)");
                 }
               }
             } catch (e) {
