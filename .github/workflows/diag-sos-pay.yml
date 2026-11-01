@@ -246,6 +246,7 @@ jobs:
               } else {
                 console.log("iOS target label=", ios.device_label,
                   "has_apns=", Boolean(ios.apns_token),
+                  "apns_len=", ios.apns_token ? String(ios.apns_token).replace(/\s/g,"").length : 0,
                   "fcm_end=", String(ios.fcm_token).slice(-8));
                 try {
                   await admin.messaging().send({
