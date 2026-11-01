@@ -55,13 +55,15 @@ a {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 0.75rem;
-  padding: 0.7rem 1rem;
-  padding-top: max(0.7rem, env(safe-area-inset-top, 0px));
+  padding: 0.75rem 1rem;
+  padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
   background: #063d3d;
   border-bottom: 1px solid #0b6e6e;
   color: #f0f2f5;
   box-sizing: border-box;
   animation: update-banner-in 220ms ease-out;
+  max-width: 100vw;
+  overflow: hidden;
 }
 
 @keyframes update-banner-in {

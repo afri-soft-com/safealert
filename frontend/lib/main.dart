@@ -764,7 +764,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       child: KeyedSubtree(key: ValueKey(_currentScreen), child: screen),
     );
 
-    final topInset = mq.padding.top > 0 ? mq.padding.top : mq.viewPadding.top;
+    // Always viewPadding for notch — padding.top is often 0 under edge-to-edge
+    // until a Scaffold applies SafeArea, which made banners sit under the status bar.
+    final topInset = mq.viewPadding.top;
     // First visible dark banner owns the status-bar inset + light icons.
     final softOwnsInset = showSoftBanner && !showSosBanner;
     final alertOwnsInset =
@@ -787,8 +789,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         onPopInvokedWithResult: (didPop, _) {
           if (!didPop) _goBack();
         },
-        child: Column(
-          children: [
+        // Scaffold gives the Column a tight height so Expanded banners+body
+        // do not overflow after edge-to-edge deploys.
+        child: Scaffold(
+          backgroundColor: AppColors.grisClair,
+          resizeToAvoidBottomInset: true,
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             if (showSosBanner)
               Material(
                 color: const Color(0xFF7A4F00),
@@ -946,6 +954,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   : body,
             ),
           ],
+          ),
         ),
       ),
     );

@@ -437,12 +437,10 @@ class AppUpdateBanner extends StatelessWidget {
             ? 'SafeAlert $latestVersion est prête. Mettez à jour quand vous voulez.'
             : 'Une version plus récente est prête. Mettez à jour quand vous voulez.');
 
-    // Manual inset from viewPadding (not padding): on Android 15 edge-to-edge
-    // with a bare Column host, padding.top can be 0 while viewPadding is not.
-    final mq = MediaQuery.of(context);
-    final topInset = includeTopSafeArea
-        ? (mq.padding.top > 0 ? mq.padding.top : mq.viewPadding.top)
-        : 0.0;
+    // Prefer viewPadding: under edge-to-edge / Scaffold, padding.top is often 0
+    // while the notch inset still lives in viewPadding.
+    final topInset =
+        includeTopSafeArea ? MediaQuery.viewPaddingOf(context).top : 0.0;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
