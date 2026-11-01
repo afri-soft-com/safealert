@@ -57,7 +57,11 @@ class _AnnuaireScreenState extends State<AnnuaireScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: l10n.annuaire, onBackTap: widget.onBack),
+          TopBar(
+            title: l10n.annuaire,
+            onBackTap: widget.onBack,
+            onNotificationsTap: () => widget.onNavigate('notifications'),
+          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),

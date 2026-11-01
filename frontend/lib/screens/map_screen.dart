@@ -478,7 +478,11 @@ class _MapScreenState extends State<MapScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: 'Carte des incidents', onBackTap: widget.onBack),
+          TopBar(
+            title: 'Carte des incidents',
+            onBackTap: widget.onBack,
+            onNotificationsTap: () => widget.onNavigate('notifications'),
+          ),
           if (widget.isGuest)
             Container(
               width: double.infinity,

@@ -16,7 +16,11 @@ class SafetyScreen extends StatelessWidget {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: 'Conseils de sécurité', onBackTap: onBack),
+          TopBar(
+            title: 'Conseils de sécurité',
+            onBackTap: onBack,
+            onNotificationsTap: () => onNavigate('notifications'),
+          ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),

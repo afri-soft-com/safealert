@@ -195,7 +195,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: 'Cercle de confiance', onBackTap: widget.onBack),
+          TopBar(
+            title: 'Cercle de confiance',
+            onBackTap: widget.onBack,
+            onNotificationsTap: () => widget.onNavigate('notifications'),
+          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),

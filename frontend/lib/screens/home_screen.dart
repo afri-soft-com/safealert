@@ -106,7 +106,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(sub: 'Bonjour, $greetingName', onMenuTap: () => widget.onNavigate('settings')),
+          TopBar(
+            sub: 'Bonjour, $greetingName',
+            onNotificationsTap: () => widget.onNavigate('notifications'),
+            onMenuTap: () => widget.onNavigate('settings'),
+          ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
@@ -228,19 +232,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   crossAxisSpacing: 10,
                   childAspectRatio: 1.15,
                   children: [
-                    ListenableBuilder(
-                      listenable: InboxService(),
-                      builder: (context, _) {
-                        final n = InboxService().unread;
-                        return _buildCard(
-                          '🔔',
-                          'Notifications',
-                          n > 0 ? '$n non lue${n > 1 ? 's' : ''}' : 'Alertes reçues',
-                          () => widget.onNavigate('notifications'),
-                          n > 0 ? AppColors.rouge : AppColors.bleu,
-                        );
-                      },
-                    ),
                     if (AppConfigService().tileVisible('map'))
                       _buildCard('🗺', 'Carte des zones', '$activeCount alerte${activeCount > 1 ? 's' : ''} (24h)', () => widget.onNavigate('map'), AppColors.bleu),
                     if (AppConfigService().tileVisible('contacts'))

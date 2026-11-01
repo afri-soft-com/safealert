@@ -35,7 +35,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: 'Mon historique', onBackTap: widget.onBack),
+          TopBar(
+            title: 'Mon historique',
+            onBackTap: widget.onBack,
+            onNotificationsTap: () => widget.onNavigate('notifications'),
+          ),
           Expanded(
             child: hp.loading
                 ? const Center(child: CircularProgressIndicator())

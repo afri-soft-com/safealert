@@ -46,7 +46,11 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: 'Carte de chaleur — Densité incidents', onBackTap: widget.onBack),
+          TopBar(
+            title: 'Carte de chaleur — Densité incidents',
+            onBackTap: widget.onBack,
+            onNotificationsTap: () => widget.onNavigate('notifications'),
+          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),

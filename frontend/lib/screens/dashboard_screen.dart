@@ -60,7 +60,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: 'Tableau de bord — Votre quartier', onBackTap: widget.onBack),
+          TopBar(
+            title: 'Tableau de bord — Votre quartier',
+            onBackTap: widget.onBack,
+            onNotificationsTap: () => widget.onNavigate('notifications'),
+          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),

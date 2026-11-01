@@ -110,7 +110,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: 'Administration', onBackTap: widget.onBack),
+          TopBar(
+            title: 'Administration',
+            onBackTap: widget.onBack,
+            onNotificationsTap: () => widget.onNavigate('notifications'),
+          ),
           TabBar(
             controller: _tabs,
             isScrollable: true,

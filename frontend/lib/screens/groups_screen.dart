@@ -261,7 +261,11 @@ class _GroupsScreenState extends State<GroupsScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: 'Groupes de voisins', onBackTap: widget.onBack),
+          TopBar(
+            title: 'Groupes de voisins',
+            onBackTap: widget.onBack,
+            onNotificationsTap: () => widget.onNavigate('notifications'),
+          ),
           Expanded(
             child: p.loading
                 ? const Center(child: CircularProgressIndicator())

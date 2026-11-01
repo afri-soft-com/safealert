@@ -93,7 +93,11 @@ class _LeaderScreenState extends State<LeaderScreen> {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: 'Secteur — Vue responsable', onBackTap: widget.onBack),
+          TopBar(
+            title: 'Secteur — Vue responsable',
+            onBackTap: widget.onBack,
+            onNotificationsTap: () => widget.onNavigate('notifications'),
+          ),
           if (sectorName != null && sectorName.isNotEmpty)
             Container(
               width: double.infinity,
