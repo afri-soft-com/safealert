@@ -447,6 +447,24 @@ const migrate = async () => {
       ALTER TABLE user_devices ADD COLUMN IF NOT EXISTS apns_token TEXT;
     `);
 
+    // In-app inbox of pushes delivered to the user (read / unread).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_inbox (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        dedupe_key VARCHAR(64) NOT NULL,
+        type VARCHAR(64),
+        title TEXT,
+        body TEXT,
+        payload JSONB,
+        read_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE (user_id, dedupe_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_user_inbox_user_created
+        ON user_inbox (user_id, created_at DESC);
+    `);
+
     // Widen group_alerts type CHECK for utility outage types
     await client.query(`
       ALTER TABLE group_alerts DROP CONSTRAINT IF EXISTS group_alerts_type_check;

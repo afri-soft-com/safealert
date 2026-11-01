@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const { pool } = require("../config/database");
 const { sendPush } = require("../config/firebase");
 const { sendApns, isApnsConfigured } = require("../config/apns");
@@ -61,7 +62,35 @@ const getUserPushTokens = async (userId) => {
   return [...new Set(devices.map((d) => d.fcm).filter(Boolean))];
 };
 
+/** Keep a copy in the in-app inbox even if the OS push is missed. */
+const recordInbox = async (userId, payload) => {
+  const data = payload?.data || {};
+  const title = String(payload?.notification?.title || data.title || "SafeAlert").slice(0, 180);
+  const body = String(payload?.notification?.body || data.body || "").slice(0, 500);
+  const type = data.type ? String(data.type).slice(0, 64) : null;
+  const dedupe = crypto
+    .createHash("sha1")
+    .update([userId, type || "", data.incidentId || data.groupId || "", title, body].join("|"))
+    .digest("hex");
+  const slim = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (v == null) continue;
+    slim[k] = String(v).slice(0, 300);
+  }
+  try {
+    await pool.query(
+      `INSERT INTO user_inbox (user_id, dedupe_key, type, title, body, payload)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+       ON CONFLICT (user_id, dedupe_key) DO NOTHING`,
+      [userId, dedupe, type, title, body, JSON.stringify(slim)]
+    );
+  } catch (err) {
+    console.error("recordInbox:", err.message);
+  }
+};
+
 const sendPushToUser = async (userId, payload) => {
+  await recordInbox(userId, payload);
   const devices = await getUserPushTargets(userId);
   const apnsOk = isApnsConfigured();
   let sent = 0;

@@ -21,7 +21,7 @@ const _kSessionUnlockedKey = 'safealert_session_unlocked_v1';
 /// Routes nécessitant une authentification (US-14 mode invité).
 const kAuthRequiredScreens = {
   'home', 'sos', 'contacts', 'dashboard', 'settings', 'leader', 'groups',
-  'history', 'admin', 'trip', 'escort_map', 'trust_zones', 'live_circles',
+  'history', 'notifications', 'admin', 'trip', 'escort_map', 'trust_zones', 'live_circles',
   'neighborhood', 'neighborhood_digest', 'incoming_sos',
   'offline_queue', 'safety_ping', 'safety_ping_missed', 'premium',
 };

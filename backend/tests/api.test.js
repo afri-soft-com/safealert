@@ -885,6 +885,13 @@ describe("Groups join requests", () => {
   });
 });
 
+describe("Inbox", () => {
+  it("GET /api/inbox requires auth", async () => {
+    const res = await request(app).get("/api/inbox");
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("History", () => {
   it("GET /api/history requires auth", async () => {
     const res = await request(app).get("/api/history");

@@ -43,6 +43,7 @@ import 'screens/groups_screen.dart';
 import 'screens/safety_screen.dart';
 import 'screens/heatmap_screen.dart';
 import 'screens/history_screen.dart';
+import 'screens/notifications_screen.dart';
 import 'screens/admin_screen.dart';
 import 'screens/maintenance_screen.dart';
 import 'screens/privacy_screen.dart';
@@ -61,6 +62,7 @@ import 'services/volume_sos_service.dart';
 import 'services/shake_sos_service.dart';
 import 'services/alert_sound_service.dart';
 import 'services/fcm_service.dart';
+import 'services/inbox_service.dart';
 import 'services/in_app_alert_service.dart';
 import 'services/app_update_service.dart';
 import 'services/app_config_service.dart';
@@ -176,6 +178,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _onFcmPending() {
     if (!mounted) return;
     _consumePendingNotificationOpen();
+    unawaited(InboxService().refresh());
   }
 
   void _onInAppAlert() {
@@ -420,6 +423,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       _fcm.refreshPendingOpens().then((_) {
         if (mounted) _consumePendingNotificationOpen();
       });
+      unawaited(InboxService().refresh());
       final auth = context.read<AuthProvider>();
       if (auth.needsPinUnlock) {
         setState(() {
@@ -733,6 +737,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         screen = DashboardScreen(onNavigate: _navigate, onBack: _onBack);
       case 'history':
         screen = HistoryScreen(onNavigate: _navigate, onBack: _onBack);
+      case 'notifications':
+        screen = NotificationsScreen(onBack: _onBack);
       case 'admin':
         screen = AdminScreen(onNavigate: _navigate, onBack: _onBack);
       default:

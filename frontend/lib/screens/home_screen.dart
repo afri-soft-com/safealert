@@ -5,6 +5,7 @@ import '../theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/incident_provider.dart';
 import '../services/app_config_service.dart';
+import '../services/inbox_service.dart';
 import '../utils/location_format.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
@@ -32,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await _refreshConfig();
       if (!mounted) return;
       context.read<IncidentProvider>().fetchIncidents(hours: 24);
+      InboxService().refresh();
     });
     // Apply admin tile toggles while the home stays open (no app restart).
     _configPoll = Timer.periodic(const Duration(seconds: 12), (_) {
@@ -226,6 +228,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   crossAxisSpacing: 10,
                   childAspectRatio: 1.15,
                   children: [
+                    ListenableBuilder(
+                      listenable: InboxService(),
+                      builder: (context, _) {
+                        final n = InboxService().unread;
+                        return _buildCard(
+                          '🔔',
+                          'Notifications',
+                          n > 0 ? '$n non lue${n > 1 ? 's' : ''}' : 'Alertes reçues',
+                          () => widget.onNavigate('notifications'),
+                          n > 0 ? AppColors.rouge : AppColors.bleu,
+                        );
+                      },
+                    ),
                     if (AppConfigService().tileVisible('map'))
                       _buildCard('🗺', 'Carte des zones', '$activeCount alerte${activeCount > 1 ? 's' : ''} (24h)', () => widget.onNavigate('map'), AppColors.bleu),
                     if (AppConfigService().tileVisible('contacts'))
