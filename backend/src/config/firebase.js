@@ -69,29 +69,34 @@ const sendPush = async (token, payload) => {
       body: payload.notification?.body || payload.data?.body,
     });
     const isSos = data?.type && SOS_PUSH_TYPES.has(data.type);
+    // Unique per incident — collapsing all "sos_alert" into one key dropped
+    // undelivered alerts when the phone was asleep.
     const collapseId = String(
-      data?.incidentId || data?.groupId || data?.type || "safealert"
+      data?.incidentId ||
+        data?.groupId ||
+        `${data?.type || "safealert"}-${Date.now()}`
     ).slice(0, 64);
     const message = {
       token,
       data,
-      notification: payload.notification,
+      notification: payload.notification || {
+        title: data?.title || "SafeAlert",
+        body: data?.body || "",
+      },
       android: {
+        // HIGH is required to wake Doze / turn the screen on when app is killed.
         priority: "high",
-        ttl: isSos ? 60 * 1000 : undefined,
+        // Was 60s — messages expired before Doze delivered them (screen stayed off).
+        ttl: isSos ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000,
         collapseKey: collapseId,
         notification: {
           channelId: isSos ? SOS_CHANNEL_ID : DEFAULT_CHANNEL_ID,
           sound: isSos ? SOS_SOUND_ANDROID : DEFAULT_SOUND_ANDROID,
           defaultVibrateTimings: true,
+          defaultLightSettings: true,
           priority: isSos ? "max" : "high",
-          ...(isSos
-            ? {
-                visibility: "public",
-                defaultSound: false,
-                notificationCount: 1,
-              }
-            : {}),
+          visibility: "public",
+          notificationCount: 1,
         },
       },
       apns: {
@@ -99,26 +104,21 @@ const sendPush = async (token, payload) => {
           // 10 = immediate delivery (required for audible alerts when app is killed).
           "apns-priority": "10",
           "apns-push-type": "alert",
-          // Keep briefly if device is offline.
-          "apns-expiration": String(Math.floor(Date.now() / 1000) + 3600),
+          "apns-expiration": String(Math.floor(Date.now() / 1000) + 86400),
           "apns-collapse-id": collapseId,
         },
         payload: {
           aps: {
             // Visible banner + sound when app is terminated. Do NOT set
-            // content-available here — silent wakes are dropped after force-quit
-            // and can interfere with alert delivery on some iOS versions.
-            alert: payload.notification
-              ? {
-                  title: payload.notification.title || "SafeAlert",
-                  body: payload.notification.body || "",
-                }
-              : {
-                  title: data?.title || "SafeAlert",
-                  body: data?.body || "",
-                },
+            // content-available here — silent wakes are dropped after force-quit.
+            alert: {
+              title:
+                payload.notification?.title || data?.title || "SafeAlert",
+              body: payload.notification?.body || data?.body || "",
+            },
             sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
             badge: 1,
+            "interruption-level": isSos ? "time-sensitive" : "active",
           },
         },
       },

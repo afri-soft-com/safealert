@@ -149,12 +149,15 @@ const buildApsBody = (payload) => {
   const isSos = data?.type && SOS_PUSH_TYPES.has(data.type);
   const title = payload.notification?.title || data.title || "SafeAlert";
   const body = payload.notification?.body || data.body || "";
-  // Minimal aps — extra keys have caused quiet/dropped delivery on some iOS builds.
   return {
     aps: {
-      alert: { title: String(title).slice(0, 100), body: String(body).slice(0, 200) },
+      alert: {
+        title: String(title).slice(0, 100),
+        body: String(body).slice(0, 200),
+      },
       sound: isSos ? SOS_SOUND_IOS : DEFAULT_SOUND_IOS,
       badge: 1,
+      "interruption-level": isSos ? "time-sensitive" : "active",
     },
     ...pickApnsData(data),
   };
@@ -162,7 +165,10 @@ const buildApsBody = (payload) => {
 
 const collapseIdFor = (payload) => {
   const data = payload?.data || {};
-  const id = data.incidentId || data.groupId || data.type || "safealert";
+  const id =
+    data.incidentId ||
+    data.groupId ||
+    `${data.type || "safealert"}-${Date.now()}`;
   return String(id).slice(0, 64);
 };
 

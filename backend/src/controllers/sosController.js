@@ -180,70 +180,97 @@ const triggerSOS = async (req, res) => {
       }
     }
 
-    // Return 201 immediately — push/SMS/geocode fan-out must not block the phone.
     const shareUrl = shareToken
       ? `${PUBLIC_BASE.replace(/\/$/, "")}/s/${shareToken}`
       : null;
     const io = req.app.get("io");
 
-    res.status(201).json({
-      incident,
-      notification: {
-        contactsNotified: 0,
-        contactsPush: 0,
-        contactsSms: 0,
-        nearbyNotified: 0,
-        nearbyPush: 0,
-        degraded: false,
-        async: true,
-      },
-      share_url: shareUrl,
-      mediation_requested: !!wantMediation,
-      sos_audio_enabled: sosAudio(),
-    });
-
-    const fanOut = async () => {
-      try {
-        await sendAlert(
+    // Critical pushes MUST complete before 201 — async fan-out after res.json
+    // was dropped when Render recycled the worker (closed-app screens stayed off).
+    let notification = {
+      contactsNotified: 0,
+      contactsPush: 0,
+      contactsSms: 0,
+      nearbyNotified: 0,
+      nearbyPush: 0,
+      degraded: false,
+    };
+    try {
+      notification = {
+        ...notification,
+        ...(await sendAlert(
           req.userId,
           lat,
           lng,
           incident_type || "sos",
           incident.zone_name,
           incident.id
-        );
-      } catch (alertErr) {
-        console.error("sendAlert error:", alertErr.message);
-      }
+        )),
+      };
+    } catch (alertErr) {
+      console.error("sendAlert error:", alertErr.message);
+      notification.degraded = true;
+      notification.error = true;
+    }
 
-      try {
-        const userRes = await pool.query(
-          "SELECT pseudo FROM users WHERE id = $1",
-          [req.userId]
-        );
-        await notifyUserGroupsOnSOS(
-          req.userId,
-          lat,
-          lng,
-          userRes.rows[0]?.pseudo || "Un membre",
-          incident.zone_name,
-          io
-        );
-      } catch (groupErr) {
-        console.error("notifyUserGroupsOnSOS error:", groupErr.message);
-      }
+    try {
+      const userRes = await pool.query(
+        "SELECT pseudo FROM users WHERE id = $1",
+        [req.userId]
+      );
+      notification.groupSos = await notifyUserGroupsOnSOS(
+        req.userId,
+        lat,
+        lng,
+        userRes.rows[0]?.pseudo || "Un membre",
+        incident.zone_name,
+        io
+      );
+    } catch (groupErr) {
+      console.error("notifyUserGroupsOnSOS error:", groupErr.message);
+      notification.groupSos = { error: true };
+    }
 
-      try {
-        await invalidateActiveAlerts();
-      } catch (cacheErr) {
-        console.error("invalidateActiveAlerts error:", cacheErr.message);
-      }
+    try {
+      await invalidateActiveAlerts();
+    } catch (cacheErr) {
+      console.error("invalidateActiveAlerts error:", cacheErr.message);
+    }
 
-      try {
-        await notifyLeadersForSOS(incident);
-      } catch (sectorErr) {
-        console.error("notifyLeadersForSOS error:", sectorErr.message);
-      }
+    try {
+      notification.sectorLeaders = await notifyLeadersForSOS(incident);
+    } catch (sectorErr) {
+      console.error("notifyLeadersForSOS error:", sectorErr.message);
+      notification.sectorLeaders = { error: true };
+    }
+
+    if (io) {
+      io.emit("sos_alert", {
+        id: incident.id,
+        type: "sos_alert",
+        user_id: req.userId,
+        lat: incident.lat,
+        lng: incident.lng,
+        zone_name: incident.zone_name,
+        incident_type: incident.incident_type,
+        created_at: incident.created_at,
+        title: "🚨 SOS — contact d'urgence",
+        body: incident.zone_name
+          ? `Alerte SOS — ${incident.zone_name}`
+          : "Une alerte SOS nécessite votre attention.",
+      });
+    }
+
+    res.status(201).json({
+      incident,
+      notification,
+      share_url: shareUrl,
+      mediation_requested: !!wantMediation,
+      sos_audio_enabled: sosAudio(),
+    });
+
+    const fanOut = async () => {
+      // Secondary only (trust zones / partner webhooks).
 
       try {
         const zones = await findMatchingZones(lat, lng);
