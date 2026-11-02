@@ -656,6 +656,33 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
     return 'Partage actif jusqu\'au ${t.day}/${t.month} $h:$m$meshBit$offlineBit';
   }
 
+  static const _pinColors = <Color>[
+    Color(0xFF185FA5),
+    Color(0xFFCC1C1C),
+    Color(0xFF0B6E6E),
+    Color(0xFFE86A1A),
+    Color(0xFF6A1B9A),
+    Color(0xFF2E7D32),
+    Color(0xFFC2185B),
+    Color(0xFF00838F),
+    Color(0xFF5D4037),
+    Color(0xFF1565C0),
+    Color(0xFFAD1457),
+    Color(0xFF4527A0),
+  ];
+
+  Color _memberColor(Map<String, dynamic> member) {
+    final id = member['id']?.toString() ?? member['user_id']?.toString() ?? '';
+    var idx = _members.indexWhere((m) {
+      final mid = m['id']?.toString() ?? m['user_id']?.toString();
+      return id.isNotEmpty && mid == id;
+    });
+    if (idx < 0) {
+      idx = (member['pseudo']?.toString() ?? id).hashCode.abs();
+    }
+    return _pinColors[idx % _pinColors.length];
+  }
+
   Widget _namedPin(String name, {Color color = AppColors.vert}) {
     final label = name.trim().isEmpty ? 'Membre' : name.trim();
     return Column(
@@ -665,7 +692,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
           constraints: const BoxConstraints(maxWidth: 110),
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
           decoration: BoxDecoration(
-            color: AppColors.bleuFonce,
+            color: color,
             borderRadius: BorderRadius.circular(8),
             boxShadow: const [
               BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1)),
@@ -697,6 +724,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
       final lat = (m['last_lat'] as num).toDouble();
       final lng = (m['last_lng'] as num).toDouble();
       final name = m['pseudo']?.toString() ?? 'Membre';
+      final color = _memberColor(m);
       return Marker(
         point: LatLng(lat, lng),
         width: 120,
@@ -707,7 +735,7 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
           child: InkWell(
             onTap: () => _showMemberDetails(m),
             borderRadius: BorderRadius.circular(8),
-            child: _namedPin(name),
+            child: _namedPin(name, color: color),
           ),
         ),
       );
@@ -892,9 +920,9 @@ class _LiveCirclesScreenState extends State<LiveCirclesScreen> {
                           dense: true,
                           enabled: true,
                           leading: Icon(
-                            onMap ? Icons.location_on : Icons.person_outline,
-                            color: onMap ? AppColors.vert : AppColors.gris,
-                            size: 20,
+                            onMap ? Icons.person_pin_circle : Icons.person_outline,
+                            color: onMap ? _memberColor(m) : AppColors.gris,
+                            size: 22,
                           ),
                           title: Text(m['pseudo']?.toString() ?? 'Membre'),
                           subtitle: Text(

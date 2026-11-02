@@ -27,10 +27,51 @@ class IncomingSosScreen extends StatelessWidget {
       _type == 'group_false_alarm' ||
       _type == 'group_safe';
 
-  String get _pseudo {
-    final p = (data['pseudo'] ?? '').trim();
-    return p.isNotEmpty ? p : 'Un proche';
+  static const _genericNames = {
+    'un proche',
+    'un membre',
+    'quelqu\'un',
+    'membre',
+    'safealert',
+  };
+
+  String? _usableName(String? raw) {
+    final p = (raw ?? '').trim();
+    if (p.isEmpty || _genericNames.contains(p.toLowerCase())) return null;
+    return p;
   }
+
+  String? _nameFromText(String? raw) {
+    final text = (raw ?? '').trim();
+    if (text.isEmpty) return null;
+    final patterns = [
+      RegExp(
+        r'^(.+?) a (?:déclenché|signale|signalé|annulé|confirmé)\b',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r':\s*(.+?) a (?:déclenché|signale|signalé|annulé|confirmé)\b',
+        caseSensitive: false,
+      ),
+      RegExp(r'^SOS de ([^«\n.]+)', caseSensitive: false),
+    ];
+    for (final re in patterns) {
+      final match = re.firstMatch(text);
+      final name = _usableName(match?.group(1));
+      if (name != null && name.length <= 50) return name;
+    }
+    return null;
+  }
+
+  /// Real sender name. Push payloads and the live socket both carry `pseudo`.
+  String? get _senderName {
+    return _usableName(data['pseudo']) ??
+        _usableName(data['name']) ??
+        _nameFromText(data['body']) ??
+        _nameFromText(data['title']);
+  }
+
+  String get _pseudo => _senderName ?? 'Un proche';
 
   String? get _phone {
     final p = (data['phone'] ?? '').trim();
@@ -148,7 +189,10 @@ class IncomingSosScreen extends StatelessWidget {
       body: Column(
         children: [
           const StatusBar(),
-          TopBar(title: _headline, onBackTap: onBack),
+          TopBar(
+            title: _senderName != null ? '$_headline — $_senderName' : _headline,
+            onBackTap: onBack,
+          ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
@@ -164,10 +208,23 @@ class IncomingSosScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
+                        _type == 'group_safe'
+                            ? 'En sécurité'
+                            : _isFalseAlarm
+                                ? 'A annulé son SOS'
+                                : 'Personne à aider',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.gris,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
                         _pseudo,
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
                           color: accent,
                         ),
                       ),

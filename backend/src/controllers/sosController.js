@@ -213,16 +213,22 @@ const triggerSOS = async (req, res) => {
       notification.error = true;
     }
 
+    let senderPseudo = "Un proche";
+    let senderPhone = "";
     try {
       const userRes = await pool.query(
-        "SELECT pseudo FROM users WHERE id = $1",
+        "SELECT pseudo, phone FROM users WHERE id = $1",
         [req.userId]
       );
+      senderPseudo = userRes.rows[0]?.pseudo || "Un proche";
+      senderPhone = userRes.rows[0]?.phone
+        ? String(userRes.rows[0].phone)
+        : "";
       notification.groupSos = await notifyUserGroupsOnSOS(
         req.userId,
         lat,
         lng,
-        userRes.rows[0]?.pseudo || "Un membre",
+        senderPseudo,
         incident.zone_name,
         io
       );
@@ -254,10 +260,12 @@ const triggerSOS = async (req, res) => {
         zone_name: incident.zone_name,
         incident_type: incident.incident_type,
         created_at: incident.created_at,
-        title: "🚨 SOS — contact d'urgence",
+        title: `🚨 SOS — ${senderPseudo}`,
         body: incident.zone_name
-          ? `Alerte SOS — ${incident.zone_name}`
-          : "Une alerte SOS nécessite votre attention.",
+          ? `${senderPseudo} a besoin d'aide — ${incident.zone_name}`
+          : `${senderPseudo} a besoin d'aide.`,
+        pseudo: senderPseudo,
+        phone: senderPhone,
       });
     }
 
@@ -347,23 +355,6 @@ const triggerSOS = async (req, res) => {
         zone_name: incident.zone_name,
         created_at: incident.created_at,
       }).catch(() => {});
-
-      if (io) {
-        io.emit("sos_alert", {
-          id: incident.id,
-          type: "sos_alert",
-          user_id: req.userId,
-          lat: incident.lat,
-          lng: incident.lng,
-          zone_name: incident.zone_name,
-          incident_type: incident.incident_type,
-          created_at: incident.created_at,
-          title: "🚨 SOS — contact d'urgence",
-          body: incident.zone_name
-            ? `Alerte SOS — ${incident.zone_name}`
-            : "Une alerte SOS nécessite votre attention.",
-        });
-      }
     };
 
     setImmediate(() => {
