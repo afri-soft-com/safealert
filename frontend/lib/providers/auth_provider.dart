@@ -13,6 +13,7 @@ import '../services/socket_service.dart';
 import '../services/trip_tracking_service.dart';
 import '../services/google_sign_in_service.dart';
 import '../services/apple_auth_service.dart';
+import '../services/session_file.dart';
 
 const _kCachedUserKey = 'safealert_cached_user_v1';
 /// Persists across app kills: false only after explicit « Verrouiller ».
@@ -137,6 +138,13 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _cacheUser(Map<String, dynamic>? user) async {
     try {
+      if (user == null) {
+        await SessionFile.remove(const ['user']);
+      } else {
+        await SessionFile.merge({'user': user});
+      }
+    } catch (_) {}
+    try {
       final prefs = await SharedPreferences.getInstance();
       if (user == null) {
         await prefs.remove(_kCachedUserKey);
@@ -147,6 +155,11 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> _loadCachedUser() async {
+    try {
+      final stored = await SessionFile.read();
+      final fromFile = stored['user'];
+      if (fromFile is Map) return Map<String, dynamic>.from(fromFile);
+    } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_kCachedUserKey);
@@ -253,12 +266,24 @@ class AuthProvider extends ChangeNotifier {
           }
         } on ApiException catch (e) {
           if (e.statusCode == 401) {
-            // Session revoked / expired — full sign-out.
-            await _api.clearToken();
-            await _cacheUser(null);
-            await _writeSessionUnlocked(false);
-            _user = null;
-            _isAuthenticated = false;
+            // iOS was wiping a still-valid local session whenever /profile
+            // answered 401 (device row / Keychain race). Stay in if we already
+            // know this account. A real sign-out is « Changer de numéro ».
+            final cached = await _loadCachedUser();
+            if (cached != null) {
+              _user = cached;
+              _isAuthenticated = true;
+              _isGuest = false;
+              await _applyPinGateAfterAuth();
+              _applyPrivacySettings();
+              if (!_hasLocalPin || _pinUnlocked) _startRealtimeServices();
+            } else {
+              await _api.clearToken();
+              await _cacheUser(null);
+              await _writeSessionUnlocked(false);
+              _user = null;
+              _isAuthenticated = false;
+            }
           } else {
             // Keep token on API errors (5xx, 429…) — restore from cache if possible.
             await _restoreCachedSessionKeepingToken();
@@ -688,6 +713,14 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
+        final cached = await _loadCachedUser();
+        if (cached != null) {
+          _user = cached;
+          _isAuthenticated = true;
+          _isGuest = false;
+          _applyPrivacySettings();
+          return true;
+        }
         await _api.clearToken();
         await _cacheUser(null);
         return false;
