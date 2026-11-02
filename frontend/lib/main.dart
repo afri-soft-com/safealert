@@ -586,7 +586,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             _consumePendingNotificationOpen();
           }
         });
-      } else if (auth.hasLocalPin || auth.needsPinSetup) {
+      } else {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && _navStack.last == 'splash') {
             setState(() {

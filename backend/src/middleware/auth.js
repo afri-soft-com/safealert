@@ -75,7 +75,10 @@ const authenticate = async (req, res, next) => {
             [decoded.userId, decoded.jti]
           );
           if (again.rows.length === 0) {
-            return res.status(401).json({ error: "Session expirée. Reconnectez-vous." });
+            // Do not 401 a signed, unrevoked JWT. iOS was wiping the local
+            // session on every cold start when the device row could not be
+            // rebound (newer row on the same device id).
+            console.error("session rebind skipped; keeping valid JWT", decoded.userId);
           }
         }
       } catch (err) {

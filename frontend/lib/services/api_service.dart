@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/network_error.dart';
+import 'session_file.dart';
 
 export '../utils/network_error.dart' show ApiException;
 
@@ -64,16 +65,24 @@ class ApiService {
       _deviceId = prefs.getString(_deviceIdKey);
       return;
     }
+    final stored = await SessionFile.read();
+    final fileToken = stored['token']?.toString();
+    final fileDevice = stored['deviceId']?.toString();
+    if (fileToken != null && fileToken.isNotEmpty) {
+      _token = fileToken;
+    }
+    if (fileDevice != null && fileDevice.isNotEmpty) {
+      _deviceId = fileDevice;
+    }
+
     String? secureToken;
     try {
       await _migrateTokenIfNeeded(prefs);
       secureToken = await _secure.read(key: _tokenKey);
-      _deviceId = await _secure.read(key: _deviceIdKey);
+      _deviceId ??= await _secure.read(key: _deviceIdKey);
     } catch (_) {
       /* Keychain can throw before first unlock — fall through to prefs. */
     }
-    // Prefs are the source of truth on iOS: Keychain often comes back empty
-    // or stale after a kill, while the last setToken() already wrote prefs.
     var prefsToken = prefs.getString(_tokenKey);
     if (prefsToken == null || prefsToken.isEmpty) {
       try {
@@ -81,21 +90,14 @@ class ApiService {
         prefsToken = prefs.getString(_tokenKey);
       } catch (_) {}
     }
-    if (prefsToken != null && prefsToken.isNotEmpty) {
-      _token = prefsToken;
-      if (secureToken != prefsToken) {
-        try {
-          await _secure.write(key: _tokenKey, value: prefsToken);
-        } catch (_) {}
-      }
-    } else if (secureToken != null && secureToken.isNotEmpty) {
-      _token = secureToken;
-      try {
-        await prefs.setString(_tokenKey, secureToken);
-      } catch (_) {}
-    }
+    _token ??= (prefsToken != null && prefsToken.isNotEmpty)
+        ? prefsToken
+        : (secureToken != null && secureToken.isNotEmpty ? secureToken : null);
     if (_deviceId == null || _deviceId!.isEmpty) {
       _deviceId = prefs.getString(_deviceIdKey);
+    }
+    if (_token != null && _token != fileToken) {
+      await SessionFile.merge({'token': _token, 'deviceId': _deviceId});
     }
   }
 
@@ -135,15 +137,20 @@ class ApiService {
       id = 'dev-${DateTime.now().millisecondsSinceEpoch}-${prefs.hashCode.abs()}';
     }
     _deviceId = id;
-    await _secure.write(key: _deviceIdKey, value: id);
+    await SessionFile.merge({'deviceId': id, if (_token != null) 'token': _token});
+    try {
+      await _secure.write(key: _deviceIdKey, value: id);
+    } catch (_) {}
     await prefs.setString(_deviceIdKey, id);
     return id;
   }
 
   Future<void> setToken(String token) async {
     _token = token;
+    // Flush to disk first. iOS can kill the app before Keychain/UserDefaults
+    // finish writing, which dropped the session on the next launch.
+    await SessionFile.merge({'token': token, 'deviceId': _deviceId});
     final prefs = await SharedPreferences.getInstance();
-    // Always mirror in prefs so a Keychain miss does not force re-login.
     await prefs.setString(_tokenKey, token);
     try {
       await _secure.write(key: _tokenKey, value: token);
@@ -152,6 +159,7 @@ class ApiService {
 
   Future<void> clearToken() async {
     _token = null;
+    await SessionFile.remove(const ['token']);
     try {
       await _secure.delete(key: _tokenKey);
     } catch (_) {}

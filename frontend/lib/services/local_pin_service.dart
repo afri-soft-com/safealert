@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'session_file.dart';
 
 /// Stockage clé/valeur du PIN local (jamais en clair dans SharedPreferences).
 abstract class PinStore {
@@ -13,6 +14,11 @@ abstract class PinStore {
 
 class SecurePinStore implements PinStore {
   static const _mirrorPrefix = 'pin_mirror_v1_';
+  static const _fileKeys = {
+    'login_pin_hash': 'pinHash',
+    'login_pin_salt': 'pinSalt',
+    'login_pin_phone': 'pinPhone',
+  };
 
   final FlutterSecureStorage _secure = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -22,8 +28,18 @@ class SecurePinStore implements PinStore {
     ),
   );
 
+  String? _fileKey(String key) => _fileKeys[key];
+
   @override
   Future<String?> read(String key) async {
+    final fileKey = _fileKey(key);
+    if (fileKey != null) {
+      try {
+        final stored = await SessionFile.read();
+        final fromFile = stored[fileKey]?.toString();
+        if (fromFile != null && fromFile.isNotEmpty) return fromFile;
+      } catch (_) {}
+    }
     try {
       final secure = await _secure.read(key: key);
       if (secure != null && secure.isNotEmpty) return secure;
@@ -39,6 +55,12 @@ class SecurePinStore implements PinStore {
 
   @override
   Future<void> write(String key, String value) async {
+    final fileKey = _fileKey(key);
+    if (fileKey != null) {
+      try {
+        await SessionFile.merge({fileKey: value});
+      } catch (_) {}
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('$_mirrorPrefix$key', value);
@@ -50,6 +72,12 @@ class SecurePinStore implements PinStore {
 
   @override
   Future<void> delete(String key) async {
+    final fileKey = _fileKey(key);
+    if (fileKey != null) {
+      try {
+        await SessionFile.remove([fileKey]);
+      } catch (_) {}
+    }
     try {
       await _secure.delete(key: key);
     } catch (_) {}
