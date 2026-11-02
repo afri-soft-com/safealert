@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Stockage clé/valeur du PIN local (jamais en clair dans SharedPreferences).
 abstract class PinStore {
@@ -11,31 +12,50 @@ abstract class PinStore {
 }
 
 class SecurePinStore implements PinStore {
+  static const _mirrorPrefix = 'pin_mirror_v1_';
+
   final FlutterSecureStorage _secure = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
     iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.first_unlock,
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+      synchronizable: false,
     ),
   );
 
   @override
   Future<String?> read(String key) async {
     try {
-      return await _secure.read(key: key);
-    } catch (_) {
-      return null;
-    }
+      final secure = await _secure.read(key: key);
+      if (secure != null && secure.isNotEmpty) return secure;
+    } catch (_) {}
+    // Hash + salt only (never the PIN). Survives an iOS Keychain miss.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final mirrored = prefs.getString('$_mirrorPrefix$key');
+      if (mirrored != null && mirrored.isNotEmpty) return mirrored;
+    } catch (_) {}
+    return null;
   }
 
   @override
   Future<void> write(String key, String value) async {
-    await _secure.write(key: key, value: value);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('$_mirrorPrefix$key', value);
+    } catch (_) {}
+    try {
+      await _secure.write(key: key, value: value);
+    } catch (_) {}
   }
 
   @override
   Future<void> delete(String key) async {
     try {
       await _secure.delete(key: key);
+    } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('$_mirrorPrefix$key');
     } catch (_) {}
   }
 }
@@ -95,6 +115,13 @@ class LocalPinService {
     final p = await _store.read(phoneKey);
     if (p == null || p.isEmpty) return null;
     return p;
+  }
+
+  /// Keep the same PIN when the account gains a phone (Apple / Google).
+  Future<void> updateIdentity(String phone) async {
+    final hash = await _store.read(hashKey);
+    if (hash == null || hash.isEmpty) return;
+    await _store.write(phoneKey, phone);
   }
 
   Future<void> setPin(String pin, {required String phone}) async {

@@ -44,7 +44,39 @@ const authenticate = async (req, res, next) => {
           [decoded.userId, decoded.jti]
         );
         if (check.rows.length === 0) {
-          return res.status(401).json({ error: "Session expirée. Reconnectez-vous." });
+          // Explicit revoke stays a logout. A missing row (insert failed, or
+          // iOS killed the app before the device row was durable) is restored
+          // so a still-valid JWT is not thrown away on the next cold start.
+          const revoked = await pool.query(
+            `SELECT 1 FROM user_devices
+             WHERE user_id = $1 AND session_jti = $2 AND revoked_at IS NOT NULL
+             LIMIT 1`,
+            [decoded.userId, decoded.jti]
+          );
+          if (revoked.rows.length > 0) {
+            return res.status(401).json({ error: "Session expirée. Reconnectez-vous." });
+          }
+          const deviceId = decoded.deviceId || `restored-${decoded.jti}`;
+          await pool.query(
+            `INSERT INTO user_devices (user_id, device_id, session_jti, last_seen_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (user_id, device_id) DO UPDATE SET
+               session_jti = EXCLUDED.session_jti,
+               revoked_at = NULL,
+               last_seen_at = NOW()
+             WHERE user_devices.revoked_at IS NOT NULL
+                OR user_devices.session_jti IS NULL
+                OR user_devices.session_jti = EXCLUDED.session_jti`,
+            [decoded.userId, deviceId, decoded.jti]
+          );
+          const again = await pool.query(
+            `SELECT id FROM user_devices
+             WHERE user_id = $1 AND session_jti = $2 AND revoked_at IS NULL`,
+            [decoded.userId, decoded.jti]
+          );
+          if (again.rows.length === 0) {
+            return res.status(401).json({ error: "Session expirée. Reconnectez-vous." });
+          }
         }
       } catch (err) {
         if (err.code !== "42P01") {

@@ -185,7 +185,24 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> checkAuth() async {
+  Future<void>? _authCheck;
+
+  bool _samePinIdentity(String a, String b) {
+    if (a == b) return true;
+    final da = a.replaceAll(RegExp(r'\D'), '');
+    final db = b.replaceAll(RegExp(r'\D'), '');
+    return da.length >= 8 && da == db;
+  }
+
+  Future<void> checkAuth() {
+    if (_authCheck != null) return _authCheck!;
+    _authCheck = _checkAuthImpl().whenComplete(() {
+      _authCheck = null;
+    });
+    return _authCheck!;
+  }
+
+  Future<void> _checkAuthImpl() async {
     try {
       await _api.init();
       await _refreshPinState();
@@ -202,12 +219,27 @@ class AuthProvider extends ChangeNotifier {
               : res['id']?.toString();
           if (_hasLocalPin) {
             _needsPinSetup = false;
-            if (identity != null && _pinPhone != null && identity != _pinPhone) {
-              await _pin.clear();
-              await _refreshPinState();
-              _needsPinSetup = true;
-              _pinUnlocked = false;
-              await _writeSessionUnlocked(false);
+            if (identity != null &&
+                _pinPhone != null &&
+                !_samePinIdentity(identity, _pinPhone!)) {
+              final storedDigits = _pinPhone!.replaceAll(RegExp(r'\D'), '');
+              final nextDigits = identity.replaceAll(RegExp(r'\D'), '');
+              final switchedPhone =
+                  storedDigits.length >= 8 &&
+                  nextDigits.length >= 8 &&
+                  storedDigits != nextDigits;
+              if (switchedPhone) {
+                await _pin.clear();
+                await _refreshPinState();
+                _needsPinSetup = true;
+                _pinUnlocked = false;
+                await _writeSessionUnlocked(false);
+              } else {
+                // Apple/Google account later linked a phone: keep the PIN.
+                await _pin.updateIdentity(identity);
+                _pinPhone = identity;
+                _pinUnlocked = await _readSessionUnlocked();
+              }
             } else {
               _pinUnlocked = await _readSessionUnlocked();
             }

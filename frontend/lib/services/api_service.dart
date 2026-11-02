@@ -34,12 +34,14 @@ class ApiService {
 
   String? _token;
   String? _deviceId;
-  /// iOS: first_unlock keeps the JWT across app kills (not only while unlocked).
+  /// iOS: after-first-unlock, this device only, not iCloud.
+  /// iCloud Keychain and WhenUnlocked both drop the JWT when iOS kills the app.
   /// Android: encrypted shared prefs. Always mirror token in SharedPreferences.
   final FlutterSecureStorage _secure = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
     iOptions: IOSOptions(
-      accessibility: KeychainAccessibility.first_unlock,
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+      synchronizable: false,
     ),
   );
 
@@ -62,15 +64,36 @@ class ApiService {
       _deviceId = prefs.getString(_deviceIdKey);
       return;
     }
+    String? secureToken;
     try {
       await _migrateTokenIfNeeded(prefs);
-      _token = await _secure.read(key: _tokenKey);
+      secureToken = await _secure.read(key: _tokenKey);
       _deviceId = await _secure.read(key: _deviceIdKey);
     } catch (_) {
       /* Keychain can throw before first unlock — fall through to prefs. */
     }
-    // SharedPreferences mirror: survives Keychain hiccups on iOS.
-    _token ??= prefs.getString(_tokenKey);
+    // Prefs are the source of truth on iOS: Keychain often comes back empty
+    // or stale after a kill, while the last setToken() already wrote prefs.
+    var prefsToken = prefs.getString(_tokenKey);
+    if (prefsToken == null || prefsToken.isEmpty) {
+      try {
+        await prefs.reload();
+        prefsToken = prefs.getString(_tokenKey);
+      } catch (_) {}
+    }
+    if (prefsToken != null && prefsToken.isNotEmpty) {
+      _token = prefsToken;
+      if (secureToken != prefsToken) {
+        try {
+          await _secure.write(key: _tokenKey, value: prefsToken);
+        } catch (_) {}
+      }
+    } else if (secureToken != null && secureToken.isNotEmpty) {
+      _token = secureToken;
+      try {
+        await prefs.setString(_tokenKey, secureToken);
+      } catch (_) {}
+    }
     if (_deviceId == null || _deviceId!.isEmpty) {
       _deviceId = prefs.getString(_deviceIdKey);
     }
