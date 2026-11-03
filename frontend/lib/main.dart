@@ -25,6 +25,7 @@ import 'providers/locale_provider.dart';
 import 'providers/trip_provider.dart';
 import 'providers/checkin_provider.dart';
 import 'providers/safety_ping_provider.dart';
+import 'screens/splash_screen.dart';
 import 'services/session_file.dart';
 import 'screens/offline_queue_screen.dart';
 import 'screens/safety_ping_screen.dart';
