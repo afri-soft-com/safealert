@@ -4,15 +4,28 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// Session durable sur disque.
+/// Session durable.
 ///
-/// Sur iOS, le Keychain et NSUserDefaults perdent le JWT quand le système
-/// tue l'app. Le fichier est dans le dossier Documents du conteneur, qui
-/// survit à cette fermeture.
+/// `SharedPreferences.getInstance` relit iOS via `persistentDomain`, qui
+/// revient souvent vide après que le système a tué l'app. Les clés sont
+/// pourtant toujours dans UserDefaults. `SharedPreferencesAsync` les relit
+/// une par une (`object(forKey:)`), ce qui survit à cette fermeture.
+/// Un fichier dans Documents sert de second exemplaire.
 class SessionFile {
   static const _fileName = 'safealert_session.json';
+  static const _blobKey = 'safealert_session_json';
   static Map<String, dynamic>? _cache;
+
+  static const _legacyKeys = <String, String>{
+    'token': 'flutter.auth_token',
+    'deviceId': 'flutter.device_id',
+    'user': 'flutter.safealert_cached_user_v1',
+    'pinHash': 'flutter.pin_mirror_v1_login_pin_hash',
+    'pinSalt': 'flutter.pin_mirror_v1_login_pin_salt',
+    'pinPhone': 'flutter.pin_mirror_v1_login_pin_phone',
+  };
 
   static bool get _inTest {
     if (kIsWeb) return true;
@@ -24,48 +37,33 @@ class SessionFile {
     }
   }
 
-  static Future<Directory?> _dir() async {
-    if (_inTest) return null;
-    try {
-      if (Platform.isIOS) {
-        final docs = Directory('${Directory.systemTemp.parent.path}/Documents');
-        if (!await docs.exists()) await docs.create(recursive: true);
-        return docs;
-      }
-    } catch (_) {}
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      if (!await dir.exists()) await dir.create(recursive: true);
-      return dir;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static Future<File?> _file() async {
-    final dir = await _dir();
-    if (dir == null) return null;
-    return File('${dir.path}/$_fileName');
-  }
-
   static Future<Map<String, dynamic>> read() async {
     if (_inTest) return {};
     if (_cache != null) return Map<String, dynamic>.from(_cache!);
-    final file = await _file();
-    if (file == null) return {};
-    if (!await file.exists()) {
-      _cache = {};
-      return {};
+
+    final layers = <Map<String, dynamic>>[];
+    final legacy = await _readLegacy();
+    if (legacy.isNotEmpty) layers.add(legacy);
+    for (final file in await _files()) {
+      final stored = await _readOne(file);
+      if (stored.isNotEmpty) layers.add(stored);
     }
-    try {
-      final decoded = jsonDecode(await file.readAsString());
-      if (decoded is Map) {
-        _cache = Map<String, dynamic>.from(decoded);
-        return Map<String, dynamic>.from(_cache!);
-      }
-    } catch (_) {}
-    _cache = {};
-    return {};
+    final blob = await _readBlob();
+    if (blob.isNotEmpty) layers.add(blob);
+
+    final merged = <String, dynamic>{};
+    for (final layer in layers) {
+      layer.forEach((key, value) {
+        if (value == null) return;
+        if (value is String && value.isEmpty) return;
+        merged[key] = value;
+      });
+    }
+    _cache = merged;
+    if (merged.isNotEmpty && jsonEncode(blob) != jsonEncode(merged)) {
+      await _persist(merged);
+    }
+    return Map<String, dynamic>.from(merged);
   }
 
   static Future<void> merge(Map<String, dynamic> patch) async {
@@ -79,14 +77,7 @@ class SessionFile {
       }
     });
     _cache = current;
-    final file = await _file();
-    if (file == null) return;
-    try {
-      await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode(current), flush: true);
-    } catch (e) {
-      debugPrint('SessionFile write: $e');
-    }
+    await _persist(current);
   }
 
   static Future<void> remove(Iterable<String> keys) async {
@@ -96,12 +87,84 @@ class SessionFile {
       current.remove(key);
     }
     _cache = current;
-    final file = await _file();
-    if (file == null) return;
+    await _persist(current);
+  }
+
+  static Future<void> _persist(Map<String, dynamic> data) async {
+    final encoded = jsonEncode(data);
     try {
-      await file.writeAsString(jsonEncode(current), flush: true);
+      await SharedPreferencesAsync().setString(_blobKey, encoded);
     } catch (e) {
-      debugPrint('SessionFile remove: $e');
+      debugPrint('SessionFile defaults: $e');
+    }
+    for (final file in await _files()) {
+      try {
+        await file.parent.create(recursive: true);
+        await file.writeAsString(encoded, flush: true);
+      } catch (e) {
+        debugPrint('SessionFile write: $e');
+      }
+    }
+  }
+
+  static Future<Map<String, dynamic>> _readBlob() async {
+    try {
+      final raw = await SharedPreferencesAsync().getString(_blobKey);
+      return _decodeMap(raw);
+    } catch (e) {
+      debugPrint('SessionFile blob: $e');
+      return {};
+    }
+  }
+
+  static Future<Map<String, dynamic>> _readLegacy() async {
+    final out = <String, dynamic>{};
+    try {
+      final prefs = SharedPreferencesAsync();
+      for (final entry in _legacyKeys.entries) {
+        final raw = await prefs.getString(entry.value);
+        if (raw == null || raw.isEmpty) continue;
+        if (entry.key == 'user') {
+          final user = _decodeMap(raw);
+          if (user.isNotEmpty) out['user'] = user;
+        } else {
+          out[entry.key] = raw;
+        }
+      }
+    } catch (e) {
+      debugPrint('SessionFile legacy: $e');
+    }
+    return out;
+  }
+
+  static Map<String, dynamic> _decodeMap(String? raw) {
+    if (raw == null || raw.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return {};
+  }
+
+  static Future<List<File>> _files() async {
+    final out = <File>[];
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      out.add(File('${docs.path}/$_fileName'));
+    } catch (_) {}
+    try {
+      final support = await getApplicationSupportDirectory();
+      out.add(File('${support.path}/$_fileName'));
+    } catch (_) {}
+    return out;
+  }
+
+  static Future<Map<String, dynamic>> _readOne(File file) async {
+    try {
+      if (!await file.exists()) return {};
+      return _decodeMap(await file.readAsString());
+    } catch (_) {
+      return {};
     }
   }
 }

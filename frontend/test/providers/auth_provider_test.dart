@@ -42,7 +42,7 @@ void main() {
       expect(fakeApi.hasToken, true);
     });
 
-    test('clears token when profile returns 401', () async {
+    test('keeps token when profile returns 401', () async {
       await fakeApi.setToken('expired-token');
       fakeApi.onGet(
         '/auth/profile',
@@ -51,9 +51,9 @@ void main() {
 
       await provider.checkAuth();
 
-      expect(provider.isAuthenticated, false);
+      expect(provider.isAuthenticated, true);
+      expect(fakeApi.hasToken, true);
       expect(provider.user, isNull);
-      expect(fakeApi.hasToken, false);
     });
 
     test('existing session without PIN requires setup', () async {

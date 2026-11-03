@@ -266,24 +266,10 @@ class AuthProvider extends ChangeNotifier {
           }
         } on ApiException catch (e) {
           if (e.statusCode == 401) {
-            // iOS was wiping a still-valid local session whenever /profile
-            // answered 401 (device row / Keychain race). Stay in if we already
-            // know this account. A real sign-out is « Changer de numéro ».
-            final cached = await _loadCachedUser();
-            if (cached != null) {
-              _user = cached;
-              _isAuthenticated = true;
-              _isGuest = false;
-              await _applyPinGateAfterAuth();
-              _applyPrivacySettings();
-              if (!_hasLocalPin || _pinUnlocked) _startRealtimeServices();
-            } else {
-              await _api.clearToken();
-              await _cacheUser(null);
-              await _writeSessionUnlocked(false);
-              _user = null;
-              _isAuthenticated = false;
-            }
+            // Ne pas effacer le JWT au démarrage. iOS relançait l'écran de
+            // connexion à chaque ouverture dès que /profile répondait 401.
+            // « Changer de numéro » reste le vrai sign-out.
+            await _keepStoredSession();
           } else {
             // Keep token on API errors (5xx, 429…) — restore from cache if possible.
             await _restoreCachedSessionKeepingToken();
@@ -297,6 +283,21 @@ class AuthProvider extends ChangeNotifier {
       _authChecked = true;
       notifyListeners();
     }
+  }
+
+  Future<void> _keepStoredSession() async {
+    final cached = await _loadCachedUser();
+    if (cached != null) _user = cached;
+    if (!_api.hasToken) {
+      _user = null;
+      _isAuthenticated = false;
+      return;
+    }
+    _isAuthenticated = true;
+    _isGuest = false;
+    await _applyPinGateAfterAuth();
+    _applyPrivacySettings();
+    if (!_hasLocalPin || _pinUnlocked) _startRealtimeServices();
   }
 
   Future<void> _restoreCachedSessionKeepingToken() async {
@@ -713,17 +714,8 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
-        final cached = await _loadCachedUser();
-        if (cached != null) {
-          _user = cached;
-          _isAuthenticated = true;
-          _isGuest = false;
-          _applyPrivacySettings();
-          return true;
-        }
-        await _api.clearToken();
-        await _cacheUser(null);
-        return false;
+        await _keepStoredSession();
+        return _isAuthenticated;
       }
       // Soft failure: use cache if present.
       final cached = await _loadCachedUser();
