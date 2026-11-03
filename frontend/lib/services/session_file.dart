@@ -39,6 +39,10 @@ class SessionFile {
     }
   }
 
+  static void invalidate() {
+    _cache = null;
+  }
+
   static Future<Map<String, dynamic>> read() async {
     if (_inTest) return {};
     if (_cache != null) return Map<String, dynamic>.from(_cache!);
@@ -64,7 +68,7 @@ class SessionFile {
         merged[key] = value;
       });
     }
-    _cache = merged;
+    _cache = merged.isEmpty ? null : merged;
     final nativeMap = native ?? const <String, dynamic>{};
     if (merged.isNotEmpty && jsonEncode(nativeMap) != jsonEncode(merged)) {
       await _persist(merged);

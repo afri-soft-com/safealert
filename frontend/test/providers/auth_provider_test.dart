@@ -56,15 +56,15 @@ void main() {
       expect(provider.user, isNull);
     });
 
-    test('existing session without PIN requires setup', () async {
+    test('existing session without PIN still opens the app', () async {
       await fakeApi.setToken('valid-token');
       fakeApi.onGet('/auth/profile', () => {'id': 'u1', 'phone': '+243811234567'});
 
       await provider.checkAuth();
 
       expect(provider.isAuthenticated, true);
-      expect(provider.needsPinSetup, true);
-      expect(provider.canEnterApp, false);
+      expect(provider.needsPinSetup, false);
+      expect(provider.canEnterApp, true);
     });
 
     test('existing session with PIN stays open after app relaunch', () async {

@@ -25,7 +25,7 @@ import 'providers/locale_provider.dart';
 import 'providers/trip_provider.dart';
 import 'providers/checkin_provider.dart';
 import 'providers/safety_ping_provider.dart';
-import 'screens/splash_screen.dart';
+import 'services/session_file.dart';
 import 'screens/offline_queue_screen.dart';
 import 'screens/safety_ping_screen.dart';
 import 'screens/safety_ping_missed_screen.dart';
@@ -457,6 +457,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Future<void> _checkDiscreetMode() async {
     await context.read<AuthProvider>().checkAuth();
     if (!mounted) return;
+    if (!context.read<AuthProvider>().canEnterApp) {
+      // La première lecture peut arriver avant que iOS rende la session.
+      SessionFile.invalidate();
+      await context.read<AuthProvider>().checkAuth();
+      if (!mounted) return;
+    }
     final prefs = await SharedPreferences.getInstance();
 
     // One-time: clear stuck local camouflage from early tester builds (default must stay OFF).
@@ -576,25 +582,25 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         _currentScreen != 'annuaire' &&
         _currentScreen != 'calculator';
 
-    if (_currentScreen == 'splash' && !maintenanceBlocks && auth.authChecked) {
-      if (auth.canEnterApp) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _navStack.last == 'splash') {
-            setState(() {
-              _navStack..clear()..add('home');
-            });
-            _consumePendingNotificationOpen();
-          }
+    if (!maintenanceBlocks && auth.authChecked && auth.canEnterApp &&
+        (_currentScreen == 'splash' || _currentScreen == 'login')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_navStack.last != 'splash' && _navStack.last != 'login') return;
+        if (!context.read<AuthProvider>().canEnterApp) return;
+        setState(() {
+          _navStack..clear()..add('home');
         });
-      } else {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _navStack.last == 'splash') {
-            setState(() {
-              _navStack..clear()..add('login');
-            });
-          }
-        });
-      }
+        _consumePendingNotificationOpen();
+      });
+    } else if (_currentScreen == 'splash' && !maintenanceBlocks && auth.authChecked) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _navStack.last == 'splash') {
+          setState(() {
+            _navStack..clear()..add('login');
+          });
+        }
+      });
     }
 
     if (maintenanceBlocks) {

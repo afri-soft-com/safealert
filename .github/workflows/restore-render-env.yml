@@ -11,11 +11,11 @@ on:
       app_latest_version:
         description: APP_LATEST_VERSION
         required: true
-        default: "1.0.95"
+        default: "1.0.96"
       app_latest_build:
         description: APP_LATEST_BUILD (Android versionCode / iOS CFBundleVersion)
         required: true
-        default: "124"
+        default: "125"
       admin_web_version:
         description: ADMIN_WEB_VERSION
         required: true

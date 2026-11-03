@@ -201,8 +201,8 @@ class AuthProvider extends ChangeNotifier {
       _needsPinSetup = false;
       _pinUnlocked = await _readSessionUnlocked();
     } else {
-      _needsPinSetup = true;
-      _pinUnlocked = false;
+      _needsPinSetup = false;
+      _pinUnlocked = true;
     }
   }
 
@@ -213,6 +213,12 @@ class AuthProvider extends ChangeNotifier {
     final da = a.replaceAll(RegExp(r'\D'), '');
     final db = b.replaceAll(RegExp(r'\D'), '');
     return da.length >= 8 && da == db;
+  }
+
+  /// Vrai seulement pour un numéro, pas pour un identifiant Apple ou Google.
+  bool _isPhoneIdentity(String value) {
+    final compact = value.replaceAll(RegExp(r'[\s().-]'), '');
+    return RegExp(r'^\+?\d{8,15}$').hasMatch(compact);
   }
 
   Future<void> checkAuth() {
@@ -243,20 +249,15 @@ class AuthProvider extends ChangeNotifier {
             if (identity != null &&
                 _pinPhone != null &&
                 !_samePinIdentity(identity, _pinPhone!)) {
-              final storedDigits = _pinPhone!.replaceAll(RegExp(r'\D'), '');
-              final nextDigits = identity.replaceAll(RegExp(r'\D'), '');
-              final switchedPhone =
-                  storedDigits.length >= 8 &&
-                  nextDigits.length >= 8 &&
-                  storedDigits != nextDigits;
-              if (switchedPhone) {
+              if (_isPhoneIdentity(identity) && _isPhoneIdentity(_pinPhone!)) {
                 await _pin.clear();
                 await _refreshPinState();
                 _needsPinSetup = true;
                 _pinUnlocked = false;
                 await _writeSessionUnlocked(false);
               } else {
-                // Apple/Google account later linked a phone: keep the PIN.
+                // Compte Apple/Google : l'identifiant n'est pas un numéro.
+                // Ne pas effacer le PIN à chaque ouverture.
                 await _pin.updateIdentity(identity);
                 _pinPhone = identity;
                 _pinUnlocked = await _readSessionUnlocked();
@@ -265,8 +266,10 @@ class AuthProvider extends ChangeNotifier {
               _pinUnlocked = await _readSessionUnlocked();
             }
           } else {
-            _needsPinSetup = true;
-            _pinUnlocked = false;
+            // Relance sans PIN lisible : ouvrir l'app. Le PIN n'est exigé
+            // qu'après une nouvelle connexion, ou après « Verrouiller ».
+            _needsPinSetup = false;
+            _pinUnlocked = true;
           }
           _applyPrivacySettings();
           if (!_hasLocalPin || _pinUnlocked) {

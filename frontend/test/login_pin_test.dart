@@ -90,7 +90,7 @@ void main() {
     expect(await LocalPinService(store: pinStore).verify('246810'), true);
   });
 
-  testWidgets('restored session without PIN shows create PIN immediately', (tester) async {
+  testWidgets('restored session without PIN opens without asking for a new PIN', (tester) async {
     await fakeApi.setToken('valid-token');
     fakeApi.onGet('/auth/profile', () => {
       'id': 'u1',
@@ -99,14 +99,12 @@ void main() {
     });
     await auth.checkAuth();
 
-    await pumpLogin(tester);
-
-    expect(find.text('Enregistrer le PIN'), findsOneWidget);
-    expect(find.text('Envoyer le code'), findsNothing);
+    expect(auth.canEnterApp, true);
+    expect(auth.needsPinSetup, false);
     expect(successCount, 0);
   });
 
-  testWidgets('session needing PIN setup after checkAuth switches to create PIN', (tester) async {
+  testWidgets('checkAuth on an open login screen does not force a new PIN', (tester) async {
     await pumpLogin(tester);
     expect(find.text('Envoyer le code'), findsOneWidget);
 
@@ -119,8 +117,8 @@ void main() {
     await auth.checkAuth();
     await tester.pumpAndSettle();
 
-    expect(find.text('Enregistrer le PIN'), findsOneWidget);
-    expect(find.text('Envoyer le code'), findsNothing);
+    expect(auth.canEnterApp, true);
+    expect(find.text('Enregistrer le PIN'), findsNothing);
     expect(successCount, 0);
   });
 
