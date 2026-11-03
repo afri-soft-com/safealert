@@ -173,6 +173,11 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> _readSessionUnlocked() async {
     try {
+      final stored = await SessionFile.read();
+      final value = stored['unlocked'];
+      if (value is bool) return value;
+    } catch (_) {}
+    try {
       final prefs = await SharedPreferences.getInstance();
       // Default true: closing the app must not force the PIN screen.
       return prefs.getBool(_kSessionUnlockedKey) ?? true;
@@ -182,6 +187,9 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _writeSessionUnlocked(bool unlocked) async {
+    try {
+      await SessionFile.merge({'unlocked': unlocked});
+    } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kSessionUnlockedKey, unlocked);

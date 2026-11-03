@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SessionFile {
   static const _fileName = 'safealert_session.json';
   static const _blobKey = 'safealert_session_json';
+  static const _channel = MethodChannel('safealert/session');
   static Map<String, dynamic>? _cache;
 
   static const _legacyKeys = <String, String>{
@@ -50,6 +52,9 @@ class SessionFile {
     }
     final blob = await _readBlob();
     if (blob.isNotEmpty) layers.add(blob);
+    final native = await _readNative();
+    if (native == null && layers.isEmpty) return {};
+    if (native != null && native.isNotEmpty) layers.add(native);
 
     final merged = <String, dynamic>{};
     for (final layer in layers) {
@@ -60,7 +65,8 @@ class SessionFile {
       });
     }
     _cache = merged;
-    if (merged.isNotEmpty && jsonEncode(blob) != jsonEncode(merged)) {
+    final nativeMap = native ?? const <String, dynamic>{};
+    if (merged.isNotEmpty && jsonEncode(nativeMap) != jsonEncode(merged)) {
       await _persist(merged);
     }
     return Map<String, dynamic>.from(merged);
@@ -90,8 +96,29 @@ class SessionFile {
     await _persist(current);
   }
 
+  static Future<Map<String, dynamic>?> _readNative() async {
+    if (_inTest || !Platform.isIOS) return {};
+    try {
+      final raw = await _channel.invokeMethod<String>('read');
+      return _decodeMap(raw);
+    } catch (e) {
+      debugPrint('SessionFile native read: $e');
+      return null;
+    }
+  }
+
+  static Future<void> _writeNative(String encoded) async {
+    if (_inTest || !Platform.isIOS) return;
+    try {
+      await _channel.invokeMethod<bool>('write', encoded);
+    } catch (e) {
+      debugPrint('SessionFile native write: $e');
+    }
+  }
+
   static Future<void> _persist(Map<String, dynamic> data) async {
     final encoded = jsonEncode(data);
+    await _writeNative(encoded);
     try {
       await SharedPreferencesAsync().setString(_blobKey, encoded);
     } catch (e) {

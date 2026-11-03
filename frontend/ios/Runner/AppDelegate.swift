@@ -27,12 +27,58 @@ import UserNotifications
       UNUserNotificationCenter.current().delegate = self
     }
 
+    // Before super.application: Dart starts during that call and must already
+    // be able to read the saved login.
+    registerSessionStore()
     let ok = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    if sessionChannel == nil {
+      registerSessionStore()
+    }
     application.registerForRemoteNotifications()
     return ok
   }
 
+  /// Login session, read with string(forKey:) — the same store that already
+  /// keeps the APNs token after iOS kills the app. SharedPreferences' getAll
+  /// does not.
+  private var sessionChannel: FlutterMethodChannel?
+  private static let sessionKey = "safealert.session.v1"
+
+  private func registerSessionStore() {
+    guard let registrar = self.registrar(forPlugin: "SafeAlertSession") else {
+      NSLog("SafeAlert session store: registrar missing")
+      return
+    }
+    let channel = FlutterMethodChannel(
+      name: "safealert/session",
+      binaryMessenger: registrar.messenger()
+    )
+    channel.setMethodCallHandler { call, result in
+      let defaults = UserDefaults.standard
+      switch call.method {
+      case "read":
+        result(defaults.string(forKey: AppDelegate.sessionKey))
+      case "write":
+        if let raw = call.arguments as? String {
+          defaults.set(raw, forKey: AppDelegate.sessionKey)
+          defaults.synchronize()
+          result(true)
+        } else {
+          result(false)
+        }
+      case "clear":
+        defaults.removeObject(forKey: AppDelegate.sessionKey)
+        defaults.synchronize()
+        result(true)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    sessionChannel = channel
+  }
+
   override func applicationDidEnterBackground(_ application: UIApplication) {
+    UserDefaults.standard.synchronize()
     do {
       try AVAudioSession.sharedInstance().setActive(
         false,
