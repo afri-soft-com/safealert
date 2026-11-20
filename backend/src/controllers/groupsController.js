@@ -466,6 +466,7 @@ const getGroupMessages = async (req, res) => {
 
     const result = await pool.query(
       `SELECT m.id, m.group_id, m.user_id, m.content, m.created_at,
+              m.audio_seconds, (m.audio_data IS NOT NULL) AS has_audio,
               u.pseudo as author_pseudo
        FROM group_messages m
        JOIN users u ON u.id = m.user_id
@@ -485,10 +486,54 @@ const getGroupMessages = async (req, res) => {
   }
 };
 
+/** Voice note limits: about 2 min of low-bitrate AAC as a data URL. */
+const MAX_AUDIO_CHARS = 1_200_000;
+const MAX_AUDIO_SECONDS = 120;
+const VOICE_LABEL = "🎤 Message vocal";
+
+/** Returns { audio, seconds } or { error }. */
+function parseVoiceNote(body) {
+  const raw = body?.audio_data_url;
+  if (raw == null || raw === "") return { audio: null, seconds: null };
+  const audio = String(raw);
+  if (!/^data:audio\/[a-z0-9.+-]+;base64,/i.test(audio)) {
+    return { error: "Format audio invalide." };
+  }
+  if (audio.length > MAX_AUDIO_CHARS) {
+    return { error: `Message vocal trop long (${MAX_AUDIO_SECONDS} s max).` };
+  }
+  const seconds = Math.round(Number(body.audio_seconds));
+  if (!Number.isFinite(seconds) || seconds < 1 || seconds > MAX_AUDIO_SECONDS) {
+    return { error: `Durée du message vocal invalide (1 à ${MAX_AUDIO_SECONDS} s).` };
+  }
+  return { audio, seconds };
+}
+
+const getMessageAudio = async (req, res) => {
+  const { id, messageId } = req.params;
+  try {
+    if (!(await isGroupMember(id, req.userId))) {
+      return res.status(403).json({ error: "Accès réservé aux membres du groupe" });
+    }
+    const r = await pool.query(
+      `SELECT audio_data, audio_seconds FROM group_messages
+       WHERE id = $1 AND group_id = $2 AND audio_data IS NOT NULL`,
+      [messageId, id]
+    );
+    if (r.rows.length === 0) return res.status(404).json({ error: "Message vocal introuvable" });
+    return res.json({ data_url: r.rows[0].audio_data, audio_seconds: r.rows[0].audio_seconds });
+  } catch (err) {
+    console.error("getMessageAudio error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
 const postGroupMessage = async (req, res) => {
   const { id } = req.params;
-  const { content } = req.body;
-  if (!content || !String(content).trim()) {
+  const voice = parseVoiceNote(req.body);
+  if (voice.error) return res.status(400).json({ error: voice.error });
+  const content = String(req.body?.content || "").trim() || (voice.audio ? VOICE_LABEL : "");
+  if (!content) {
     return res.status(400).json({ error: "Message requis" });
   }
 
@@ -507,10 +552,11 @@ const postGroupMessage = async (req, res) => {
     const pseudo = userRes.rows[0]?.pseudo || "Membre";
 
     const result = await pool.query(
-      `INSERT INTO group_messages (group_id, user_id, content)
-       VALUES ($1, $2, $3)
-       RETURNING id, group_id, user_id, content, created_at`,
-      [id, req.userId, String(content).trim().slice(0, 2000)]
+      `INSERT INTO group_messages (group_id, user_id, content, audio_data, audio_seconds)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, group_id, user_id, content, created_at, audio_seconds,
+                 (audio_data IS NOT NULL) AS has_audio`,
+      [id, req.userId, content.slice(0, 2000), voice.audio, voice.seconds]
     );
 
     const message = {
@@ -523,7 +569,7 @@ const postGroupMessage = async (req, res) => {
       req.userId,
       {
         title: `💬 ${groupName}`,
-        body: `${pseudo}: ${String(content).trim().slice(0, 100)}`,
+        body: `${pseudo}: ${content.slice(0, 100)}`,
       },
       {
         type: "group_message",
@@ -682,6 +728,7 @@ module.exports = {
   setMemberRole,
   getGroupMembers,
   getGroupMessages,
+  getMessageAudio,
   postGroupMessage,
   getGroupAlerts,
   postGroupAlert,

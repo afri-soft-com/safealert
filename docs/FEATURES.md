@@ -28,6 +28,7 @@ Variables `FEATURE_*=true|1|yes` — voir `backend/src/config/features.js`.
 | `FEATURE_PUBLIC_SHARE` | on | Lien public temporaire « suivre mon trajet » |
 | `FEATURE_SAFETY_PING` | on | Contrôle planifié « Tu es OK ? » |
 | `FEATURE_STRUCTURED_GROUP_ALERTS` | on | Alertes utilitaires (électricité, eau, inondation, rue) |
+| `FEATURE_FLOOD_ALERTS` | on | Alerte fortes pluies par zone (Open-Meteo, toutes les 30 min) |
 | `FEATURE_CORRIDORS` | on | Repères / suggestion d'itinéraire (MVP) |
 | `FEATURE_HEATMAP` | **on** | Carte de chaleur (UI mobile) ; endpoints API inchangés |
 | `FEATURE_FAKE_CALL` | on | Faux appel entrant (sortie discrète) |
@@ -90,6 +91,36 @@ Après déploiement : `npm run migrate` dans `backend/`.
 21. **FCM** — refresh token + upload `/auth/fcm-token` ; doc `FIREBASE_SETUP.md`.
 22. **Offline queue** — SOS + reports + messages groupe (`pending_queue` v3).
 23. **Backup contacts** — chiffrement client + `PUT/GET /api/backup/contacts`.
+
+
+## Sécurité personnelle (novembre 2026)
+
+24. **Trajet sans nouvelles** — si un trajet actif n'envoie plus de position depuis
+    `TRIP_SIGNAL_LOST_MINUTES` (10 par défaut), les contacts de confiance reçoivent la
+    dernière position (push + SMS), une seule fois ; message « de nouveau en ligne » au
+    ping suivant. Job dans `processOverdueTrips` → `processSilentTrips`.
+25. **Batterie presque vide** — à 5 % ou moins (hors charge), l'app envoie
+    `POST /api/battery/low` ; le serveur prévient les contacts seulement pendant un trajet
+    ou un SOS, au plus une fois toutes les 6 h. Vérification toutes les 2 min, app ouverte
+    ou trajet en arrière-plan.
+26. **Fiche médicale** — `GET/PUT /api/medical-card` ; `GET /api/medical-card/:userId`
+    lisible par les contacts de confiance et le staff **seulement pendant un SOS** et si
+    l'utilisateur a laissé « Partager pendant un SOS ». Bouton sur l'écran SOS entrant.
+27. **Alertes inondation** — grille sur Kinshasa (`FLOOD_BBOX`, `FLOOD_GRID_STEP`),
+    seuils `FLOOD_MM_PER_HOUR` (15) et `FLOOD_MM_3H` (30). Push aux utilisateurs dont la
+    dernière position est dans une case concernée, au plus toutes les 12 h. Seules les
+    coordonnées de la grille partent vers Open-Meteo.
+28. **Lieux refuges** — `GET /api/refuges` (sans compte, du plus proche au plus loin),
+    ajout/suppression par leaders, agents et admins. Écran « Lieux refuges » + calque sur
+    la carte (icône hôpital) avec itinéraire.
+29. **Audio pendant un SOS** — option dans Réglages (désactivée par défaut, le micro est
+    demandé à l'activation) : 60 s enregistrées après l'envoi, jointes au SOS, gardées
+    7 jours. Les contacts l'écoutent depuis l'écran SOS entrant (`GET /api/sos/:id/evidence`).
+30. **Messages vocaux dans les groupes** — maintenir le micro (2 min max) ;
+    `POST /groups/:id/messages` avec `audio_data_url`, lecture via
+    `GET /groups/:id/messages/:messageId/audio`.
+31. **Widget SOS** — déjà présent sur Android (`SosHomeWidgetProvider`). iOS : à faire
+    (extension WidgetKit + profil de provisioning dédié).
 
 ---
 

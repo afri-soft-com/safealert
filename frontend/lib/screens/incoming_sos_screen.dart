@@ -5,7 +5,11 @@ import '../utils/location_format.dart';
 import '../utils/open_maps.dart';
 import '../widgets/status_bar.dart';
 import '../widgets/top_bar.dart';
+import '../services/audio_clip_service.dart';
+import '../services/sos_audio_service.dart';
+import '../widgets/app_feedback.dart';
 import 'group_detail_screen.dart';
+import 'medical_card_screen.dart';
 
 /// Écran destinataire quand on ouvre une notif SOS / alerte proche.
 class IncomingSosScreen extends StatelessWidget {
@@ -72,6 +76,38 @@ class IncomingSosScreen extends StatelessWidget {
   }
 
   String get _pseudo => _senderName ?? 'Un proche';
+
+  /// Push data uses camelCase, the live socket uses snake_case.
+  String? get _senderId {
+    final v = (data['userId'] ?? data['user_id'] ?? '').trim();
+    return v.isNotEmpty ? v : null;
+  }
+
+  String? get _incidentId {
+    final v = (data['incidentId'] ?? data['incident_id'] ?? data['id'] ?? '').trim();
+    return v.isNotEmpty ? v : null;
+  }
+
+  bool get _isSos => _type == 'sos_alert' || _type == 'group_sos' || _type == 'sos';
+
+  Future<void> _playSosAudio(BuildContext context) async {
+    final id = _incidentId;
+    if (id == null) return;
+    final clips = await SosAudioService().fetchClips(id);
+    if (!context.mounted) return;
+    if (clips.isEmpty) {
+      showAppSnackBar(
+        context,
+        "Pas encore d'audio. S'il a été activé, il arrive environ 1 minute après le SOS.",
+      );
+      return;
+    }
+    try {
+      await AudioClipService().playDataUrl(clips.last['data_url'].toString());
+    } catch (e) {
+      if (context.mounted) showAppSnackBar(context, 'Lecture audio impossible.', isError: true);
+    }
+  }
 
   String? get _phone {
     final p = (data['phone'] ?? '').trim();
@@ -296,6 +332,24 @@ class IncomingSosScreen extends StatelessWidget {
                     color: AppColors.bleuFonce,
                     onTap: _hasLocation ? () => _openMaps(context) : null,
                   ),
+                  if (_isSos && _senderId != null) ...[
+                    const SizedBox(height: 8),
+                    _actionBtn(
+                      icon: Icons.medical_information_outlined,
+                      label: 'Fiche médicale de $_pseudo',
+                      color: AppColors.teal,
+                      onTap: () => showMedicalCardForSos(context, _senderId!),
+                    ),
+                  ],
+                  if (_isSos && _incidentId != null) ...[
+                    const SizedBox(height: 8),
+                    _actionBtn(
+                      icon: Icons.graphic_eq,
+                      label: "Écouter l'audio du SOS",
+                      color: AppColors.teal,
+                      onTap: () => _playSosAudio(context),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   _actionBtn(
                     icon: Icons.map,

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme.dart';
 import '../providers/groups_provider.dart';
+import '../services/audio_clip_service.dart';
 import '../services/location_service.dart';
 import '../utils/location_format.dart';
 import '../widgets/status_bar.dart';
@@ -22,6 +23,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
   late TabController _tabController;
   Timer? _pollTimer;
   final _messageCtrl = TextEditingController();
+  bool _recording = false;
+  String? _playingId;
 
   String get _groupId => widget.group['id']?.toString() ?? '';
   String get _groupName => widget.group['name'] as String? ?? 'Groupe';
@@ -88,6 +91,62 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
         backgroundColor: AppColors.rouge,
       ));
     }
+  }
+
+  /// Hold the mic to record, release to send (max 2 min, cut automatically).
+  Future<void> _startVoice() async {
+    final audio = AudioClipService();
+    if (!await audio.ensurePermission()) {
+      _snack('Autorisez le micro pour envoyer un message vocal.');
+      return;
+    }
+    if (await audio.start()) {
+      setState(() => _recording = true);
+      Future<void>.delayed(const Duration(seconds: 120), () {
+        if (_recording && mounted) _stopVoice();
+      });
+    }
+  }
+
+  Future<void> _stopVoice({bool send = true}) async {
+    if (!_recording) return;
+    setState(() => _recording = false);
+    final audio = AudioClipService();
+    if (!send) {
+      await audio.cancel();
+      return;
+    }
+    final clip = await audio.stop();
+    if (clip == null) {
+      _snack('Message trop court : maintenez le micro pendant que vous parlez.');
+      return;
+    }
+    if (!mounted) return;
+    final ok = await context.read<GroupsProvider>().sendVoiceMessage(_groupId, clip.dataUrl, clip.seconds);
+    if (!ok) _snack('Message vocal non envoyé. Vérifiez votre connexion.');
+  }
+
+  Future<void> _playVoice(String messageId) async {
+    setState(() => _playingId = messageId);
+    final url = await context.read<GroupsProvider>().fetchVoiceMessage(_groupId, messageId);
+    if (url == null) {
+      _snack('Message vocal indisponible.');
+    } else {
+      try {
+        await AudioClipService().playDataUrl(url);
+      } catch (_) {
+        _snack('Lecture impossible.');
+      }
+    }
+    if (mounted) setState(() => _playingId = null);
+  }
+
+  void _snack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(text, style: const TextStyle(fontSize: 12)),
+      backgroundColor: AppColors.rouge,
+    ));
   }
 
   void _showCreateAlertDialog() {
@@ -397,11 +456,25 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
           ),
           child: Row(
             children: [
+              GestureDetector(
+                onLongPressStart: (_) => _startVoice(),
+                onLongPressEnd: (_) => _stopVoice(),
+                onLongPressCancel: () => _stopVoice(send: false),
+                child: Tooltip(
+                  message: 'Maintenir pour un message vocal',
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: _recording ? AppColors.rouge : AppColors.grisClair,
+                    child: Icon(Icons.mic, size: 18, color: _recording ? Colors.white : AppColors.bleuFonce),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: TextField(
                   controller: _messageCtrl,
                   decoration: InputDecoration(
-                    hintText: 'Votre message...',
+                    hintText: _recording ? 'Enregistrement… relâchez pour envoyer' : 'Votre message...',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     isDense: true,
@@ -458,7 +531,25 @@ class _GroupDetailScreenState extends State<GroupDetailScreen>
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(content, style: const TextStyle(fontSize: 12)),
+                  if (m['has_audio'] == true)
+                    InkWell(
+                      onTap: () => _playVoice(m['id'].toString()),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _playingId == m['id'].toString() ? Icons.hourglass_top : Icons.play_circle_fill,
+                            color: AppColors.teal,
+                            size: 28,
+                          ),
+                          const SizedBox(width: 6),
+                          Text('Message vocal · ${m['audio_seconds'] ?? '?'} s',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    )
+                  else
+                    Text(content, style: const TextStyle(fontSize: 12)),
                 ],
               ),
             ),

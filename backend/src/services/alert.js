@@ -252,4 +252,42 @@ const sendCancelAlert = async (userId, lat, lng) => {
   }
 };
 
-module.exports = { sendAlert, sendCancelAlert, ALERT_RADIUS_KM };
+/**
+ * Notify only the user's trust contacts (push + SMS), not the neighbourhood.
+ * Used for quieter warnings: trip went silent, phone almost empty.
+ * `build(user, where, maps)` returns { title, body, sms }.
+ */
+const notifyTrustContacts = async (userId, lat, lng, dataType, build, extraData = {}) => {
+  const client = await pool.connect();
+  try {
+    const userResult = await client.query(
+      "SELECT pseudo, phone FROM users WHERE id = $1",
+      [userId]
+    );
+    const user = userResult.rows[0];
+    if (!user) return { contacts: 0, pushSent: 0, smsSent: 0 };
+    const hasPos = Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
+    const where = hasPos ? locationSnippet(lat, lng, null) : "position inconnue";
+    const maps = hasPos ? `https://maps.google.com/?q=${lat},${lng}` : "";
+    const msg = build(user, where, maps);
+    return await notifyContacts(
+      client,
+      userId,
+      user,
+      msg.title,
+      msg.body,
+      msg.sms,
+      dataType,
+      {
+        lat: hasPos ? String(lat) : "",
+        lng: hasPos ? String(lng) : "",
+        origin: "contact",
+        ...extraData,
+      }
+    );
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { sendAlert, sendCancelAlert, notifyTrustContacts, ALERT_RADIUS_KM };

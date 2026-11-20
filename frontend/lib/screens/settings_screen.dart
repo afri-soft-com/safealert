@@ -12,8 +12,11 @@ import '../services/alert_sound_service.dart';
 import '../services/contact_backup_service.dart';
 import '../services/duress_pin_service.dart';
 import '../services/notification_sound_prefs.dart';
+import '../services/sos_audio_service.dart';
 import '../widgets/app_feedback.dart';
 import 'calculator_screen.dart' show kDiscreetUnlockCode;
+import 'medical_card_screen.dart';
+import 'refuges_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback onBack;
@@ -44,6 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _discreetMode = false;
   bool _sharePresence = true;
   bool _sosNotifyGroups = true;
+  bool _sosAudio = false;
   bool _deleting = false;
   bool _saving = false;
   SafeAlertSoundId _alertSound = SafeAlertSoundId.siren;
@@ -60,13 +64,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Mirror lock logic: local OR profile (so testers can always turn OFF what locks them).
     final localDiscreet = prefs.getBool('discreet_mode_local') ?? false;
     final sound = await NotificationSoundPrefs().load();
+    final sosAudio = await SosAudioService().isEnabled();
     if (!mounted) return;
     setState(() {
       _discreetMode = localDiscreet || auth.isDiscreetMode;
       _sharePresence = auth.sharePresence;
       _sosNotifyGroups = auth.sosNotifyGroups;
       _alertSound = sound;
+      _sosAudio = sosAudio;
     });
+  }
+
+  Future<void> _saveSosAudio(bool value) async {
+    final stored = await SosAudioService().setEnabled(value);
+    if (!mounted) return;
+    setState(() => _sosAudio = stored);
+    if (value && !stored) {
+      showAppSnackBar(context, 'Micro refusé : autorisez-le dans les réglages du téléphone.', isError: true);
+    }
+  }
+
+  Widget _pushTile(String label, IconData icon, Widget Function() screen) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: Icon(icon, size: 20, color: AppColors.bleuFonce),
+      title: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      trailing: const Icon(Icons.chevron_right, size: 18),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen())),
+    );
   }
 
   Future<void> _saveAlertSound(SafeAlertSoundId id) async {
@@ -783,6 +809,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _navTile(AppLocalizations.of(context).trustZones, 'trust_zones', Icons.home_work_outlined),
                       _navTile('Cercles famille', 'live_circles', Icons.family_restroom_outlined),
                       _navTile(AppLocalizations.of(context).neighborhood, 'neighborhood', Icons.apartment),
+                      _pushTile('Fiche médicale', Icons.medical_information_outlined, () => const MedicalCardScreen()),
+                      _pushTile('Lieux refuges', Icons.local_hospital_outlined, () => const RefugesScreen()),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        value: _sosAudio,
+                        onChanged: _saveSosAudio,
+                        activeColor: AppColors.rouge,
+                        title: const Text('Audio pendant un SOS', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        subtitle: const Text(
+                          "Enregistre 60 s de son après l'envoi d'un SOS et l'envoie à vos contacts de confiance (gardé 7 jours).",
+                          style: TextStyle(fontSize: 10, color: AppColors.gris),
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
                         onPressed: () async {

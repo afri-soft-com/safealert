@@ -12,6 +12,8 @@
     <!-- CAMERA: prise de photo optionnelle (preuves témoin). Pas de READ_MEDIA_* :
          image_picker / file_picker utilisent le sélecteur système (politique Play Photo & Video). -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- SOS audio clip and group voice notes, only after the user opts in -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Cercle famille hors-ligne : Wi‑Fi local + Bluetooth Nearby -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

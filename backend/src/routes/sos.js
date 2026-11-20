@@ -14,6 +14,7 @@ router.post("/trigger", authenticate, sosLimiter, [
 
 router.post("/:id/cancel", authenticate, ctrl.cancelSOS);
 router.post("/:id/evidence", authenticate, ctrl.attachEvidence);
+router.get("/:id/evidence", authenticate, ctrl.listEvidence);
 router.post("/:id/share", authenticate, ctrl.createSosShare);
 router.post("/cancel", authenticate, ctrl.cancelLatestSOS);
 router.get("/my", authenticate, ctrl.getMyAlerts);

@@ -9,6 +9,9 @@ import 'package:provider/provider.dart';
 import '../theme.dart';
 import '../providers/incident_provider.dart';
 import '../services/location_service.dart';
+import '../services/refuge_service.dart';
+import '../utils/open_maps.dart';
+import 'refuges_screen.dart';
 import '../utils/location_format.dart';
 import '../utils/map_zoom.dart';
 import '../widgets/status_bar.dart';
@@ -37,6 +40,95 @@ class _MapScreenState extends State<MapScreen> {
   int _hoursFilter = 24;
   /// Multi-select severity chips (default: all on = comportement inchangé).
   final Set<String> _severityFilters = {'danger', 'vigilance', 'safe'};
+  /// Safe places layer (hospitals, pharmacies…), off by default.
+  bool _showRefuges = false;
+  List<Refuge> _refuges = const [];
+
+  Future<void> _toggleRefuges() async {
+    final next = !_showRefuges;
+    setState(() => _showRefuges = next);
+    if (!next) return;
+    try {
+      final list = await RefugeService().fetch(lat: _center.latitude, lng: _center.longitude, radiusKm: 20);
+      if (!mounted) return;
+      setState(() => _refuges = list);
+      if (list.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Aucun lieu refuge enregistré dans cette zone.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) setState(() => _refuges = const []);
+    }
+  }
+
+  List<Marker> _buildRefugeMarkers() {
+    return [
+      for (final r in _refuges)
+        Marker(
+          point: LatLng(r.lat, r.lng),
+          width: 34,
+          height: 34,
+          child: GestureDetector(
+            onTap: () => _showRefuge(r),
+            child: Container(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.teal, width: 2),
+              ),
+              child: Text((RefugeService.categories[r.category] ?? ('📍', '')).$1,
+                  style: const TextStyle(fontSize: 16)),
+            ),
+          ),
+        ),
+    ];
+  }
+
+  void _showRefuge(Refuge r) {
+    final cat = RefugeService.categories[r.category] ?? ('📍', 'Autre');
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${cat.$1} ${r.name}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(
+              [cat.$2, if (r.open24h) 'Ouvert 24h/24', if (r.address != null) r.address!].join(' · '),
+              style: const TextStyle(fontSize: 12, color: AppColors.gris),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => openExternalMapsOrSnack(ctx, r.lat, r.lng, label: r.name),
+                    icon: const Icon(Icons.directions),
+                    label: const Text('Itinéraire'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RefugesScreen()));
+                    },
+                    child: const Text('Tous les refuges'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -569,6 +661,15 @@ class _MapScreenState extends State<MapScreen> {
                       _periodChip('24h', 24),
                       const SizedBox(width: 4),
                       _periodChip('7j', 168),
+                      IconButton(
+                        tooltip: 'Lieux refuges',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _toggleRefuges,
+                        icon: Icon(
+                          Icons.local_hospital,
+                          color: _showRefuges ? AppColors.teal : AppColors.gris,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -592,6 +693,7 @@ class _MapScreenState extends State<MapScreen> {
                                       userAgentPackageName: 'com.safealert.app',
                                     ),
                                     MarkerLayer(markers: _buildMarkers(incidents)),
+                                    if (_showRefuges) MarkerLayer(markers: _buildRefugeMarkers()),
                                   ],
                                 ),
                                 if (_locating)

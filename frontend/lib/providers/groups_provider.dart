@@ -155,6 +155,29 @@ class GroupsProvider extends ChangeNotifier {
     }
   }
 
+  /// Voice note: not queued offline (too large for the local queue).
+  Future<bool> sendVoiceMessage(String groupId, String dataUrl, int seconds) async {
+    try {
+      await _api.post('/groups/$groupId/messages', {
+        'audio_data_url': dataUrl,
+        'audio_seconds': seconds,
+      });
+      await fetchMessages(groupId);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<String?> fetchVoiceMessage(String groupId, String messageId) async {
+    try {
+      final res = await _api.get('/groups/$groupId/messages/$messageId/audio');
+      return res['data_url']?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> fetchAlerts(String groupId) async {
     try {
       final res = await _api.get('/groups/$groupId/alerts');

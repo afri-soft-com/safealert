@@ -15,6 +15,7 @@ router.post("/:id/join", authenticate, ctrl.joinGroupById);
 router.get("/:id/members", authenticate, ctrl.getGroupMembers);
 router.patch("/:id/members/:userId", authenticate, ctrl.setMemberRole);
 router.get("/:id/messages", authenticate, ctrl.getGroupMessages);
+router.get("/:id/messages/:messageId/audio", authenticate, ctrl.getMessageAudio);
 router.post("/:id/messages", authenticate, ctrl.postGroupMessage);
 router.get("/:id/alerts", authenticate, ctrl.getGroupAlerts);
 router.post("/:id/alerts", authenticate, ctrl.postGroupAlert);

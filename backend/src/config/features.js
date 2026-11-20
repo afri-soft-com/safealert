@@ -7,6 +7,7 @@ const isEnabled = (name, defaultValue = false) => {
 
 module.exports = {
   socketRedisAdapter: () => isEnabled("FEATURE_SOCKET_REDIS_ADAPTER", true),
+  floodAlerts: () => isEnabled("FEATURE_FLOOD_ALERTS", true),
   auditLog: () => isEnabled("FEATURE_AUDIT_LOG", true),
   otpPhoneLimit: () => isEnabled("FEATURE_OTP_PHONE_LIMIT", true),
 

@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const { pool } = require("../config/database");
 const { sendPush } = require("../config/firebase");
 const { sendSMS } = require("../services/sms");
-const { sendAlert } = require("../services/alert");
+const { sendAlert, notifyTrustContacts } = require("../services/alert");
 const { safeTrip, escortMode, publicShare } = require("../config/features");
 const { notifyTrustCircle } = require("./checkInController");
 const { getEntitlementsForUser, LEGACY, PREMIUM } = require("../services/premiumEntitlements");
@@ -449,13 +449,27 @@ const pingTrip = async (req, res) => {
       }
     }
 
+    // GREATEST: an offline ping replayed late must not move last_ping_at back,
+    // or the « plus de réseau » job would fire again.
     const updated = await pool.query(
       `UPDATE safe_trips SET
-         last_lat = $2, last_lng = $3, last_ping_at = $7::timestamptz,
-         abnormal_stop_at = $4, status = $5, arrived_at = $6
+         last_lat = $2, last_lng = $3,
+         last_ping_at = GREATEST(COALESCE(last_ping_at, $7::timestamptz), $7::timestamptz),
+         abnormal_stop_at = $4, status = $5, arrived_at = $6,
+         signal_lost_notified_at = NULL
        WHERE id = $1 RETURNING *`,
       [id, lat, lng, abnormal, status, arrivedAt, pingAt.toISOString()]
     );
+
+    if (trip.signal_lost_notified_at) {
+      notifyTrustContacts(req.userId, lat, lng, "trip_signal_back", (user, where, maps) => ({
+        title: "✅ Trajet — de nouveau en ligne",
+        body: `${user.pseudo} donne de nouveau sa position. ${where}`,
+        sms: `SafeAlert : ${user.pseudo} donne de nouveau sa position pendant son trajet. ${where} ${maps}`,
+      }), { trip_id: String(id) }).catch((err) =>
+        console.error("trip signal back notify:", err.message)
+      );
+    }
 
     await appendTrackPoint(id, Number(lat), Number(lng), {
       recordedAt: pingAt.toISOString(),
@@ -681,7 +695,45 @@ const processOverdueTrips = async () => {
     } catch (_) {}
   }
 
-  return { alerted };
+  const signalLost = await processSilentTrips();
+  return { alerted, signalLost };
+};
+
+/** Minutes without any trip ping before trust contacts are told. */
+const signalLostMinutes = () => {
+  const n = Number(process.env.TRIP_SIGNAL_LOST_MINUTES || 10);
+  return Number.isFinite(n) && n >= 3 ? n : 10;
+};
+
+/**
+ * Active trip that sent no position for N minutes: the phone may be off,
+ * stolen or out of network. Tell trust contacts once, with the last position;
+ * the next ping resets it (see pingTrip).
+ */
+const processSilentTrips = async () => {
+  const minutes = signalLostMinutes();
+  const silent = await pool.query(
+    `UPDATE safe_trips SET signal_lost_notified_at = NOW()
+     WHERE status = 'active'
+       AND signal_lost_notified_at IS NULL
+       AND COALESCE(last_ping_at, created_at) < NOW() - make_interval(mins => $1)
+     RETURNING id, user_id, last_lat, last_lng, origin_lat, origin_lng, last_ping_at`,
+    [minutes]
+  );
+  for (const trip of silent.rows) {
+    const lat = trip.last_lat ?? trip.origin_lat;
+    const lng = trip.last_lng ?? trip.origin_lng;
+    try {
+      await notifyTrustContacts(trip.user_id, lat, lng, "trip_signal_lost", (user, where, maps) => ({
+        title: "📵 Trajet — plus de nouvelles",
+        body: `Le téléphone de ${user.pseudo} n'envoie plus sa position depuis ${minutes} min. Dernière position : ${where}`,
+        sms: `SafeAlert : le telephone de ${user.pseudo} n envoie plus sa position depuis ${minutes} min pendant son trajet. Derniere position : ${where} ${maps}`,
+      }), { trip_id: String(trip.id) });
+    } catch (err) {
+      console.error("trip signal lost notify:", err.message);
+    }
+  }
+  return silent.rows.length;
 };
 
 /** Traveler names a place at current (or given) coordinates — visible to followers. */
@@ -795,6 +847,7 @@ module.exports = {
   listMyTrips,
   getTrip,
   processOverdueTrips,
+  processSilentTrips,
   createShareLink,
   addPlace,
 };

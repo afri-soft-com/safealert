@@ -13,6 +13,7 @@ import '../services/in_app_alert_service.dart';
 import '../services/local_database.dart';
 import '../services/location_service.dart';
 import '../services/socket_service.dart';
+import '../services/sos_audio_service.dart';
 import '../data/incident_types.dart';
 import '../utils/location_format.dart';
 import '../utils/network_error.dart';
@@ -385,7 +386,10 @@ class IncidentProvider extends ChangeNotifier {
         res['positionNote'] =
             'GPS indisponible — le serveur a utilisé votre dernière position enregistrée si elle existe.';
       }
-      _markOwnOutgoing(incidentId: res['incident']?['id']?.toString());
+      final sentId = res['incident']?['id']?.toString();
+      _markOwnOutgoing(incidentId: sentId);
+      // Optional 60 s audio clip for trust contacts (opt-in in Settings).
+      if (sentId != null) unawaited(SosAudioService().recordAndAttach(sentId));
       // Émetteur : jamais de sirène. SOS discret = vibration courte seulement.
       if (isDiscrete) {
         await _sounds.feedbackDiscreteSosTrigger();

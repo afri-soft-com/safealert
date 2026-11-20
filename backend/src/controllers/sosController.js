@@ -1,5 +1,5 @@
 const { pool } = require("../config/database");
-const { emitToTrustCircle } = require("../services/realtime");
+const { emitToTrustCircle, STAFF_ROLES } = require("../services/realtime");
 const { sendAlert, sendCancelAlert } = require("../services/alert");
 const {
   notifyUserGroupsOnSOS,
@@ -648,7 +648,40 @@ const getMyAlerts = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/sos/:id/evidence — audio/photo attached to an SOS, for the sender,
+ * their trust contacts and staff. Evidence expires after 7 days.
+ */
+const listEvidence = async (req, res) => {
+  try {
+    const inc = await pool.query(`SELECT user_id FROM incidents WHERE id = $1`, [req.params.id]);
+    if (inc.rows.length === 0) return res.status(404).json({ error: "Alerte introuvable" });
+    const ownerId = String(inc.rows[0].user_id);
+    if (ownerId !== String(req.userId) && !STAFF_ROLES.has(req.userRole)) {
+      const contact = await pool.query(
+        `SELECT 1 FROM trust_contacts WHERE user_id = $1 AND contact_user_id = $2 LIMIT 1`,
+        [ownerId, req.userId]
+      );
+      if (contact.rows.length === 0) {
+        return res.status(403).json({ error: "Réservé aux contacts de confiance." });
+      }
+    }
+    const r = await pool.query(
+      `SELECT id, media_type, storage_key AS data_url, created_at
+       FROM incident_evidence
+       WHERE incident_id = $1 AND retention_until > NOW()
+       ORDER BY created_at ASC`,
+      [req.params.id]
+    );
+    return res.json({ evidence: r.rows });
+  } catch (err) {
+    console.error("listEvidence error:", err);
+    return res.status(500).json({ error: "Une erreur est survenue. Réessayez." });
+  }
+};
+
 module.exports = {
+  listEvidence,
   triggerSOS,
   cancelSOS,
   cancelLatestSOS,

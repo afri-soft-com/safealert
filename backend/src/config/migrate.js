@@ -768,6 +768,46 @@ const migrate = async () => {
       ALTER TABLE safety_pings ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMP WITH TIME ZONE;
     `);
 
+    await client.query(`
+      -- Trip went silent (no ping) / phone almost empty: notify contacts once
+      ALTER TABLE safe_trips ADD COLUMN IF NOT EXISTS signal_lost_notified_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS low_battery_notified_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS flood_alert_sent_at TIMESTAMP WITH TIME ZONE;
+
+      -- Medical card shared with trust contacts during an SOS
+      CREATE TABLE IF NOT EXISTS medical_cards (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        blood_type VARCHAR(5),
+        allergies VARCHAR(500),
+        conditions VARCHAR(500),
+        medications VARCHAR(500),
+        emergency_note VARCHAR(500),
+        share_on_sos BOOLEAN DEFAULT true,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      -- Safe places open to the public (hospital, pharmacy, fuel station…)
+      CREATE TABLE IF NOT EXISTS refuge_places (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(120) NOT NULL,
+        category VARCHAR(20) NOT NULL
+          CHECK (category IN ('hospital','pharmacy','fuel','church','shop','other')),
+        lat DOUBLE PRECISION NOT NULL,
+        lng DOUBLE PRECISION NOT NULL,
+        address VARCHAR(200),
+        phone VARCHAR(30),
+        open_24h BOOLEAN DEFAULT false,
+        active BOOLEAN DEFAULT true,
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_refuge_places_active ON refuge_places(active);
+
+      -- Voice notes in neighbourhood groups
+      ALTER TABLE group_messages ADD COLUMN IF NOT EXISTS audio_data TEXT;
+      ALTER TABLE group_messages ADD COLUMN IF NOT EXISTS audio_seconds SMALLINT;
+    `);
+
     const adminPhone = process.env.PLATFORM_ADMIN_PHONE;
     if (adminPhone) {
       const normalized = normalizePhone(adminPhone.trim()) || adminPhone.trim();

@@ -54,6 +54,7 @@ dependencies:
   smart_auth: ^3.2.0
   connectivity_plus: ^6.1.0
   vibration: ^3.1.8
+  record: ^6.2.1
 
 # google_sign_in_ios ≥5.8 pulls GoogleSignIn 8 → GoogleUtilities 8 (breaks Firebase 10)
 dependency_overrides:

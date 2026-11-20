@@ -56,6 +56,9 @@ const legalRoutes = require("./routes/legal");
 const incidentTypesRoutes = require("./routes/incidentTypes");
 const appRoutes = require("./routes/app");
 const liveCirclesRoutes = require("./routes/liveCircles");
+const batteryRoutes = require("./routes/battery");
+const medicalCardRoutes = require("./routes/medicalCard");
+const refugesRoutes = require("./routes/refuges");
 
 const app = express();
 const server = http.createServer(app);
@@ -111,6 +114,8 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(corsOptions));
 app.use(
   express.json({
+    // SOS audio and group voice notes travel as base64 data URLs.
+    limit: "2mb",
     verify: (req, _res, buf) => {
       // Preserve raw body for AfriSoft hub webhook HMAC verification.
       if (req.originalUrl && req.originalUrl.startsWith("/webhooks/")) {
@@ -187,6 +192,9 @@ app.use("/api/ops", opsRoutes);
 app.use("/api/invites", invitesRoutes);
 app.use("/api/safety-pings", safetyPingsRoutes);
 app.use("/api/corridors", corridorsRoutes);
+app.use("/api/battery", batteryRoutes);
+app.use("/api/medical-card", medicalCardRoutes);
+app.use("/api/refuges", refugesRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/legal", legalRoutes);
 app.use("/api/incident-types", incidentTypesRoutes);
@@ -385,6 +393,12 @@ function startBackgroundJobs() {
   setInterval(() => {
     sendDigests().catch((err) => warn("neighborhood digest:", err.message));
   }, 60_000);
+
+  // Heavy-rain warnings by area — every 30 min
+  const { processFloodAlerts } = require("./services/floodAlerts");
+  setInterval(() => {
+    processFloodAlerts().catch((err) => warn("flood alerts:", err.message));
+  }, 30 * 60_000);
 
   // Purge evidence past retention — daily
   setInterval(async () => {

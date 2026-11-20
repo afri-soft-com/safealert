@@ -9,6 +9,7 @@ import '../services/api_service.dart';
 import '../services/fcm_service.dart';
 import '../services/local_pin_service.dart';
 import '../services/location_service.dart';
+import '../services/low_battery_watcher.dart';
 import '../services/socket_service.dart';
 import '../services/trip_tracking_service.dart';
 import '../services/google_sign_in_service.dart';
@@ -833,12 +834,14 @@ class AuthProvider extends ChangeNotifier {
     SocketService().connect(userId: id);
     FCMService().setCurrentUserId(id);
     LocationService().startPeriodicUpdates();
+    LowBatteryWatcher().start();
   }
 
   void _stopRealtimeServices() {
     FCMService().setCurrentUserId(null);
     SocketService().disconnect();
     LocationService().stopPeriodicUpdates();
+    LowBatteryWatcher().stop();
     TripTrackingService().stop();
   }
 

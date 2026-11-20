@@ -61,7 +61,7 @@
 		<key>NSCameraUsageDescription</key>
 		<string>SafeAlert utilise la caméra pour joindre une photo à un signalement témoin.</string>
 		<key>NSMicrophoneUsageDescription</key>
-		<string>SafeAlert peut enregistrer un court clip audio lors d’un SOS ou d’un signalement, avec votre consentement.</string>
+		<string>SafeAlert utilise le micro pour enregistrer un court clip audio après un SOS (si vous l’activez dans les réglages) et pour les messages vocaux de vos groupes de quartier.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>SafeAlert accède à vos photos uniquement pour joindre une preuve à un signalement.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
