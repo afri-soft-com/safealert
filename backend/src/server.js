@@ -104,19 +104,8 @@ const socketCors =
 const io = new Server(server, { cors: socketCors });
 app.set("io", io);
 
-io.on("connection", (socket) => {
-  socket.on("authenticate", (payload) => {
-    const userId =
-      typeof payload === "string"
-        ? payload
-        : payload && typeof payload === "object"
-          ? payload.userId || payload.user_id
-          : null;
-    if (userId && typeof userId === "string" && userId.length < 80) {
-      socket.join(`user:${userId}`);
-    }
-  });
-});
+// Rooms come from a verified JWT only — see services/realtime.js.
+require("./services/realtime").setupSocketAuth(io);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(corsOptions));

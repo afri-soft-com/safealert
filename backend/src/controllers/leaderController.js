@@ -1,4 +1,5 @@
 const { pool } = require("../config/database");
+const { emitToStaff } = require("../services/realtime");
 
 const getLeaderSector = async (userId) => {
   const res = await pool.query("SELECT sector_name FROM users WHERE id = $1", [userId]);
@@ -62,7 +63,7 @@ const acknowledgeIncident = async (req, res) => {
 
     const io = req.app.get("io");
     if (io) {
-      io.emit("incident_status", {
+      emitToStaff(io, "incident_status", {
         id,
         status: newStatus,
         leader_id: req.userId,

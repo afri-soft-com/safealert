@@ -1,4 +1,5 @@
 const { pool } = require("../config/database");
+const { emitToStaff, STAFF_ROOM } = require("../services/realtime");
 const { sendPush } = require("../config/firebase");
 const { fieldDispatch } = require("../config/features");
 
@@ -74,7 +75,7 @@ const assignAgent = async (req, res) => {
 
     const io = req.app.get("io");
     if (io) {
-      io.emit("incident_assigned", {
+      emitToStaff(io, "incident_assigned", {
         id,
         agent_id,
         eta_minutes: etaMins || null,
@@ -122,7 +123,8 @@ const closeWithReason = async (req, res) => {
 
     const io = req.app.get("io");
     if (io) {
-      io.emit("incident_closed", { id, status: closeStatus, reason });
+      io.to(STAFF_ROOM).to(`user:${result.rows[0].user_id}`)
+        .emit("incident_closed", { id, status: closeStatus, reason });
     }
 
     return res.json({ incident: result.rows[0] });
@@ -140,7 +142,7 @@ const postChat = async (req, res) => {
     return res.status(400).json({ error: "Message requis" });
   }
   try {
-    const inc = await pool.query(`SELECT id FROM incidents WHERE id = $1`, [id]);
+    const inc = await pool.query(`SELECT id, user_id FROM incidents WHERE id = $1`, [id]);
     if (inc.rows.length === 0) return res.status(404).json({ error: "Incident non trouvé" });
 
     const result = await pool.query(
@@ -153,7 +155,10 @@ const postChat = async (req, res) => {
     const msg = { ...result.rows[0], pseudo: user.rows[0]?.pseudo };
 
     const io = req.app.get("io");
-    if (io) io.emit("incident_chat", { incident_id: id, message: msg });
+    if (io) {
+      io.to(STAFF_ROOM).to(`user:${inc.rows[0].user_id}`)
+        .emit("incident_chat", { incident_id: id, message: msg });
+    }
 
     return res.status(201).json(msg);
   } catch (err) {

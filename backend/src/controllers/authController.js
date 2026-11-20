@@ -192,7 +192,7 @@ const requestCode = async (req, res) => {
         ? reviewFixed
         : bypassFixed.length === 6
           ? bypassFixed
-          : String(Math.floor(100000 + Math.random() * 900000));
+          : String(crypto.randomInt(100000, 1000000));
     const codeHash = await bcrypt.hash(code, 10);
     const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
 
@@ -222,8 +222,23 @@ const requestCode = async (req, res) => {
       console.error("requestCode SMS error (continuing):", smsErr.message || smsErr);
     }
 
-    // Expose code when ALLOW_DEV_OTP, or when hub/provider failed (Reserva codeOtp pattern).
-    const exposeDevOtp = shouldExposeDevOtp() || smsFailed;
+    // Outside production a failed SMS still shows the code (local testing).
+    // In production it never does: whoever asks for a code for someone else's
+    // number would get into that account.
+    const isProd = process.env.NODE_ENV === "production";
+    const exposeDevOtp = shouldExposeDevOtp() || (smsFailed && !isProd);
+
+    if (smsFailed && isProd && !exposeDevOtp && !reviewFixed) {
+      await pool.query(
+        `UPDATE otp_codes SET used_at = NOW()
+         WHERE phone = $1 AND used_at IS NULL`,
+        [phone]
+      );
+      return res.status(503).json({
+        error: "Le SMS n'a pas pu être envoyé. Réessayez dans quelques minutes.",
+        smsEnvoye: false,
+      });
+    }
 
     if (exposeDevOtp) {
       const smsNote = smsFailed

@@ -27,8 +27,11 @@ const parseSeverityFilters = (raw) => {
   return keys.length ? keys.sort() : null;
 };
 
+/** SOS rows live in `incidents` too; they must stay off the public map. */
+const PRIVATE_INCIDENT_TYPES = ["sos", "sos_discret"];
+
 const buildIncidentsCacheKey = (hours, status, severityKey) =>
-  `map:incidents:h${hours}:s${status || "all"}:sev${severityKey || "all"}`;
+  `map:incidents:v2:h${hours}:s${status || "all"}:sev${severityKey || "all"}`;
 
 const getIncidents = async (req, res) => {
   const { lat, lng, radius_km, status, limit, hours, incident_type } = req.query;
@@ -106,6 +109,9 @@ const getIncidents = async (req, res) => {
     }
 
     query += clauses.join(" OR ") + ")";
+    // Public endpoint (no login): never expose where a person in an SOS is.
+    // Leaders see SOS through /leader/sector/incidents.
+    query += ` AND i.incident_type NOT IN (${PRIVATE_INCIDENT_TYPES.map((t) => `'${t}'`).join(",")})`;
 
     if (status) {
       query += ` AND i.status = $${paramIndex++}`;

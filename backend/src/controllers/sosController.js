@@ -1,4 +1,5 @@
 const { pool } = require("../config/database");
+const { emitToTrustCircle } = require("../services/realtime");
 const { sendAlert, sendCancelAlert } = require("../services/alert");
 const {
   notifyUserGroupsOnSOS,
@@ -251,7 +252,7 @@ const triggerSOS = async (req, res) => {
     }
 
     if (io) {
-      io.emit("sos_alert", {
+      await emitToTrustCircle(io, req.userId, "sos_alert", {
         id: incident.id,
         type: "sos_alert",
         user_id: req.userId,
@@ -545,7 +546,7 @@ const cancelSOS = async (req, res) => {
     }).catch(() => {});
 
     if (io) {
-      io.emit("sos_cancelled", {
+      await emitToTrustCircle(io, req.userId, "sos_cancelled", {
         id: incident.id,
         user_id: req.userId,
         resolution: "false_alarm",
@@ -614,7 +615,7 @@ const cancelLatestSOS = async (req, res) => {
     }).catch(() => {});
 
     if (io) {
-      io.emit("sos_cancelled", {
+      await emitToTrustCircle(io, req.userId, "sos_cancelled", {
         id: incident.id,
         user_id: req.userId,
         resolution: "false_alarm",

@@ -50,6 +50,8 @@ class SocketService {
       ApiService.socketOrigin,
       io.OptionBuilder()
           .setTransports(['websocket'])
+          // The server only joins rooms for a verified JWT.
+          .setAuth({'token': ApiService().token ?? ''})
           .enableAutoConnect()
           .build(),
     );
@@ -103,9 +105,9 @@ class SocketService {
   }
 
   void _authenticate() {
-    final id = _userId;
-    if (id == null || id.isEmpty || _socket == null) return;
-    _socket!.emit('authenticate', {'userId': id});
+    final token = ApiService().token;
+    if (token == null || token.isEmpty || _socket == null) return;
+    _socket!.emit('authenticate', {'token': token});
   }
 
   void disconnect() {

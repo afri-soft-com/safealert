@@ -129,7 +129,6 @@ function emitTripPlace(io, trip, place) {
     place,
     at: new Date().toISOString(),
   };
-  io.emit("trip_place", payload);
   for (const cid of trip.escort_contact_ids || []) {
     io.to(`user:${cid}`).emit("trip_place", payload);
   }
@@ -337,7 +336,6 @@ const startTrip = async (req, res) => {
     try {
       const io = req.app.get("io");
       if (io) {
-        io.emit("trip_started", { trip_id: trip.id, user_id: req.userId });
         for (const cid of escorts) {
           io.to(`user:${cid}`).emit("escort_trip", { trip: tripWithTrack });
         }
@@ -474,7 +472,6 @@ const pingTrip = async (req, res) => {
         status,
         at: pingAt.toISOString(),
       };
-      io.emit("trip_ping", payload);
       for (const cid of trip.escort_contact_ids || []) {
         io.to(`user:${cid}`).emit("trip_ping", payload);
       }

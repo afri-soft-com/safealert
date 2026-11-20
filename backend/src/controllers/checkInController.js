@@ -1,4 +1,5 @@
 const { pool } = require("../config/database");
+const { emitToTrustCircle } = require("../services/realtime");
 const { sendSMS } = require("../services/sms");
 const { checkIn: checkInEnabled } = require("../config/features");
 const { notifyUserGroupsOnSafe } = require("../services/groupNotify");
@@ -110,7 +111,7 @@ const createCheckIn = async (req, res) => {
     }
 
     if (io) {
-      io.emit("check_in", {
+      await emitToTrustCircle(io, req.userId, "check_in", {
         user_id: req.userId,
         check_in: result.rows[0],
         pseudo: notify.pseudo,

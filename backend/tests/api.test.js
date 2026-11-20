@@ -249,6 +249,13 @@ describe("Incidents", () => {
     expect(res.body[0].incident_type).toBe("agression");
   });
 
+  it("GET /api/map/incidents never returns SOS rows (public endpoint)", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    await request(app).get("/api/map/incidents?hours=24&lat=-4.3&lng=15.3&radius_km=5");
+    const sql = mockQuery.mock.calls.map((c) => String(c[0])).find((q) => q.includes("FROM incidents i"));
+    expect(sql).toContain("i.incident_type NOT IN ('sos','sos_discret')");
+  });
+
   it("GET /api/map/incidents filters by severity and includes safe resolved", async () => {
     mockQuery.mockResolvedValue({
       rows: [

@@ -1,4 +1,5 @@
 const { pool } = require("../config/database");
+const { emitToTrustCircle } = require("../services/realtime");
 const { liveStatus } = require("../config/features");
 
 const TTL_SECONDS = 90;
@@ -40,7 +41,7 @@ const upsertLiveStatus = async (req, res) => {
 
     const io = req.app.get("io");
     if (io) {
-      io.emit("sos_live", {
+      await emitToTrustCircle(io, req.userId, "sos_live", {
         incident_id,
         user_id: req.userId,
         lat, lng,
