@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class IncidentTypeDef {
   final String slug;
   final String labelFr;
@@ -22,6 +24,21 @@ const kFallbackIncidentTypes = <IncidentTypeDef>[
   IncidentTypeDef(slug: 'suspect', labelFr: 'Présence suspecte'),
   IncidentTypeDef(slug: 'autre', labelFr: 'Autre'),
 ];
+
+/// Report types that read as criminal-activity reports. App Review (guideline
+/// 2.1) only allows those with a law-enforcement partner, which we do not have,
+/// so the iOS build does not offer them.
+const kCrimeIncidentSlugs = {'agression', 'vol', 'suspect'};
+
+/// Types the user can pick to file a report on this platform.
+List<IncidentTypeDef> reportableIncidentTypes(
+  List<IncidentTypeDef> catalog, {
+  TargetPlatform? platform,
+}) {
+  final target = platform ?? defaultTargetPlatform;
+  if (kIsWeb || target != TargetPlatform.iOS) return catalog;
+  return catalog.where((t) => !kCrimeIncidentSlugs.contains(t.slug)).toList();
+}
 
 /// SOS labels stay hardcoded — SOS is not a report-form type.
 String incidentTypeLabel(String? slug, {List<IncidentTypeDef>? catalog}) {

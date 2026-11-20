@@ -128,8 +128,8 @@ class _MapScreenState extends State<MapScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
-        final catalog = context.read<IncidentProvider>().incidentTypes;
-        String selectedType = catalog.isNotEmpty ? catalog.first.slug : 'agression';
+        final catalog = context.read<IncidentProvider>().reportTypes;
+        String selectedType = catalog.isNotEmpty ? catalog.first.slug : 'autre';
         bool anonymous = false;
         bool consentEvidence = false;
         String? photoPath;
@@ -155,6 +155,20 @@ class _MapScreenState extends State<MapScreen> {
                     style: TextStyle(
                       fontSize: 10,
                       color: approx ? AppColors.orange : AppColors.gris,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.orange.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'Votre signalement prévient vos voisins et les groupes de quartier. '
+                      'SafeAlert ne le transmet pas à la police. En cas d\'urgence, '
+                      'appelez les numéros officiels (onglet Urgences).',
+                      style: TextStyle(fontSize: 10, color: AppColors.bleuFonce),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -526,7 +540,7 @@ class _MapScreenState extends State<MapScreen> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _typeFilter == 'all' ||
-                                  provider.incidentTypes.any((t) => t.slug == _typeFilter)
+                                  provider.reportTypes.any((t) => t.slug == _typeFilter)
                               ? _typeFilter
                               : 'all',
                           isDense: true,
@@ -540,7 +554,7 @@ class _MapScreenState extends State<MapScreen> {
                               value: 'all',
                               child: Text('Tous types', style: TextStyle(fontSize: 11)),
                             ),
-                            ...provider.incidentTypes.map((t) => DropdownMenuItem(
+                            ...provider.reportTypes.map((t) => DropdownMenuItem(
                               value: t.slug,
                               child: Text(t.labelFr, style: const TextStyle(fontSize: 11)),
                             )),

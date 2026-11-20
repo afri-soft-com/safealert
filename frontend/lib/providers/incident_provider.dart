@@ -58,6 +58,9 @@ class IncidentProvider extends ChangeNotifier {
   bool get isOffline => _isOffline;
   List<IncidentTypeDef> get incidentTypes => _incidentTypes;
 
+  /// Types offered in the report form and map filter on this platform.
+  List<IncidentTypeDef> get reportTypes => reportableIncidentTypes(_incidentTypes);
+
   String labelForType(String? slug) =>
       incidentTypeLabel(slug, catalog: _incidentTypes);
 

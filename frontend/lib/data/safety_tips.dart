@@ -34,14 +34,14 @@ const safetyCategories = [
   SafetyCategory('👥', 'Communauté', AppColors.rouge, [
     'Créez un groupe de voisins SafeAlert pour vous alerter mutuellement.',
     'Participez aux réunions de quartier et aux comités de sécurité locaux.',
-    'Signalez tout comportement suspect via l\'application (anonymement si nécessaire).',
+    'Prévenez vos voisins via l\'application si vous remarquez un danger dans le quartier.',
     'Encouragez vos voisins à rejoindre le cercle de confiance.',
     'Connaissez le chef de quartier et les agents de sécurité locaux.',
   ]),
   SafetyCategory('🚨', 'Urgence', AppColors.rougeDark, [
     'En cas d\'agression : ne résistez pas, donnez ce qui est demandé.',
     'Utilisez le bouton SOS discret (Volume↓ 3×) silencieusement.',
-    'Après une agression, mettez-vous en sécurité puis signalez via l\'app.',
+    'Après une agression, mettez-vous en sécurité, appelez les services officiels et prévenez vos proches.',
     'Notez les détails : taille, vêtements, direction de fuite, véhicule.',
     'Consultez un médecin même en l\'absence de blessures visibles.',
   ]),
